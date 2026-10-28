@@ -1,0 +1,9 @@
+TRADUÇÃO DAS DESCRIÇÕES DE JOGOS E OFERTAS
+
+A Nara agora tenta traduzir o campo de descrição de cada jogo/oferta para pt-BR antes de publicar. Usa a configuração Gemini já utilizada pela IA da Nara.
+
+Configure nas variáveis de ambiente da hospedagem:
+GEMINI_API_KEY=sua_chave_gemini
+GEMINI_MODEL=nome_do_modelo_compatível
+
+Se as variáveis não estiverem definidas ou a API falhar, o bot publica a descrição original e continua funcionando. As traduções são salvas no banco SENT_DB_PATH em uma tabela de cache para reduzir chamadas repetidas. Apenas descrições são traduzidas; título oficial, preço, URL, plataforma e prazo não são alterados.
