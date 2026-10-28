@@ -1,0 +1,5 @@
+LAYOUT DAS PUBLICAÇÕES DE JOGOS
+
+A arte do jogo agora é baixada e enviada como anexo do Discord quando disponível, para ganhar mais destaque visual. O embed foi reorganizado com descrição mais ampla, preço, plataforma, tipo, validade e comparação GG.deals. Se a imagem não puder ser baixada, o bot usa a URL original como imagem do embed.
+
+Limite importante: o Discord controla a largura máxima do conteúdo e dos embeds. O bot não consegue forçar o cartão a ocupar a largura inteira da janela do aplicativo.
