@@ -2,6 +2,7 @@ import asyncio
 import logging
 import json
 import sqlite3
+import os
 from datetime import datetime, timezone
 from typing import Any
 
@@ -18,6 +19,97 @@ from admin_config import GuildConfig
 from utils import get_text_channel, erro_comando
 
 log = logging.getLogger("ofertas")
+
+# Tradução das descrições de jogos e ofertas para português brasileiro.
+# Reutiliza as variáveis Gemini da Nara e mantém fallback para o texto original.
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "").strip()
+_translation_warned = False
+
+
+def _translate_game_description_sync(text: str) -> str:
+    """Chamada síncrona isolada; executada em thread para não bloquear o loop do Discord."""
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    prompt = (
+        "Traduza a descrição abaixo para português brasileiro natural (pt-BR). "
+        "Retorne somente a descrição traduzida, sem introdução, aspas ou comentários. "
+        "Preserve o sentido e todos os fatos. Não traduza nomes oficiais de jogos, "
+        "personagens, estúdios, plataformas, marcas, URLs, códigos, comandos, "
+        "identificadores, datas, valores ou moedas. Não invente informações nem "
+        "adicione detalhes. Se o texto já estiver em português brasileiro, devolva-o "
+        "com mudanças mínimas.\\n\\nDESCRIÇÃO:\\n" + text
+    )
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(temperature=0.1),
+    )
+    result = (getattr(response, "text", None) or "").strip()
+    return result or text
+
+
+async def traduzir_descricao_oferta(texto: str) -> str:
+    """Traduz descrições externas e mantém cache SQLite para reduzir custo e latência."""
+    global _translation_warned
+    original = (texto or "").strip()
+    if not original:
+        return original
+    if not GEMINI_API_KEY or not GEMINI_MODEL:
+        if not _translation_warned:
+            log.warning(
+                "Tradução de descrições de jogos/ofertas desativada: "
+                "configure GEMINI_API_KEY e GEMINI_MODEL no ambiente."
+            )
+            _translation_warned = True
+        return original
+
+    try:
+        with sqlite3.connect(SENT_DB_PATH) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS offer_translation_cache (
+                    source_text TEXT PRIMARY KEY,
+                    translated_text TEXT NOT NULL,
+                    translated_at TEXT NOT NULL
+                )
+            """)
+            row = conn.execute(
+                "SELECT translated_text FROM offer_translation_cache WHERE source_text = ?",
+                (original,),
+            ).fetchone()
+            if row and row[0]:
+                return str(row[0])
+    except sqlite3.Error:
+        log.exception("Não foi possível ler o cache de traduções; tentando traduzir sem cache.")
+
+    try:
+        translated = await asyncio.to_thread(_translate_game_description_sync, original)
+        translated = translated.strip() or original
+    except Exception:
+        log.exception("Falha traduzindo descrição de jogo/oferta; será usado o texto original.")
+        return original
+
+    try:
+        with sqlite3.connect(SENT_DB_PATH) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS offer_translation_cache (
+                    source_text TEXT PRIMARY KEY,
+                    translated_text TEXT NOT NULL,
+                    translated_at TEXT NOT NULL
+                )
+            """)
+            conn.execute(
+                "INSERT OR REPLACE INTO offer_translation_cache "
+                "(source_text, translated_text, translated_at) VALUES (?, ?, ?)",
+                (original, translated, datetime.now(timezone.utc).isoformat()),
+            )
+            conn.commit()
+    except sqlite3.Error:
+        log.exception("Não foi possível salvar a tradução no cache; tradução ainda será usada.")
+
+    return translated
 
 
 # ---------------------------------------------------------------- banco local
@@ -440,6 +532,11 @@ class Ofertas(commands.Cog):
                 if channel is None:
                     continue
                 try:
+                    # Traduz a descrição da oferta antes de publicar. O cache evita
+                    # chamadas repetidas para descrições idênticas.
+                    item["description"] = await traduzir_descricao_oferta(
+                        str(item.get("description") or "")
+                    )
                     await channel.send(embed=make_offer_embed(item))
                     mark_offer_sent(item["key"])
                     sent_this_cycle += 1
