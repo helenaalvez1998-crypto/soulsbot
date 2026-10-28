@@ -1,0 +1,13 @@
+CORREÇÃO DO ERRO: Cog named 'Platinas' already loaded
+
+O log indica que o arquivo publicado em /data/app/cogs/loja.py não corresponde ao cogs/loja.py correto: o traceback mostra setup() tentando executar add_cog(Platinas(bot)) dentro de loja.py. No projeto correto, cogs/platinas.py registra Platinas e cogs/loja.py registra Loja.
+
+Implantação:
+1. Pare o bot.
+2. Substitua os arquivos do projeto pelo conteúdo deste ZIP, preservando .env e o banco de dados.
+3. Confirme que /data/app/cogs/loja.py contém 'await bot.add_cog(Loja(bot))'.
+4. Confirme que /data/app/cogs/platinas.py contém 'await bot.add_cog(Platinas(bot))'.
+5. Não envie cogs/platinas.py renomeado como cogs/loja.py; confira os caminhos no painel de deploy.
+6. Reinicie e confira o log.
+
+Não substitua nem publique o arquivo .env. Mantenha as chaves privadas somente nas variáveis de ambiente.
