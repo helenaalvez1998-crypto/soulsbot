@@ -430,8 +430,8 @@ def money_decimal_brl(value: Any) -> str | None:
     except (TypeError, ValueError):
         return None
 
-def make_offer_embed(item: dict[str, Any], image_url: str | None = None) -> discord.Embed:
-    """Cartão minimalista: título, descrição, preços e imagem em destaque."""
+def make_offer_embed(item: dict[str, Any]) -> discord.Embed:
+    """Cartão compacto e visual: título, descrição, preço e imagem dentro do embed."""
     titulo = str(item.get("title") or "Jogo / oferta")[:250]
     descricao = str(item.get("description") or "Confira os detalhes na página da oferta.")[:1800]
     plataforma = str(item.get("platform", "Plataforma não informada"))[:250]
@@ -440,6 +440,7 @@ def make_offer_embed(item: dict[str, Any], image_url: str | None = None) -> disc
     desconto = item.get("discount")
     url = str(item.get("url", ""))
     fonte = str(item.get("source", "Loja"))
+    validade = str(item.get("end_date") or "").strip()
 
     cor = discord.Color.green() if item.get("kind") == "game" else discord.Color.orange()
     embed = discord.Embed(title=titulo, url=url or None, description=descricao, color=cor)
@@ -447,18 +448,17 @@ def make_offer_embed(item: dict[str, Any], image_url: str | None = None) -> disc
     if item.get("kind") == "promo" and original and original != preco:
         atual = f"**{preco}**"
         if desconto:
-            atual += f"  (-{desconto}%)"
-        embed.add_field(name="Seu preço", value=atual[:1024], inline=True)
-        embed.add_field(name="Preço padrão", value=str(original)[:1024], inline=True)
+            atual += f"  ·  **-{desconto}%**"
+        embed.add_field(name="Agora", value=atual[:1024], inline=True)
+        embed.add_field(name="Preço normal", value=str(original)[:1024], inline=True)
     else:
         embed.add_field(name="Preço", value=f"**{preco}**"[:1024], inline=True)
 
-    # Plataforma e validade ficam em uma linha discreta, sem campos redundantes.
-    validade = str(item.get("end_date") or "").strip()
-    metadata = [plataforma]
+    # Metadados discretos, sem campo redundante de categoria/tipo.
+    meta = [plataforma]
     if validade and validade.lower() not in {"consulte a loja", "sem data informada", "n/a"}:
-        metadata.append(f"Até {validade}")
-    embed.add_field(name=" ", value=" · ".join(metadata)[:1024], inline=False)
+        meta.append(f"Até {validade}")
+    embed.add_field(name=" ", value=" · ".join(meta)[:1024], inline=False)
 
     gg_url = item.get("gg_deals_url")
     gg_retail = item.get("gg_deals_retail")
@@ -466,16 +466,16 @@ def make_offer_embed(item: dict[str, Any], image_url: str | None = None) -> disc
     if gg_url and (gg_retail or gg_keyshops):
         comparison = []
         if gg_retail:
-            comparison.append(f"Oficiais: **{gg_retail}**")
+            comparison.append(f"Lojas oficiais: **{gg_retail}**")
         if gg_keyshops:
             comparison.append(f"Keyshops: **{gg_keyshops}**")
         comparison.append(f"[Comparar preços]({gg_url})")
         embed.add_field(name="GG.deals", value=" · ".join(comparison), inline=False)
 
-    embed.set_footer(text=f"Disponível via {fonte}")
-    final_image = image_url or item.get("image")
-    if final_image and str(final_image).startswith(("https://", "attachment://")):
-        embed.set_image(url=str(final_image))
+    embed.set_footer(text=f"Fonte: {fonte}")
+    image_url = str(item.get("image") or "")
+    if image_url.startswith("https://"):
+        embed.set_image(url=image_url)
     return embed
 
 
@@ -584,15 +584,13 @@ class Ofertas(commands.Cog):
                     )
                     # Enviar a arte como anexo separado costuma dar mais destaque visual
                     # do que a imagem embutida no cartão, respeitando o limite do Discord.
-                    image_file = await preparar_imagem_oferta(self.http_session, item)
-                    if image_file:
-                        embed = make_offer_embed(item, image_url=f"attachment://{image_file.filename}")
-                        await channel.send(embed=embed, file=image_file, view=OfertaView(str(item.get("url", ""))))
-                    else:
-                        await channel.send(
-                            embed=make_offer_embed(item),
-                            view=OfertaView(str(item.get("url", ""))),
-                        )
+                    # Use a URL original dentro do embed. Enviar o arquivo anexado
+                    # junto com attachment:// fez alguns clientes mostrarem a imagem
+                    # separada do cartão, quebrando o layout minimalista.
+                    await channel.send(
+                        embed=make_offer_embed(item),
+                        view=OfertaView(str(item.get("url", ""))),
+                    )
                     mark_offer_sent(item["key"])
                     sent_this_cycle += 1
                     await asyncio.sleep(1.2)
