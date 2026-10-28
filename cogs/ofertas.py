@@ -431,31 +431,34 @@ def money_decimal_brl(value: Any) -> str | None:
         return None
 
 def make_offer_embed(item: dict[str, Any], image_url: str | None = None) -> discord.Embed:
-    """Monta um embed limpo; a imagem principal pode ser enviada como anexo para maior destaque."""
+    """Cartão minimalista: título, descrição, preços e imagem em destaque."""
     titulo = str(item.get("title") or "Jogo / oferta")[:250]
-    descricao = str(item.get("description") or "Confira os detalhes na página da oferta.")[:4000]
-    tipo = str(item.get("category", "Oferta"))[:120]
-    plataforma = str(item.get("platform", "Não informada"))[:250]
+    descricao = str(item.get("description") or "Confira os detalhes na página da oferta.")[:1800]
+    plataforma = str(item.get("platform", "Plataforma não informada"))[:250]
     preco = str(item.get("price", "Consulte a loja"))
     original = item.get("original_price")
-    if original and original != preco:
-        preco = f"~~{original}~~ → **{preco}**"
-    validade = str(item.get("end_date") or "Consulte a loja")[:120]
-    fonte = str(item.get("source", "Fonte não informada"))[:100]
+    desconto = item.get("discount")
     url = str(item.get("url", ""))
+    fonte = str(item.get("source", "Loja"))
 
     cor = discord.Color.green() if item.get("kind") == "game" else discord.Color.orange()
-    embed = discord.Embed(
-        title=titulo,
-        url=url or None,
-        description=descricao,
-        color=cor,
-    )
-    # Campos mais curtos para evitar excesso de quebras de linha em telas estreitas.
-    embed.add_field(name="Preço", value=preco[:1024], inline=True)
-    embed.add_field(name="Plataforma", value=plataforma[:1024], inline=True)
-    embed.add_field(name="Tipo", value=tipo[:1024], inline=True)
-    embed.add_field(name="Validade", value=validade, inline=False)
+    embed = discord.Embed(title=titulo, url=url or None, description=descricao, color=cor)
+
+    if item.get("kind") == "promo" and original and original != preco:
+        atual = f"**{preco}**"
+        if desconto:
+            atual += f"  (-{desconto}%)"
+        embed.add_field(name="Seu preço", value=atual[:1024], inline=True)
+        embed.add_field(name="Preço padrão", value=str(original)[:1024], inline=True)
+    else:
+        embed.add_field(name="Preço", value=f"**{preco}**"[:1024], inline=True)
+
+    # Plataforma e validade ficam em uma linha discreta, sem campos redundantes.
+    validade = str(item.get("end_date") or "").strip()
+    metadata = [plataforma]
+    if validade and validade.lower() not in {"consulte a loja", "sem data informada", "n/a"}:
+        metadata.append(f"Até {validade}")
+    embed.add_field(name=" ", value=" · ".join(metadata)[:1024], inline=False)
 
     gg_url = item.get("gg_deals_url")
     gg_retail = item.get("gg_deals_retail")
@@ -463,18 +466,25 @@ def make_offer_embed(item: dict[str, Any], image_url: str | None = None) -> disc
     if gg_url and (gg_retail or gg_keyshops):
         comparison = []
         if gg_retail:
-            comparison.append(f"Lojas oficiais: **{gg_retail}**")
+            comparison.append(f"Oficiais: **{gg_retail}**")
         if gg_keyshops:
             comparison.append(f"Keyshops: **{gg_keyshops}**")
-        comparison.append(f"[Comparar preços no GG.deals]({gg_url})")
-        embed.add_field(name="Comparação de preços (Brasil)", value="\\n".join(comparison), inline=False)
+        comparison.append(f"[Comparar preços]({gg_url})")
+        embed.add_field(name="GG.deals", value=" · ".join(comparison), inline=False)
 
-    embed.set_footer(text=f"Fonte: {fonte}" + (" • GG.deals" if gg_url else ""))
-    # Fallback para embed image caso o envio de anexo não seja possível.
+    embed.set_footer(text=f"Disponível via {fonte}")
     final_image = image_url or item.get("image")
-    if final_image and str(final_image).startswith("https://"):
+    if final_image and str(final_image).startswith(("https://", "attachment://")):
         embed.set_image(url=str(final_image))
     return embed
+
+
+class OfertaView(discord.ui.View):
+    """Botão simples de acesso à página da oferta."""
+    def __init__(self, url: str):
+        super().__init__(timeout=None)
+        if url.startswith(("https://", "http://")):
+            self.add_item(discord.ui.Button(label="Ver oferta", style=discord.ButtonStyle.link, url=url))
 
 
 async def preparar_imagem_oferta(
@@ -577,9 +587,12 @@ class Ofertas(commands.Cog):
                     image_file = await preparar_imagem_oferta(self.http_session, item)
                     if image_file:
                         embed = make_offer_embed(item, image_url=f"attachment://{image_file.filename}")
-                        await channel.send(embed=embed, file=image_file)
+                        await channel.send(embed=embed, file=image_file, view=OfertaView(str(item.get("url", ""))))
                     else:
-                        await channel.send(embed=make_offer_embed(item))
+                        await channel.send(
+                            embed=make_offer_embed(item),
+                            view=OfertaView(str(item.get("url", ""))),
+                        )
                     mark_offer_sent(item["key"])
                     sent_this_cycle += 1
                     await asyncio.sleep(1.2)
