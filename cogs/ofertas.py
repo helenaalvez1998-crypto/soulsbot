@@ -3,6 +3,7 @@ import logging
 import json
 import sqlite3
 import os
+from io import BytesIO
 from datetime import datetime, timezone
 from typing import Any
 
@@ -429,12 +430,12 @@ def money_decimal_brl(value: Any) -> str | None:
     except (TypeError, ValueError):
         return None
 
-def make_offer_embed(item: dict[str, Any]) -> discord.Embed:
-    """Monta um único embed por oferta (evita previews duplicados de link/imagem)."""
-    titulo = str(item["title"])[:250]
-    descricao = str(item.get("description") or "Confira os detalhes na página da oferta.")[:950]
+def make_offer_embed(item: dict[str, Any], image_url: str | None = None) -> discord.Embed:
+    """Monta um embed limpo; a imagem principal pode ser enviada como anexo para maior destaque."""
+    titulo = str(item.get("title") or "Jogo / oferta")[:250]
+    descricao = str(item.get("description") or "Confira os detalhes na página da oferta.")[:4000]
     tipo = str(item.get("category", "Oferta"))[:120]
-    plataforma = str(item.get("platform", "Não informada"))[:120]
+    plataforma = str(item.get("platform", "Não informada"))[:250]
     preco = str(item.get("price", "Consulte a loja"))
     original = item.get("original_price")
     if original and original != preco:
@@ -442,14 +443,20 @@ def make_offer_embed(item: dict[str, Any]) -> discord.Embed:
     validade = str(item.get("end_date") or "Consulte a loja")[:120]
     fonte = str(item.get("source", "Fonte não informada"))[:100]
     url = str(item.get("url", ""))
-    imagem = item.get("image")
 
     cor = discord.Color.green() if item.get("kind") == "game" else discord.Color.orange()
-    embed = discord.Embed(title=titulo, url=url or None, description=descricao, color=cor)
-    embed.add_field(name="Tipo", value=tipo, inline=True)
-    embed.add_field(name="Plataforma", value=plataforma, inline=True)
-    embed.add_field(name="Preço", value=preco, inline=True)
+    embed = discord.Embed(
+        title=titulo,
+        url=url or None,
+        description=descricao,
+        color=cor,
+    )
+    # Campos mais curtos para evitar excesso de quebras de linha em telas estreitas.
+    embed.add_field(name="Preço", value=preco[:1024], inline=True)
+    embed.add_field(name="Plataforma", value=plataforma[:1024], inline=True)
+    embed.add_field(name="Tipo", value=tipo[:1024], inline=True)
     embed.add_field(name="Validade", value=validade, inline=False)
+
     gg_url = item.get("gg_deals_url")
     gg_retail = item.get("gg_deals_retail")
     gg_keyshops = item.get("gg_deals_keyshops")
@@ -459,12 +466,40 @@ def make_offer_embed(item: dict[str, Any]) -> discord.Embed:
             comparison.append(f"Lojas oficiais: **{gg_retail}**")
         if gg_keyshops:
             comparison.append(f"Keyshops: **{gg_keyshops}**")
-        comparison.append(f"[Ver comparação no GG.deals]({gg_url})")
-        embed.add_field(name="Comparação de preços (Brasil)", value="\n".join(comparison), inline=False)
+        comparison.append(f"[Comparar preços no GG.deals]({gg_url})")
+        embed.add_field(name="Comparação de preços (Brasil)", value="\\n".join(comparison), inline=False)
+
     embed.set_footer(text=f"Fonte: {fonte}" + (" • GG.deals" if gg_url else ""))
-    if imagem and str(imagem).startswith("https://"):
-        embed.set_image(url=str(imagem))
+    # Fallback para embed image caso o envio de anexo não seja possível.
+    final_image = image_url or item.get("image")
+    if final_image and str(final_image).startswith("https://"):
+        embed.set_image(url=str(final_image))
     return embed
+
+
+async def preparar_imagem_oferta(
+    session: aiohttp.ClientSession, item: dict[str, Any]
+) -> discord.File | None:
+    """Baixa a arte do jogo para enviá-la como imagem destacada fora do embed."""
+    image_url = str(item.get("image") or "")
+    if not image_url.startswith("https://"):
+        return None
+    try:
+        async with session.get(image_url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            if resp.status != 200:
+                return None
+            content_type = resp.headers.get("Content-Type", "").lower()
+            if not content_type.startswith("image/"):
+                return None
+            data = await resp.read()
+            if not data or len(data) > 8 * 1024 * 1024:
+                return None
+        # Discord reconhece a extensão pelo nome; o nome genérico cobre PNG/JPEG/WebP.
+        ext = ".png" if "png" in content_type else ".webp" if "webp" in content_type else ".jpg"
+        return discord.File(BytesIO(data), filename=f"jogo{ext}")
+    except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
+        log.debug("Não foi possível baixar a imagem da oferta %s.", item.get("key"))
+        return None
 
 
 class Ofertas(commands.Cog):
@@ -537,7 +572,14 @@ class Ofertas(commands.Cog):
                     item["description"] = await traduzir_descricao_oferta(
                         str(item.get("description") or "")
                     )
-                    await channel.send(embed=make_offer_embed(item))
+                    # Enviar a arte como anexo separado costuma dar mais destaque visual
+                    # do que a imagem embutida no cartão, respeitando o limite do Discord.
+                    image_file = await preparar_imagem_oferta(self.http_session, item)
+                    if image_file:
+                        embed = make_offer_embed(item, image_url=f"attachment://{image_file.filename}")
+                        await channel.send(embed=embed, file=image_file)
+                    else:
+                        await channel.send(embed=make_offer_embed(item))
                     mark_offer_sent(item["key"])
                     sent_this_cycle += 1
                     await asyncio.sleep(1.2)
