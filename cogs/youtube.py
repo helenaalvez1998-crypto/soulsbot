@@ -246,7 +246,7 @@ class YouTube(commands.Cog):
             log.info("Entrada do feed ignorada (é uma live): %s", latest["id"])
             return
 
-        video_ch_id = await GuildConfig.get(self.bot.db, self.guild_id, "video_channel") or VIDEO_CHANNEL_ID
+        video_ch_id = await GuildConfig.get(self.bot.db, self.guild_id, "video_channel")
         channel = await get_text_channel(self.bot, video_ch_id)
         if channel is None:
             return
@@ -262,9 +262,11 @@ class YouTube(commands.Cog):
         embed.set_image(url=f"https://i.ytimg.com/vi/{latest['id']}/hqdefault.jpg")
         embed.set_footer(text="Notificação automática do YouTube")
         role_video_name = None
-        role_video_id = await GuildConfig.get(self.bot.db, self.guild_id, "role_video") or ROLE_VIDEO
-        if role_video_id:
-            role_obj = channel.guild.get_role(role_video_id) if channel.guild else None
+        role_video_ref = await GuildConfig.get(self.bot.db, self.guild_id, "role_video")
+        if channel.guild and role_video_ref:
+            role_video_text = str(role_video_ref).strip()
+            role_obj = (channel.guild.get_role(int(role_video_text)) if role_video_text.isdigit()
+                        else discord.utils.get(channel.guild.roles, name=role_video_text))
             role_video_name = role_obj.name if role_obj else None
         content, mentions = com_mencao(channel, role_video_name or "", "📺 **Vídeo novo no YouTube!**")
         try:
@@ -312,7 +314,7 @@ class YouTube(commands.Cog):
         else:
             self.current_live_video_id = live["id"]
 
-        live_ch_id = await GuildConfig.get(self.bot.db, self.guild_id, "live_channel") or LIVE_CHANNEL_ID
+        live_ch_id = await GuildConfig.get(self.bot.db, self.guild_id, "live_channel")
         channel = await get_text_channel(self.bot, live_ch_id)
         if channel is None:
             return
@@ -330,9 +332,11 @@ class YouTube(commands.Cog):
             embed.set_image(url=thumbnail)
         embed.set_footer(text="Notificação automática do YouTube")
         role_live_name = None
-        role_live_id = await GuildConfig.get(self.bot.db, self.guild_id, "role_live") or ROLE_LIVE
-        if role_live_id:
-            role_obj = channel.guild.get_role(role_live_id) if channel.guild else None
+        role_live_ref = await GuildConfig.get(self.bot.db, self.guild_id, "role_live")
+        if channel.guild and role_live_ref:
+            role_live_text = str(role_live_ref).strip()
+            role_obj = (channel.guild.get_role(int(role_live_text)) if role_live_text.isdigit()
+                        else discord.utils.get(channel.guild.roles, name=role_live_text))
             role_live_name = role_obj.name if role_obj else None
         content, mentions = com_mencao(channel, role_live_name or "", "🔴 **A live começou no YouTube!**")
         try:
@@ -350,14 +354,14 @@ class YouTube(commands.Cog):
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.checks.has_permissions(manage_guild=True)
     async def teste_video(self, interaction: discord.Interaction):
-        video_ch = await GuildConfig.get(self.bot.db, interaction.guild_id, "video_channel") or VIDEO_CHANNEL_ID
+        video_ch = await GuildConfig.get(self.bot.db, interaction.guild_id, "video_channel")
         await interaction.response.send_message(f"Canal de vídeos configurado: <#{video_ch}>.", ephemeral=True)
 
     @app_commands.command(name="teste_live", description="[MOD] Envia um teste para verificar os avisos de transmissões ao vivo.")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.checks.has_permissions(manage_guild=True)
     async def teste_live(self, interaction: discord.Interaction):
-        live_ch = await GuildConfig.get(self.bot.db, interaction.guild_id, "live_channel") or LIVE_CHANNEL_ID
+        live_ch = await GuildConfig.get(self.bot.db, interaction.guild_id, "live_channel")
         await interaction.response.send_message(
             f"Canal de lives configurado: <#{live_ch}>. "
             "A detecção consulta a YouTube Data API periodicamente.",
@@ -369,8 +373,8 @@ class YouTube(commands.Cog):
     @app_commands.checks.has_permissions(manage_guild=True)
     async def status_youtube(self, interaction: discord.Interaction):
         key_status = "configurada" if YOUTUBE_API_KEY else "FALTANDO"
-        video_ch = await GuildConfig.get(self.bot.db, interaction.guild_id, "video_channel") or VIDEO_CHANNEL_ID
-        live_ch = await GuildConfig.get(self.bot.db, interaction.guild_id, "live_channel") or LIVE_CHANNEL_ID
+        video_ch = await GuildConfig.get(self.bot.db, interaction.guild_id, "video_channel")
+        live_ch = await GuildConfig.get(self.bot.db, interaction.guild_id, "live_channel")
         await interaction.response.send_message(
             f"**Canal YouTube:** `{YOUTUBE_CHANNEL_ID}`\n"
             f"**Vídeos:** <#{video_ch}>\n"

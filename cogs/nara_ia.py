@@ -29,16 +29,32 @@ from ia_ferramentas import criar_registro
 from ia_gemini import GeminiAdaptador
 from ia_nucleo import Ctx, Registro, Risco, rodar_agente
 from levels import nivel_por_xp, patente_por_nivel
+from gemini_resilience import GeminiUnavailableError, gemini_status
 
 log = logging.getLogger("nara.ia")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "").strip()
-IA_LIMITE_DIARIO = int(os.getenv("IA_LIMITE_DIARIO", "0"))  # 0 = sem limite
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip() or "gemini-3.8-flash"
+
+
+def _env_nonnegative_int(name: str, default: int = 0) -> int:
+    raw = os.getenv(name, str(default)).strip()
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        log.warning("Valor inválido para %s; usando %s.", name, default)
+        return default
+    if value < 0:
+        log.warning("Valor negativo para %s; usando %s.", name, default)
+        return default
+    return value
+
+
+IA_LIMITE_DIARIO = _env_nonnegative_int("IA_LIMITE_DIARIO", 0)  # 0 = sem limite
 # Canais onde o bot responde dúvidas da comunidade sem ser marcado (vazio = modo livre desligado)
 IA_CANAIS_LIVRES = {int(x) for x in os.getenv("IA_CANAIS_LIVRES", "").replace(" ", "").split(",") if x.isdigit()}
-IA_TETO_ESPONTANEO = int(os.getenv("IA_TETO_ESPONTANEO", "0"))      # 0 = sem teto global de respostas livres
-IA_COOLDOWN_CANAL = int(os.getenv("IA_COOLDOWN_CANAL", "0"))         # 0 = responder a cada mensagem do canal de dúvidas
+IA_TETO_ESPONTANEO = _env_nonnegative_int("IA_TETO_ESPONTANEO", 0)  # 0 = sem teto global
+IA_COOLDOWN_CANAL = _env_nonnegative_int("IA_COOLDOWN_CANAL", 0)     # 0 = sem cooldown
 # A IA pode agir (comprar, equipar, editar santuário, registrar zerado)? false = só consulta, como antes.
 IA_ACOES = os.getenv("IA_ACOES", "true").strip().lower() in ("1", "true", "sim", "yes")
 # Ações de moderação pela IA (ex.: conceder XP). Desligado por padrão; mesmo ligado, só moderador e com botão.
@@ -194,7 +210,16 @@ class NaraIA(commands.Cog):
             self.prompt_golive = ""
             log.warning("prompts/go_live.md não encontrado; a Nara não ensinará o Go Live.")
         if not self.ativo:
-            log.warning("IA da Nara desativada: defina GEMINI_API_KEY e GEMINI_MODEL.")
+            log.warning("IA da Nara desativada: defina GEMINI_API_KEY; GEMINI_MODEL tem padrão compatível.")
+        else:
+            log.info("Gemini habilitado; modelo efetivo configurado: %s (a quota é compartilhada pelo projeto/API key).", GEMINI_MODEL)
+
+    async def cog_unload(self):
+        if self.gemini is not None:
+            try:
+                self.gemini.close()
+            except Exception:
+                log.exception("Falha ao fechar cliente Gemini da Nara")
 
     async def cog_load(self):
         await self.bot.db.conn.execute(
@@ -385,11 +410,12 @@ class NaraIA(commands.Cog):
                 try:
                     texto, ctx = await self._responder_ia(message, pesquisa=True, livre=False)
                     await self._registrar_uso(message.author.id)
-                except Exception as exc:
+                except GeminiUnavailableError as exc:
+                    log.warning("Nara pausada pelo circuit breaker Gemini: %s", exc.admin_message)
+                    texto = exc.user_message
+                except Exception:
                     log.exception("Falha na IA da Nara")
-                    texto = ("A cota da IA acabou por agora. Tente de novo mais tarde."
-                             if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)
-                             else "Meus circuitos engasgaram. Tente de novo em instantes.")
+                    texto = "Meus circuitos engasgaram. Tente de novo em instantes."
             self.seguimento[(message.channel.id, message.author.id)] = time.monotonic()
             if ctx is None:
                 return await message.reply(texto[:1900], allowed_mentions=sem_mencao)
@@ -400,27 +426,62 @@ class NaraIA(commands.Cog):
             return
         canal = message.channel.id
         chave = (canal, message.author.id)
-        if not await self._pode_usar(message.author.id) or not await self._teto_livre_ok():
-            return await message.reply(
-                "A configuração atual atingiu o limite diário da IA. A moderação precisa ajustar "
-                "IA_LIMITE_DIARIO=0 e IA_TETO_ESPONTANEO=0 para remover os limites.",
-                allowed_mentions=sem_mencao,
-            )
+        agora = time.monotonic()
+        # Evita várias chamadas simultâneas no mesmo canal e aplica a variável de
+        # cooldown que já existia na configuração, mas não era usada.
+        if canal in self.em_andamento:
+            return
+        if IA_COOLDOWN_CANAL and agora - self.ultimo_livre.get(canal, 0) < IA_COOLDOWN_CANAL:
+            return
+        self.em_andamento.add(canal)
+        self.ultimo_livre[canal] = agora
         try:
-            async with message.channel.typing():
-                texto, ctx = await self._responder_ia(message, pesquisa=False, livre=True)
-        except Exception:
-            log.exception("Falha na IA da Nara (canal de dúvidas)")
-            return await message.reply(
-                "Não consegui responder agora. Tente novamente em instantes.",
-                allowed_mentions=sem_mencao,
+            if not await self._pode_usar(message.author.id) or not await self._teto_livre_ok():
+                return await message.reply(
+                    "A configuração atual atingiu o limite diário da IA. A moderação precisa ajustar "
+                    "IA_LIMITE_DIARIO=0 e IA_TETO_ESPONTANEO=0 para remover os limites.",
+                    allowed_mentions=sem_mencao,
+                )
+            try:
+                async with message.channel.typing():
+                    texto, ctx = await self._responder_ia(message, pesquisa=False, livre=True)
+            except GeminiUnavailableError as exc:
+                log.warning("Canal livre da Nara pausado pelo circuit breaker Gemini: %s", exc.admin_message)
+                return await message.reply(exc.user_message, allowed_mentions=sem_mencao)
+            except Exception:
+                log.exception("Falha na IA da Nara (canal de dúvidas)")
+                return await message.reply(
+                    "Não consegui responder agora. Tente novamente em instantes.",
+                    allowed_mentions=sem_mencao,
+                )
+            if texto is None:
+                texto = "Pode explicar melhor o que você quer saber? Até eu preciso de um mínimo de contexto."
+            await self._registrar_uso(message.author.id)
+            await self._registrar_uso(GLOBAL_ID)
+            await self._enviar(message, texto, ctx)
+            self.seguimento[chave] = time.monotonic()
+        finally:
+            self.em_andamento.discard(canal)
+
+    @discord.app_commands.command(name="gemini_status", description="Mostra o estado da conexão/quota do Gemini (admin).")
+    @discord.app_commands.default_permissions(manage_guild=True)
+    async def gemini_status_command(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("Você precisa de Gerenciar servidor.", ephemeral=True)
+        status = gemini_status()
+        if status["blocked"]:
+            remaining = status["remaining_seconds"]
+            mins = max(1, (remaining + 59) // 60)
+            body = (
+                f"**Estado:** pausado pelo circuit breaker\n"
+                f"**Tipo:** `{status['kind']}`\n"
+                f"**Tempo restante:** aproximadamente {mins} minuto(s)\n"
+                f"**Motivo:** `{(status['reason'] or 'não informado')[:300]}`\n"
+                "Verifique a quota, Search grounding e faturamento no projeto Google AI Studio."
             )
-        if texto is None:
-            texto = "Pode explicar melhor o que você quer saber? Até eu preciso de um mínimo de contexto."
-        await self._registrar_uso(message.author.id)
-        await self._registrar_uso(GLOBAL_ID)
-        await self._enviar(message, texto, ctx)
-        self.seguimento[chave] = time.monotonic()
+        else:
+            body = "**Estado:** sem bloqueio local registrado. Isso não garante que a quota externa esteja disponível."
+        await interaction.response.send_message(body, ephemeral=True)
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):

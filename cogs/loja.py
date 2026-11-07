@@ -220,7 +220,14 @@ class LojaView(discord.ui.View):
         else:
             resultado = await db.comprar_item(self.user.id, item.id, item.tipo, item.preco)
             if resultado == "ok":
-                await db.log(self.user.id, "loja_compra", f"{item.id} preco={item.preco}")
+                try:
+                    await db.log(self.user.id, "loja_compra", f"{item.id} preco={item.preco}")
+                except Exception:
+                    import logging
+                    logging.getLogger("loja").exception(
+                        "Compra confirmada para user=%s item=%s, mas falhou o log de auditoria",
+                        self.user.id, item.id,
+                    )
                 self.aviso = f"✅ Você comprou **{item.nome}** por 🪙 {item.preco}."
             elif resultado == "ja_tem":
                 self.aviso = f"Você já tem **{item.nome}**."

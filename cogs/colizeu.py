@@ -91,7 +91,7 @@ class Colizeu(commands.Cog):
 
     async def _foto_platina(self, guild: discord.Guild, platina) -> str | None:
         """Busca a mensagem original para obter um link de imagem válido (links do Discord expiram)."""
-        mod_ch_id = await GuildConfig.get(self.bot.db, guild.id, "mod_channel") or config.MOD_CHANNEL_ID
+        mod_ch_id = await GuildConfig.get(self.bot.db, guild.id, "mod_channel")
         if not mod_ch_id:
             return None
         canal = await get_text_channel(self.bot, mod_ch_id)
@@ -123,7 +123,7 @@ class Colizeu(commands.Cog):
             logging.warning("Pillow não está instalado; catálogo visual desativado temporariamente.")
             return None
 
-        mod_ch_id = await GuildConfig.get(self.bot.db, guild.id, "mod_channel") or config.MOD_CHANNEL_ID
+        mod_ch_id = await GuildConfig.get(self.bot.db, guild.id, "mod_channel")
         if not mod_ch_id:
             return None
         canal = await get_text_channel(self.bot, mod_ch_id)

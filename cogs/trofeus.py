@@ -9,6 +9,7 @@ from discord.ext import commands
 import config
 import trofeus_service as svc
 import catalogo_ia
+from gemini_resilience import GeminiUnavailableError
 
 log = logging.getLogger("nara.trofeus")
 
@@ -125,10 +126,18 @@ class SolicitarJogoModal(discord.ui.Modal, title="Solicitar cadastro de jogo"):
         self.cog = cog
 
     async def on_submit(self, interaction: discord.Interaction):
-        nome = str(self.nome.value).strip()
-        plataforma = str(self.plataforma.value or "").strip()
+        nome = " ".join(str(self.nome.value).split()).strip()
+        plataforma = " ".join(str(self.plataforma.value or "").split()).strip()
         await interaction.response.defer(ephemeral=True, thinking=True)
         try:
+            permitido, _, _ = await self.cog.bot.db.reservar_pesquisa_catalogo(
+                interaction.user.id, limite=3, janela_minutos=10
+            )
+            if not permitido:
+                return await interaction.followup.send(
+                    "Limite de pesquisa atingido: são permitidas até 3 identificações por 10 minutos para evitar abuso da API. Tente novamente mais tarde.",
+                    ephemeral=True,
+                )
             result = await catalogo_ia.identificar_jogo(nome)
             candidates = result["candidates"]
             if candidates:
@@ -141,20 +150,33 @@ class SolicitarJogoModal(discord.ui.Modal, title="Solicitar cadastro de jogo"):
                     "Confirme o título oficial abaixo para iniciar a pesquisa do catálogo.",
                     embed=view.embed(), view=view, ephemeral=True,
                 )
-            raise ValueError("Não foi encontrada uma correspondência confiável.")
+            raise ValueError(result.get("notes") or "Não foi encontrada uma correspondência confiável.")
         except Exception as exc:
             log.exception("Falha ao identificar jogo solicitado pelo painel")
-            await self.cog.bot.db.conn.execute(
-                """INSERT INTO catalog_import_jobs(requested_by,game_name,status,progress,details,updated_at)
-                   VALUES (?,?, 'needs_review', 0, ?, CURRENT_TIMESTAMP)""",
-                (interaction.user.id, nome, f"Plataforma: {plataforma}. Erro/ambiguidade: {str(exc)[:800]}"),
-            )
-            await self.cog.bot.db.conn.commit()
-            await interaction.followup.send(
-                f"Não consegui confirmar o título automaticamente. A solicitação de **{discord.utils.escape_markdown(nome)}** "
-                "foi enviada para revisão administrativa. Nenhum nome canônico foi criado.",
-                ephemeral=True,
-            )
+            try:
+                detalhe_erro = (
+                    f"{exc.admin_message} Detalhe do provedor: {exc.technical_message}"
+                    if isinstance(exc, GeminiUnavailableError) else str(exc)
+                )
+                await self.cog.bot.db.conn.execute(
+                    """INSERT INTO catalog_import_jobs(requested_by,game_name,status,progress,details,updated_at)
+                       VALUES (?,?, 'needs_review', 0, ?, CURRENT_TIMESTAMP)""",
+                    (interaction.user.id, nome, f"Plataforma: {plataforma}. Erro/ambiguidade: {detalhe_erro[:800]}"),
+                )
+                await self.cog.bot.db.conn.commit()
+            except Exception:
+                log.exception("Falha ao salvar solicitação administrativa para %s", nome)
+            reason = (exc.user_message if isinstance(exc, GeminiUnavailableError) else str(exc)).strip() or type(exc).__name__
+            try:
+                await interaction.followup.send(
+                    f"**A identificação automática falhou.** Solicitação: **{discord.utils.escape_markdown(nome)}**\n"
+                    f"Motivo: {discord.utils.escape_markdown(reason[:700])}\n"
+                    "Nenhum nome canônico foi criado. O administrador pode consultar `/catalogo_fila` e `/gemini_status`.",
+                    ephemeral=True,
+                )
+            except discord.HTTPException:
+                log.exception("Não foi possível notificar a falha de identificação")
+
 
 
 class BotaoSolicitarJogo(discord.ui.Button):
@@ -520,6 +542,7 @@ class ConfirmarPesquisaJogo(discord.ui.Button):
         super().__init__(label="Confirmar jogo e pesquisar catálogo", emoji="🔎",
                          style=discord.ButtonStyle.success, row=1)
         self.parent = parent
+        self.claimed = False
 
     async def callback(self, interaction: discord.Interaction):
         p = self.parent
@@ -527,32 +550,50 @@ class ConfirmarPesquisaJogo(discord.ui.Button):
             return await interaction.response.send_message("Esta pesquisa pertence a outro membro.", ephemeral=True)
         if p.selected is None:
             return await interaction.response.send_message("Selecione primeiro o jogo correto.", ephemeral=True)
+        if self.claimed:
+            return await interaction.response.send_message("Esta pesquisa já foi iniciada.", ephemeral=True)
+
+        # Claim antes do primeiro await: dois cliques quase simultâneos não iniciam duas pesquisas.
+        self.claimed = True
         candidate = p.candidates[p.selected]
+        for child in p.children:
+            child.disabled = True
         await interaction.response.defer(ephemeral=True, thinking=True)
-        db = p.cog.bot.db
-        cur = await db.conn.execute(
-            """INSERT INTO catalog_import_jobs(requested_by,game_name,status,progress,details,updated_at)
-               VALUES (?,?, 'researching', 5, ?, CURRENT_TIMESTAMP)""",
-            (p.user_id, candidate["canonical_title"], json.dumps({
-                "input": p.query, "candidate": candidate
-            }, ensure_ascii=False)),
-        )
-        await db.conn.commit()
-        job_id = cur.lastrowid
         try:
+            await interaction.message.edit(view=p)
+        except discord.HTTPException:
+            log.warning("Não foi possível desabilitar os botões da confirmação de pesquisa")
+
+        db = p.cog.bot.db
+        job_id = None
+        try:
+            cur = await db.conn.execute(
+                """INSERT INTO catalog_import_jobs(requested_by,game_name,status,progress,details,updated_at)
+                   VALUES (?,?, 'researching', 5, ?, CURRENT_TIMESTAMP)""",
+                (p.user_id, candidate["canonical_title"], json.dumps({
+                    "input": p.query, "candidate": candidate, "identity_sources": p.sources
+                }, ensure_ascii=False)),
+            )
+            await db.conn.commit()
+            job_id = cur.lastrowid
+
             payload = await catalogo_ia.pesquisar_catalogo(candidate, incluir_dlc=True)
-            payload["name"] = candidate["canonical_title"]
+            year = candidate.get("release_year")
+            payload["name"] = (f"{candidate['canonical_title']} ({year})" if year else candidate["canonical_title"])
             payload["name_original"] = candidate.get("original_title", "")
             payload["platforms"] = candidate.get("platforms", [])
-            payload["sources"] = payload.get("sources", [])
             result = await svc.importar_catalogo(db, payload, publicar=False)
-            aliases = [p.query, candidate.get("original_title", ""),
-                       candidate["canonical_title"], *candidate.get("aliases", [])]
+            # Não converta um nome genérico (ex.: "God of War") em alias de uma edição específica.
+            aliases = [p.query, *candidate.get("aliases", [])]
+            base_titles = {candidate["canonical_title"].casefold(),
+                           str(candidate.get("original_title") or "").casefold()}
+            aliases = [a for a in aliases if str(a).strip().casefold() not in base_titles]
             await svc.salvar_aliases(db, result["game_id"], aliases)
             details = {
                 "game_id": result["game_id"], "slug": result["slug"],
                 "coverage_notes": payload.get("coverage_notes", ""),
                 "sources": payload.get("sources", []),
+                "identity_sources": p.sources,
                 "research_sources": payload.get("research_sources", 0),
                 "items": result["items_received"], "trophies": result["trophies_received"],
             }
@@ -573,17 +614,25 @@ class ConfirmarPesquisaJogo(discord.ui.Button):
                 ephemeral=True,
             )
         except Exception as exc:
-            log.exception("Falha na pesquisa automática do catálogo para %s", candidate["canonical_title"])
-            await db.conn.execute(
-                "UPDATE catalog_import_jobs SET status='failed',details=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                (str(exc)[:1500], job_id),
-            )
-            await db.conn.commit()
-            await interaction.followup.send(
-                f"A pesquisa automática falhou: `{str(exc)[:500]}`. Nenhum catálogo foi publicado. "
-                "Confira GEMINI_API_KEY, GEMINI_MODEL e os logs do bot.",
-                ephemeral=True,
-            )
+            log.exception("Falha na pesquisa automática do catálogo para %s", candidate.get("canonical_title", "desconhecido"))
+            if job_id is not None:
+                try:
+                    await db.conn.execute(
+                        "UPDATE catalog_import_jobs SET status='failed',details=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                        (str(exc)[:1500], job_id),
+                    )
+                    await db.conn.commit()
+                except Exception:
+                    log.exception("Não foi possível registrar a falha do job %s", job_id)
+            try:
+                await interaction.followup.send(
+                    f"A pesquisa automática falhou: `{str(exc)[:500]}`. Nenhum catálogo foi publicado. "
+                    "Confira a fila administrativa e os logs do bot.",
+                    ephemeral=True,
+                )
+            except discord.HTTPException:
+                log.exception("Não foi possível notificar o usuário sobre a falha do catálogo")
+
 
 
 class ConfirmacaoJogoView(discord.ui.View):
@@ -617,7 +666,20 @@ class ConfirmacaoJogoView(discord.ui.View):
             )
         if self.notes:
             e.add_field(name="Observações", value=self.notes[:900], inline=False)
-        e.set_footer(text="A confiança é estimativa do modelo, não garantia factual. Fontes da pesquisa ficam registradas.")
+        fontes = []
+        for source in self.sources[:8]:
+            if not isinstance(source, dict):
+                continue
+            url = str(source.get("url", "")).strip()
+            if not url.startswith("https://"):
+                continue
+            titulo = discord.utils.escape_markdown(str(source.get("title") or url)[:100])
+            fontes.append(f"• [{titulo}]({url})")
+        if fontes:
+            e.add_field(name="Fontes para conferência", value="\n".join(fontes)[:1024], inline=False)
+        elif self.sources == []:
+            e.add_field(name="Base da identificação", value="Correspondência local curada. A pesquisa do catálogo ainda fará sua própria busca com fontes.", inline=False)
+        e.set_footer(text="A confiança é estimativa do modelo, não garantia factual. Confira as fontes antes de confirmar.")
         return e
 
 
@@ -631,12 +693,18 @@ class ConfirmarValidacaoCatalogo(discord.ui.View):
     async def confirmar(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.user_id or not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message("Somente o administrador que abriu esta confirmação pode validar.", ephemeral=True)
-        db = self.cog.bot.db
-        await db.conn.execute("UPDATE game_items SET verified=1 WHERE game_id=?", (self.game_id,))
-        await db.conn.execute("UPDATE game_trophies SET verified=1 WHERE game_id=?", (self.game_id,))
-        await db.conn.commit()
+        try:
+            result = await svc.validar_catalogo(self.cog.bot.db, self.game_id)
+        except Exception as exc:
+            log.exception("Falha ao validar catálogo %s", self.game_id)
+            return await interaction.response.send_message(
+                f"Não foi possível validar o catálogo: {discord.utils.escape_markdown(str(exc)[:400])}",
+                ephemeral=True,
+            )
         await interaction.response.edit_message(
-            content=f"Registros de **{self.game_name}** marcados como revisados. Agora execute `/catalogo_auditar` e depois `/catalogo_publicar` se a auditoria estiver aprovada.",
+            content=(f"Registros de **{self.game_name}** marcados como revisados "
+                     f"({result['items']} itens e {result['trophies']} troféus). "
+                     "Agora execute `/catalogo_auditar` e depois `/catalogo_publicar` se a auditoria estiver aprovada."),
             view=None,
         )
 
@@ -645,6 +713,43 @@ class ConfirmarValidacaoCatalogo(discord.ui.View):
         if interaction.user.id != self.user_id:
             return await interaction.response.send_message("Confirmação pertence a outro administrador.", ephemeral=True)
         await interaction.response.edit_message(content="Validação cancelada.", view=None)
+
+
+class PainelAdminCacador(discord.ui.View):
+    def __init__(self, cog, user_id):
+        super().__init__(timeout=180)
+        self.cog, self.user_id = cog, user_id
+
+    @discord.ui.button(label="Ver fila de jogos", emoji="📥", style=discord.ButtonStyle.primary)
+    async def fila(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user_id or not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("Apenas o administrador que abriu o painel pode consultar a fila.", ephemeral=True)
+        rows = await self.cog.bot.db._all(
+            "SELECT id,game_name,requested_by,status,details,created_at FROM catalog_import_jobs ORDER BY id DESC LIMIT 15"
+        )
+        if not rows:
+            return await interaction.response.send_message("A fila está vazia.", ephemeral=True)
+        lines = []
+        for r in rows:
+            detail = (r["details"] or "").strip()
+            try:
+                parsed = json.loads(detail)
+                detail = parsed.get("error") or parsed.get("coverage_notes") or json.dumps(parsed, ensure_ascii=False)
+            except Exception:
+                pass
+            lines.append(
+                f"`#{r['id']}` **{discord.utils.escape_markdown(r['game_name'])}** · "
+                f"<@{r['requested_by']}> · `{r['status']}`\n"
+                f"↳ {discord.utils.escape_markdown(detail[:220] or 'Sem detalhes.')}"
+            )
+        e = discord.Embed(title="Fila do Caçador", description="\n\n".join(lines)[:4000], color=config.COR_OURO)
+        await interaction.response.send_message(embed=e, ephemeral=True)
+
+    @discord.ui.button(label="Fechar", emoji="✖️", style=discord.ButtonStyle.secondary)
+    async def fechar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("Este painel pertence a outro administrador.", ephemeral=True)
+        await interaction.response.edit_message(content="Painel administrativo fechado.", embed=None, view=None)
 
 
 class CacadorTrofeus(commands.Cog):
@@ -660,28 +765,70 @@ class CacadorTrofeus(commands.Cog):
         else:
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
+    @app_commands.command(name="catalogo_admin", description="[ADMIN] Abre a administração do Caçador de Troféus.")
+    @app_commands.default_permissions(manage_guild=True)
+    @app_commands.guild_only()
+    async def catalogo_admin(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("Você precisa da permissão Gerenciar servidor.", ephemeral=True)
+        e = discord.Embed(
+            title="⚙️ Administração — Caçador de Troféus",
+            description=(
+                "**Fluxo de trabalho**\n"
+                "1. `/catalogo_fila` ou botão abaixo: consulte solicitações e erros.\n"
+                "2. `/jogo_buscar`: identifique o título oficial e gere o catálogo.\n"
+                "3. `/catalogo_auditar slug`: confira fontes e cobertura.\n"
+                "4. `/catalogo_validar slug`: confirme que a revisão humana foi feita.\n"
+                "5. `/catalogo_publicar slug`: publique após passar na auditoria.\n\n"
+                "Apenas membros com **Gerenciar servidor** podem administrar. A publicação não é automática."
+            ),
+            color=config.COR_OURO,
+        )
+        await interaction.response.send_message(embed=e, view=PainelAdminCacador(self, interaction.user.id), ephemeral=True)
+
     @app_commands.command(name="jogo_buscar", description="Identifica o título oficial do jogo e pesquisa fontes para o catálogo.")
     @app_commands.guild_only()
     @app_commands.describe(nome="Pode ser abreviação, nome traduzido ou conter erros de digitação.")
     async def jogo_buscar(self, interaction: discord.Interaction, nome: str):
+        nome = " ".join(str(nome or "").split()).strip()[:120]
         await interaction.response.defer(ephemeral=True, thinking=True)
-        existing = await svc.buscar_jogo_por_nome_ou_alias(self.bot.db, nome)
-        if existing:
-            await svc.registrar_acesso(self.bot.db, interaction.user.id, int(existing["id"]))
-            view = PainelJogoView(self, interaction.user.id, existing)
-            return await interaction.followup.send(
-                f"Correspondência encontrada no catálogo: **{existing['name']}**.",
-                embed=await view.embed(), view=view, ephemeral=True)
         try:
+            existing = await svc.buscar_jogo_por_nome_ou_alias(self.bot.db, nome)
+            if existing:
+                await svc.registrar_acesso(self.bot.db, interaction.user.id, int(existing["id"]))
+                view = PainelJogoView(self, interaction.user.id, existing)
+                return await interaction.followup.send(
+                    f"Correspondência encontrada no catálogo: **{existing['name']}**.",
+                    embed=await view.embed(), view=view, ephemeral=True)
+
+            permitido, _, _ = await self.bot.db.reservar_pesquisa_catalogo(
+                interaction.user.id, limite=3, janela_minutos=10
+            )
+            if not permitido:
+                return await interaction.followup.send(
+                    "Limite de pesquisa atingido: são permitidas até 3 identificações por 10 minutos para evitar abuso da API. Tente novamente mais tarde.",
+                    ephemeral=True,
+                )
             result = await catalogo_ia.identificar_jogo(nome)
         except Exception as exc:
-            log.exception("Falha ao identificar jogo")
+            log.exception("Falha ao identificar ou consultar jogo %r", nome)
+            # Mantém um rastro administrativo sem deixar uma falha de escrita mascarar a resposta.
+            try:
+                await self.bot.db.conn.execute(
+                    """INSERT INTO catalog_import_jobs(requested_by,game_name,status,progress,details,updated_at)
+                       VALUES (?,?, 'needs_review', 0, ?, CURRENT_TIMESTAMP)""",
+                    (interaction.user.id, nome, f"Falha na identificação/consulta: {str(exc)[:1200]}"),
+                )
+                await self.bot.db.conn.commit()
+            except Exception:
+                log.exception("Não foi possível guardar a falha de pesquisa para %r", nome)
             return await interaction.followup.send(
-                f"Não consegui identificar o jogo: `{str(exc)[:450]}`. "
-                "Verifique se GEMINI_API_KEY está configurada e se o modelo aceita Google Search grounding.",
+                f"Não foi possível concluir a busca: `{discord.utils.escape_markdown(str(exc)[:450])}`. "
+                "Nenhum catálogo foi publicado. A falha foi enviada à fila administrativa quando possível.",
                 ephemeral=True,
             )
-        candidates = result["candidates"]
+
+        candidates = result.get("candidates", [])
         if not candidates:
             return await interaction.followup.send(
                 "Não encontrei uma correspondência confiável. Tente incluir o ano, estúdio ou plataforma. "
@@ -691,6 +838,7 @@ class CacadorTrofeus(commands.Cog):
         view = ConfirmacaoJogoView(self, interaction.user.id, nome, candidates,
                                    result.get("sources", []), result.get("notes", ""))
         await interaction.followup.send(embed=view.embed(), view=view, ephemeral=True)
+
 
     @app_commands.command(name="cacador", description="Abre seu painel de troféus e colecionáveis.")
     @app_commands.guild_only()
@@ -732,21 +880,23 @@ class CacadorTrofeus(commands.Cog):
         row = await self.bot.db._one("SELECT * FROM games_catalog WHERE slug=? COLLATE NOCASE", (slug.strip(),))
         if not row:
             return await interaction.response.send_message("Não encontrei esse catálogo. Confira o slug.", ephemeral=True)
-        audit = await svc.auditar_catalogo(self.bot.db, int(row["id"]))
-        if not audit["ready"]:
+        try:
+            audit = await svc.publicar_catalogo(self.bot.db, int(row["id"]))
+        except ValueError as exc:
             return await interaction.response.send_message(
-                f"Publicação bloqueada. Itens: {audit['items']} · Troféus: {audit['trophies']} · "
-                f"Registros com fonte: {audit['sourced']}/{audit['total']} · "
-                f"Verificados manualmente: {audit['verified']}/{audit['total']} · "
-                f"Domínios de fonte: {len(audit['domains'])}.\n"
-                "Revise as fontes, use /catalogo_validar após a revisão humana e tente novamente.",
-                ephemeral=True)
-        await self.bot.db.conn.execute(
-            "UPDATE games_catalog SET status='ready', updated_at=CURRENT_TIMESTAMP WHERE id=?", (row["id"],)
-        )
-        await self.bot.db.conn.commit()
+                f"Publicação bloqueada. {discord.utils.escape_markdown(str(exc)[:900])}\n"
+                "Revise as fontes e os registros, use `/catalogo_validar` após a revisão humana e tente novamente.",
+                ephemeral=True,
+            )
+        except Exception:
+            log.exception("Falha ao publicar catálogo %s", slug)
+            return await interaction.response.send_message(
+                "Falha interna ao publicar. O status do catálogo não foi alterado; consulte os logs.",
+                ephemeral=True,
+            )
         await interaction.response.send_message(
-            f"✅ **{row['name']}** está publicado no Caçador de Troféus.", ephemeral=True)
+            f"✅ **{audit['name']}** está publicado no Caçador de Troféus.", ephemeral=True)
+
 
     @app_commands.command(name="catalogo_auditar", description="[MOD] Mostra cobertura, fontes e estado de validação de um catálogo.")
     @app_commands.default_permissions(manage_guild=True)
@@ -758,12 +908,12 @@ class CacadorTrofeus(commands.Cog):
         if not row:
             return await interaction.response.send_message("Slug não encontrado.", ephemeral=True)
         a = await svc.auditar_catalogo(self.bot.db, int(row["id"]))
-        sources = "\\n".join(f"• [{x.get('title') or x.get('url')}]({x.get('url')})" for x in a["sources"][:8]) or "Nenhuma fonte."
+        sources = "\n".join(f"• [{x.get('title') or x.get('url')}]({x.get('url')})" for x in a["sources"][:8]) or "Nenhuma fonte."
         e = discord.Embed(title=f"Auditoria — {row['name']}", description=(
-            f"Status: `{row['status']}`\\nItens: **{a['items']}** · Troféus: **{a['trophies']}**\\n"
-            f"Registros com fonte: **{a['sourced']}/{a['total']}**\\n"
-            f"Verificados manualmente: **{a['verified']}/{a['total']}**\\n"
-            f"Domínios independentes: **{len(a['domains'])}** ({', '.join(a['domains'][:8]) or 'nenhum'})\\n"
+            f"Status: `{row['status']}`\nItens: **{a['items']}** · Troféus: **{a['trophies']}**\n"
+            f"Registros com fonte: **{a['sourced']}/{a['total']}**\n"
+            f"Verificados manualmente: **{a['verified']}/{a['total']}**\n"
+            f"Domínios independentes: **{len(a['domains'])}** ({', '.join(a['domains'][:8]) or 'nenhum'})\n"
             f"Pronto para publicar: **{'SIM' if a['ready'] else 'NÃO'}**"
         ), color=config.COR_OURO)
         e.add_field(name="Fontes de pesquisa", value=sources[:1024], inline=False)
@@ -779,7 +929,7 @@ class CacadorTrofeus(commands.Cog):
         if not row:
             return await interaction.response.send_message("Slug não encontrado.", ephemeral=True)
         await interaction.response.send_message(
-            f"Você confirma que revisou manualmente **todos** os itens, troféus, requisitos, localizações e fontes de **{row['name']}**?\\n"
+            f"Você confirma que revisou manualmente **todos** os itens, troféus, requisitos, localizações e fontes de **{row['name']}**?\n"
             "Responda `sim` no botão para marcar os registros como verificados. Isso não publica o catálogo.",
             view=ConfirmarValidacaoCatalogo(self, int(row["id"]), row["name"], interaction.user.id),
             ephemeral=True,
@@ -791,22 +941,49 @@ class CacadorTrofeus(commands.Cog):
     async def catalogo_fila(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message("Apenas administradores podem consultar a fila.", ephemeral=True)
+        # Reconcilia jobs abandonados por timeout/crash mesmo quando a pesquisa foi
+        # interrompida há poucos minutos e escapou ao primeiro carregamento do cog.
+        await self.bot.db.conn.execute(
+            """UPDATE catalog_import_jobs SET status='interrupted',
+               details=CASE WHEN details='' THEN 'Pesquisa interrompida ou expirada.' ELSE details || char(10) || 'Pesquisa interrompida ou expirada.' END,
+               updated_at=CURRENT_TIMESTAMP
+               WHERE status='researching' AND updated_at < datetime('now','-5 minutes')"""
+        )
+        await self.bot.db.conn.commit()
         rows = await self.bot.db._all(
-            "SELECT id, game_name, requested_by, status, created_at FROM catalog_import_jobs ORDER BY id DESC LIMIT 15"
+            "SELECT id, game_name, requested_by, status, details, created_at FROM catalog_import_jobs ORDER BY id DESC LIMIT 15"
         )
         if not rows:
             return await interaction.response.send_message("A fila de solicitações está vazia.", ephemeral=True)
-        lines = [
-            f"`#{r['id']}` **{discord.utils.escape_markdown(r['game_name'])}** · "
-            f"<@{r['requested_by']}> · `{r['status']}` · {r['created_at']}"
-            for r in rows
-        ]
-        embed = discord.Embed(title="📥 Solicitações de novos jogos", description="\n".join(lines), color=config.COR_OURO)
-        embed.set_footer(text="A pesquisa automática e o processamento da fila serão implementados na próxima etapa.")
+        lines = []
+        for r in rows:
+            detail = (r["details"] or "").strip()
+            try:
+                parsed = json.loads(detail)
+                detail = parsed.get("error") or parsed.get("coverage_notes") or json.dumps(parsed, ensure_ascii=False)
+            except Exception:
+                pass
+            detail = discord.utils.escape_markdown(detail[:220]) if detail else "Sem detalhes."
+            lines.append(
+                f"`#{r['id']}` **{discord.utils.escape_markdown(r['game_name'])}** · "
+                f"<@{r['requested_by']}> · `{r['status']}` · {r['created_at']}\n"
+                f"↳ {detail}"
+            )
+        embed = discord.Embed(title="📥 Solicitações de novos jogos", description="\n\n".join(lines)[:4000], color=config.COR_OURO)
+        embed.set_footer(text="Erros técnicos e resultados da pesquisa são exibidos nesta fila.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def cog_load(self):
-        log.info("Caçador de Troféus carregado.")
+        # Executado uma vez no carregamento do cog. Jobs ainda marcados como "researching"
+        # não sobreviveram a um reinício do processo: registra o estado interrompido.
+        await self.bot.db.conn.execute(
+            """UPDATE catalog_import_jobs SET status='interrupted',
+               details=CASE WHEN details='' THEN 'Processo reiniciado durante a pesquisa.' ELSE details || char(10) || 'Processo reiniciado durante a pesquisa.' END,
+               updated_at=CURRENT_TIMESTAMP
+               WHERE status='researching' AND updated_at < datetime('now','-5 minutes')"""
+        )
+        await self.bot.db.conn.commit()
+        log.info("Caçador de Troféus carregado; pesquisas órfãs marcadas como interrompidas.")
 
 
 async def setup(bot):

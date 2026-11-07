@@ -33,6 +33,7 @@ from config import (
 )
 from admin_config import GuildConfig
 from utils import get_text_channel, erro_comando
+from gemini_resilience import run_gemini_call
 
 log = logging.getLogger("ofertas")
 
@@ -46,7 +47,7 @@ JANELA_DUPLICADO_GRATIS = timedelta(days=14)
 # ====================================================================== tradução
 # Só é usada se OFFERS_SHOW_DESCRIPTION=true. Reaproveita a configuração Gemini da Nara.
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip() or "gemini-3.8-flash"
 _translation_warned = False
 
 
@@ -55,7 +56,7 @@ def _translate_game_description_sync(text: str) -> str:
     from google import genai
     from google.genai import types
 
-    client = genai.Client(api_key=GEMINI_API_KEY)
+    client = genai.Client(api_key=GEMINI_API_KEY, http_options=types.HttpOptions(timeout=45_000))
     prompt = (
         "Traduza a descrição abaixo para português brasileiro natural (pt-BR). "
         "Retorne somente a descrição traduzida, sem introdução, aspas ou comentários. "
@@ -65,13 +66,18 @@ def _translate_game_description_sync(text: str) -> str:
         "adicione detalhes. Se o texto já estiver em português brasileiro, devolva-o "
         "com mudanças mínimas.\n\nDESCRIÇÃO:\n" + text
     )
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(temperature=0.1),
-    )
-    result = (getattr(response, "text", None) or "").strip()
-    return result or text
+    try:
+        response = run_gemini_call(lambda: client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.1),
+        ))
+        result = (getattr(response, "text", None) or "").strip()
+        return result or text
+    finally:
+        close = getattr(client, "close", None)
+        if callable(close):
+            close()
 
 
 _CACHE_DDL = """
@@ -83,6 +89,29 @@ _CACHE_DDL = """
 """
 
 
+def _ler_cache_traducao(original: str) -> str | None:
+    with sqlite3.connect(SENT_DB_PATH, timeout=3) as conn:
+        conn.execute("PRAGMA busy_timeout=3000")
+        conn.execute(_CACHE_DDL)
+        row = conn.execute(
+            "SELECT translated_text FROM offer_translation_cache WHERE source_text = ?",
+            (original,),
+        ).fetchone()
+        return str(row[0]) if row and row[0] else None
+
+
+def _salvar_cache_traducao(original: str, translated: str) -> None:
+    with sqlite3.connect(SENT_DB_PATH, timeout=3) as conn:
+        conn.execute("PRAGMA busy_timeout=3000")
+        conn.execute(_CACHE_DDL)
+        conn.execute(
+            "INSERT OR REPLACE INTO offer_translation_cache "
+            "(source_text, translated_text, translated_at) VALUES (?, ?, ?)",
+            (original, translated, datetime.now(timezone.utc).isoformat()),
+        )
+        conn.commit()
+
+
 async def traduzir_descricao_oferta(texto: str) -> str:
     """Traduz descrições externas e mantém cache SQLite para reduzir custo e latência."""
     global _translation_warned
@@ -91,19 +120,14 @@ async def traduzir_descricao_oferta(texto: str) -> str:
         return original
     if not GEMINI_API_KEY or not GEMINI_MODEL:
         if not _translation_warned:
-            log.warning("Tradução de descrições desativada: configure GEMINI_API_KEY e GEMINI_MODEL.")
+            log.warning("Tradução de descrições desativada: configure GEMINI_API_KEY.")
             _translation_warned = True
         return original
 
     try:
-        with sqlite3.connect(SENT_DB_PATH) as conn:
-            conn.execute(_CACHE_DDL)
-            row = conn.execute(
-                "SELECT translated_text FROM offer_translation_cache WHERE source_text = ?",
-                (original,),
-            ).fetchone()
-            if row and row[0]:
-                return str(row[0])
+        cached = await asyncio.to_thread(_ler_cache_traducao, original)
+        if cached:
+            return cached
     except sqlite3.Error:
         log.exception("Não foi possível ler o cache de traduções.")
 
@@ -115,14 +139,7 @@ async def traduzir_descricao_oferta(texto: str) -> str:
         return original
 
     try:
-        with sqlite3.connect(SENT_DB_PATH) as conn:
-            conn.execute(_CACHE_DDL)
-            conn.execute(
-                "INSERT OR REPLACE INTO offer_translation_cache "
-                "(source_text, translated_text, translated_at) VALUES (?, ?, ?)",
-                (original, translated, datetime.now(timezone.utc).isoformat()),
-            )
-            conn.commit()
+        await asyncio.to_thread(_salvar_cache_traducao, original, translated)
     except sqlite3.Error:
         log.exception("Não foi possível salvar a tradução no cache.")
     return translated
@@ -816,8 +833,8 @@ class Ofertas(commands.Cog):
 
     async def cog_load(self):
         self.http_session = aiohttp.ClientSession(headers={"User-Agent": "NaraBot/2.0"})
-        init_offers_db()
-        migrate_legacy_seeds()
+        await asyncio.to_thread(init_offers_db)
+        await asyncio.to_thread(migrate_legacy_seeds)
         self.offers_loop.start()
 
     async def cog_unload(self):
@@ -868,24 +885,28 @@ class Ofertas(commands.Cog):
             fontes_presentes = {i["source_id"] for i in unique.values()}
             if SEED_OFFERS_ON_FIRST_RUN:
                 for src in fontes_presentes:
-                    if offer_already_sent(f"seed:{src}"):
+                    if await asyncio.to_thread(offer_already_sent, f"seed:{src}"):
                         continue
                     seeded = 0
                     for item in unique.values():
                         if item["source_id"] == src:
-                            mark_offer_sent(item["key"])
+                            await asyncio.to_thread(mark_offer_sent, item["key"])
                             if item["kind"] == "game":
-                                mark_free_title(item.get("norm", ""))
+                                await asyncio.to_thread(mark_free_title, item.get("norm", ""))
                             seeded += 1
-                    mark_offer_sent(f"seed:{src}")
+                    await asyncio.to_thread(mark_offer_sent, f"seed:{src}")
                     log.info("Fonte '%s' registrada pela primeira vez: %s ofertas marcadas sem postar.", src, seeded)
 
-            novos = [
-                i for i in unique.values()
-                if not offer_already_sent(i["key"])
-                and not (i["kind"] == "game" and free_title_recently_sent(i.get("norm", "")))
-                and not (i["kind"] == "promo" and (i.get("discount") or 0) < MIN_PROMO_DISCOUNT)
-            ]
+            # A leitura da base de deduplicação pode esperar por lock; não bloqueie o event loop.
+            novos = []
+            for item in unique.values():
+                if await asyncio.to_thread(offer_already_sent, item["key"]):
+                    continue
+                if item["kind"] == "game" and await asyncio.to_thread(free_title_recently_sent, item.get("norm", "")):
+                    continue
+                if item["kind"] == "promo" and (item.get("discount") or 0) < MIN_PROMO_DISCOUNT:
+                    continue
+                novos.append(item)
             # Jogos grátis primeiro; depois as promoções de maior desconto.
             novos.sort(key=lambda i: (i["kind"] != "game", -(i.get("discount") or 0)))
 
@@ -893,9 +914,9 @@ class Ofertas(commands.Cog):
             guild_id = self.bot.guilds[0].id if self.bot.guilds else 0
             for item in novos:
                 if item["kind"] == "game":
-                    target_id = await GuildConfig.get(self.bot.db, guild_id, "games_channel") or GAMES_CHANNEL_ID
+                    target_id = await GuildConfig.get(self.bot.db, guild_id, "games_channel")
                 else:
-                    target_id = await GuildConfig.get(self.bot.db, guild_id, "promos_channel") or PROMOS_CHANNEL_ID
+                    target_id = await GuildConfig.get(self.bot.db, guild_id, "promos_channel")
                 if not target_id:
                     log.warning("Defina os canais de jogos/promoções via /adm ou config.py para ativar os avisos de ofertas.")
                     return
@@ -906,9 +927,9 @@ class Ofertas(commands.Cog):
                     if OFFERS_SHOW_DESCRIPTION and item.get("description"):
                         item["description"] = await traduzir_descricao_oferta(str(item["description"]))
                     await enviar_oferta(channel, item)
-                    mark_offer_sent(item["key"])
+                    await asyncio.to_thread(mark_offer_sent, item["key"])
                     if item["kind"] == "game":
-                        mark_free_title(item.get("norm", ""))
+                        await asyncio.to_thread(mark_free_title, item.get("norm", ""))
                     sent_this_cycle += 1
                     await asyncio.sleep(1.2)
                     if sent_this_cycle >= MAX_OFFERS_PER_CHECK:
@@ -928,8 +949,8 @@ class Ofertas(commands.Cog):
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.checks.has_permissions(manage_guild=True)
     async def status_ofertas(self, interaction: discord.Interaction):
-        games_id = await GuildConfig.get(self.bot.db, interaction.guild_id, "games_channel") or GAMES_CHANNEL_ID
-        promos_id = await GuildConfig.get(self.bot.db, interaction.guild_id, "promos_channel") or PROMOS_CHANNEL_ID
+        games_id = await GuildConfig.get(self.bot.db, interaction.guild_id, "games_channel")
+        promos_id = await GuildConfig.get(self.bot.db, interaction.guild_id, "promos_channel")
         games = f"<#{games_id}>" if games_id else "Não configurado"
         promos = f"<#{promos_id}>" if promos_id else "Não configurado"
         gog = "✅ GOG (BRL)" if OFFERS_GOG_ENABLED else "⚪ GOG desligada (OFFERS_GOG_ENABLED)"

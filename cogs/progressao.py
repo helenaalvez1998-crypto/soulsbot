@@ -66,6 +66,20 @@ class ProgressaoXP(commands.Cog):
                 except discord.HTTPException as exc:
                     logging.error("Falha ao renomear cargo '%s' em '%s': %s", nome_original, guild.name, exc)
 
+    async def notificar_recompensa(self, guild, user_id: int, antigo_nivel: int,
+                                   novo_nivel: int, quantidade: int, motivo: str):
+        """Atualiza efeitos do Discord para XP já creditado em outra transação."""
+        membro = guild.get_member(user_id) if guild else None
+        if membro and novo_nivel > antigo_nivel:
+            await sincronizar_patente(guild, membro, novo_nivel)
+            try:
+                await membro.send(
+                    f"⚔️ Você alcançou o nível **{novo_nivel} — {patente_por_nivel(novo_nivel)}** "
+                    f"no sistema da Nara! (+{quantidade} XP por {motivo})"
+                )
+            except (discord.Forbidden, discord.HTTPException):
+                pass
+
     async def conceder_xp(self, guild, user_id: int, quantidade: int, motivo: str):
         if quantidade <= 0:
             return
@@ -73,13 +87,7 @@ class ProgressaoXP(commands.Cog):
         xp_antigo = int(antigo_xp_row['xp'])
         antigo_nivel = nivel_por_xp(xp_antigo)
         _, novo_nivel, total = await self.bot.db.add_reward(user_id, quantidade, 0)
-        membro = guild.get_member(user_id) if guild else None
-        if membro and novo_nivel > antigo_nivel:
-            await sincronizar_patente(guild, membro, novo_nivel)
-            try:
-                await membro.send(f"⚔️ Você alcançou o nível **{novo_nivel} — {patente_por_nivel(novo_nivel)}** no sistema de progressão da Nara! (+{quantidade} XP por {motivo})")
-            except (discord.Forbidden, discord.HTTPException):
-                pass
+        await self.notificar_recompensa(guild, user_id, antigo_nivel, novo_nivel, quantidade, motivo)
         return total
 
     @commands.Cog.listener()
@@ -89,7 +97,7 @@ class ProgressaoXP(commands.Cog):
         # Ignora mensagens vazias, comandos e canais de moderação.
         if not message.content.strip() and not message.attachments:
             return
-        mod_ch_id = await GuildConfig.get(self.bot.db, message.guild.id, "mod_channel") or config.MOD_CHANNEL_ID
+        mod_ch_id = await GuildConfig.get(self.bot.db, message.guild.id, "mod_channel")
         if mod_ch_id and message.channel.id == mod_ch_id:
             return
         agora = time.monotonic()

@@ -88,12 +88,17 @@ class Zerados(commands.Cog):
         if z["user_id"] != interaction.user.id and not await eh_moderador(interaction.user, self.bot.db):
             return await interaction.response.send_message("Você só pode remover os seus próprios registros.", ephemeral=True)
 
-        await db.apagar_zerado(registro)
-        await db.log(interaction.user.id, "zerado_removido", f"id={registro} user={z['user_id']} jogo={z['game']}")
+        removido = await db.remover_zerado_com_recompensa(registro)
+        if removido is None:
+            return await interaction.response.send_message("Este registro já foi removido por outra ação.", ephemeral=True)
+        try:
+            await db.log(interaction.user.id, "zerado_removido", f"id={registro} user={z['user_id']} jogo={z['game']}")
+        except Exception:
+            log.exception("Zerado #%s removido, mas falhou o log de auditoria", registro)
 
         extra = ""
         if z["xp_awarded"] or z["denarios_awarded"]:
-            _, novo, _ = await db.add_reward(z["user_id"], -z["xp_awarded"], -z["denarios_awarded"])
+            novo = nivel_por_xp(int(removido["new_xp"]))
             membro = interaction.guild.get_member(z["user_id"])
             if membro:
                 await sincronizar_patente(interaction.guild, membro, novo)
@@ -119,11 +124,24 @@ class Zerados(commands.Cog):
             return await interaction.response.send_message("Informe o nome do jogo.", ephemeral=True)
 
         capturas = list(capturas or [])
+        if len(capturas) > 5:
+            return await interaction.response.send_message("Envie no máximo 5 comprovantes por registro.", ephemeral=True)
+        total_bytes = 0
         for anexo in capturas:
             if not eh_midia(anexo):
                 return await interaction.response.send_message(
                     f"Arquivo não suportado: {anexo.filename}. Envie imagens ou vídeos.", ephemeral=True
                 )
+            tamanho = int(getattr(anexo, "size", 0) or 0)
+            if tamanho > 20 * 1024 * 1024:
+                return await interaction.response.send_message(
+                    f"O arquivo {anexo.filename} excede o limite de 20 MB.", ephemeral=True
+                )
+            total_bytes += tamanho
+        if total_bytes > 40 * 1024 * 1024:
+            return await interaction.response.send_message(
+                "O total dos comprovantes não pode ultrapassar 40 MB por registro.", ephemeral=True
+            )
 
         db = self.bot.db
         if await db.zerado_duplicado(interaction.user.id, jogo, plataforma):
@@ -133,34 +151,48 @@ class Zerados(commands.Cog):
             )
 
         await interaction.response.defer(ephemeral=True, thinking=True)
-        linhas = await self.gravar_zerado(interaction.guild, interaction.user, d, jogo, plataforma, comentario, capturas)
+        try:
+            linhas = await self.gravar_zerado(interaction.guild, interaction.user, d, jogo, plataforma, comentario, capturas)
+        except ValueError as exc:
+            return await interaction.edit_original_response(content=str(exc))
         await interaction.edit_original_response(content="\n".join(linhas))
 
     async def gravar_zerado(self, guild, user, d, jogo, plataforma, comentario, capturas) -> list[str]:
         """Núcleo do registro, usado pelo painel e pela IA: grava, recompensa, sincroniza a patente
         e anuncia. As validações (data, duplicidade, anexos) ficam com quem chama. Devolve as linhas do resumo."""
         db = self.bot.db
-        # Recompensa (com limite por 24h para evitar farm de XP)
-        xp = dinheiro = 0
-        xp_zerado = await GuildConfig.get(db, guild.id, "xp_zerado") or config.XP_ZERADO
-        den_zerado = await GuildConfig.get(db, guild.id, "denarios_zerado") or config.DENARIOS_ZERADO
-        limite = await GuildConfig.get(db, guild.id, "zerados_xp_limite") or config.ZERADOS_XP_LIMITE_DIARIO
-        if xp_zerado > 0 or den_zerado > 0:
-            if limite <= 0 or await db.contar_zerados_recentes(user.id) < limite:
-                xp, dinheiro = xp_zerado, den_zerado
+        xp_zerado = await GuildConfig.get(db, guild.id, "xp_zerado")
+        den_zerado = await GuildConfig.get(db, guild.id, "denarios_zerado")
+        limite = await GuildConfig.get(db, guild.id, "zerados_xp_limite")
+        if xp_zerado is None:
+            xp_zerado = config.XP_ZERADO
+        if den_zerado is None:
+            den_zerado = config.DENARIOS_ZERADO
+        if limite is None:
+            limite = config.ZERADOS_XP_LIMITE_DIARIO
 
-        zerado_id = await db.criar_zerado(
-            user.id, jogo, plataforma, d.isoformat(), comentario, xp, dinheiro
+        registro = await db.registrar_zerado_com_recompensa(
+            user.id, jogo, plataforma, d.isoformat(), comentario,
+            int(xp_zerado), int(den_zerado), int(limite),
         )
-        await db.log(user.id, "zerado_registrado", f"id={zerado_id} jogo={jogo}")
-
-        subiu = False
-        novo_nivel = None
-        if xp or dinheiro:
-            antigo, novo_nivel, _ = await db.add_reward(user.id, xp, dinheiro)
-            subiu = novo_nivel > antigo
-            if subiu and isinstance(user, discord.Member):
-                await sincronizar_patente(guild, user, novo_nivel)
+        if registro is None:
+            raise ValueError(
+                "Você já registrou esse jogo nessa plataforma. Para refazer, remova o registro antigo com `/remover_zerado`."
+            )
+        zerado_id = int(registro["id"])
+        xp, dinheiro = int(registro["xp"]), int(registro["denarios"])
+        novo_nivel = registro["new_level"]
+        subiu = (registro["old_level"] is not None and novo_nivel is not None
+                 and int(novo_nivel) > int(registro["old_level"]))
+        if subiu and isinstance(user, discord.Member):
+            try:
+                await sincronizar_patente(guild, user, int(novo_nivel))
+            except Exception:
+                log.exception("Zerado #%s salvo, mas falhou a sincronização de patente", zerado_id)
+        try:
+            await db.log(user.id, "zerado_registrado", f"id={zerado_id} jogo={jogo}")
+        except Exception:
+            log.exception("Zerado #%s registrado, mas falhou o log de auditoria", zerado_id)
 
         contexto = SimpleNamespace(guild_id=guild.id, user=user)  # _anunciar só usa estes dois campos
         anunciado = await self._anunciar(contexto, zerado_id, jogo, plataforma, d, comentario, capturas, xp, dinheiro, novo_nivel if subiu else None)
@@ -168,8 +200,8 @@ class Zerados(commands.Cog):
         linhas = [f"✅ **{jogo}** registrado como zerado! (registro #{zerado_id})"]
         if xp or dinheiro:
             linhas.append(f"**Recompensa:** +{xp} XP · +{dinheiro} Denários")
-        elif xp_zerado > 0:
-            linhas.append(f"_Você já atingiu o limite de {limite} zerados com recompensa nas últimas 24h; este registro entrou sem XP._")
+        elif registro["daily_limit_reached"] and (xp_zerado > 0 or den_zerado > 0):
+            linhas.append(f"_Você já atingiu o limite de {limite} zerados com recompensa nas últimas 24h; este registro entrou sem XP/Denários._")
         if subiu:
             linhas.append(f"⬆️ **Novo nível:** {novo_nivel} — {patente_por_nivel(novo_nivel)}")
         if capturas and not anunciado:
@@ -177,13 +209,13 @@ class Zerados(commands.Cog):
         return linhas
 
     async def _anunciar(self, interaction, zerado_id, jogo, plataforma, data, comentario, capturas, xp, dinheiro, novo_nivel) -> bool:
-        zerados_ch_id = await GuildConfig.get(self.bot.db, interaction.guild_id, "zerados_channel")
-        if not zerados_ch_id:
-            return False
-        canal = await get_text_channel(self.bot, zerados_ch_id)
-        if canal is None:
-            return False
         try:
+            zerados_ch_id = await GuildConfig.get(self.bot.db, interaction.guild_id, "zerados_channel")
+            if not zerados_ch_id:
+                return False
+            canal = await get_text_channel(self.bot, zerados_ch_id)
+            if canal is None:
+                return False
             arquivos = [await a.to_file() for a in capturas]
             embed = discord.Embed(
                 title="✅ Jogo zerado!",
@@ -207,7 +239,7 @@ class Zerados(commands.Cog):
                     break
             await canal.send(embed=embed, files=arquivos or discord.utils.MISSING)
             return True
-        except discord.HTTPException:
+        except Exception:
             log.exception("Falha ao anunciar zerado #%s", zerado_id)
             return False
 

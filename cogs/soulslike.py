@@ -1,6 +1,7 @@
 import io
 import logging
 import re
+import time
 
 import discord
 from discord import app_commands
@@ -21,6 +22,7 @@ DESAFIOS_PADRAO = [
 ]
 MIN_SEGUNDOS = 30
 MAX_SEGUNDOS = 1000 * 3600
+PENDING_UPLOAD_TTL = 10 * 60  # evita bloquear o usuário indefinidamente se ele não anexar comprovante
 
 
 async def eh_moderador(member: discord.Member, db=None) -> bool:
@@ -204,7 +206,7 @@ class Soulslike(commands.Cog):
     # -------------------------------------------------------- submissão de runs (usada pela Central)
     async def enviar_para_moderacao(self, user, g, c, seg, build, dados, filename):
         db = self.bot.db
-        mod_ch_id = await GuildConfig.get(db, user.guild.id if hasattr(user, 'guild') and user.guild else 0, "mod_channel") or config.MOD_CHANNEL_ID
+        mod_ch_id = await GuildConfig.get(db, user.guild.id if hasattr(user, 'guild') and user.guild else 0, "mod_channel")
         canal = await get_text_channel(self.bot, mod_ch_id)
         if canal is None:
             return None
@@ -215,47 +217,81 @@ class Soulslike(commands.Cog):
         await db.conn.commit()
         run_id = cur.lastrowid
 
-        record = await db._one(
-            "SELECT MIN(seconds) AS m FROM sl_runs WHERE status='approved' AND game_id=? AND challenge_id=?",
-            (g["id"], c["id"]),
-        )
-        pb = await db._one(
-            "SELECT MIN(seconds) AS m FROM sl_runs WHERE status='approved' AND user_id=? AND game_id=? AND challenge_id=?",
-            (user.id, g["id"], c["id"]),
-        )
-        pos = await self._posicao(g["id"], c["id"], seg, user.id)
-        if pb and pb["m"] is not None and seg >= pb["m"]:
-            ref = f"não melhora o melhor tempo dele ({fmt_tempo(pb['m'])}); conta como **mais uma zerada**"
-        elif record and record["m"] is not None:
-            dif = seg - record["m"]
-            ref = "seria um **novo recorde**" if dif < 0 else f"seria o {pos}º, {fmt_tempo(dif)} mais lento que o recorde"
-        else:
-            ref = "seria o **primeiro registro** da categoria"
+        try:
+            record = await db._one(
+                "SELECT MIN(seconds) AS m FROM sl_runs WHERE status='approved' AND game_id=? AND challenge_id=?",
+                (g["id"], c["id"]),
+            )
+            pb = await db._one(
+                "SELECT MIN(seconds) AS m FROM sl_runs WHERE status='approved' AND user_id=? AND game_id=? AND challenge_id=?",
+                (user.id, g["id"], c["id"]),
+            )
+            pos = await self._posicao(g["id"], c["id"], seg, user.id)
+            if pb and pb["m"] is not None and seg >= pb["m"]:
+                ref = f"não melhora o melhor tempo dele ({fmt_tempo(pb['m'])}); conta como **mais uma zerada**"
+            elif record and record["m"] is not None:
+                dif = seg - record["m"]
+                ref = "seria um **novo recorde**" if dif < 0 else f"seria o {pos}º, {fmt_tempo(dif)} mais lento que o recorde"
+            else:
+                ref = "seria o **primeiro registro** da categoria"
 
-        embed = discord.Embed(title="⚔️ Run Soulslike aguardando aprovação", color=config.COR_PRATA)
-        embed.add_field(name="Membro", value=user.mention)
-        embed.add_field(name="Jogo", value=g["name"])
-        embed.add_field(name="Desafio", value=c["name"])
-        embed.add_field(name="Tempo", value=fmt_tempo(seg))
-        embed.add_field(name="Build", value=build or "Não informada")
-        embed.add_field(name="Posição", value=ref)
-        if filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")):
-            embed.set_image(url=f"attachment://{filename}")
-        embed.set_footer(text=f"SL:{run_id}")
+            embed = discord.Embed(title="⚔️ Run Soulslike aguardando aprovação", color=config.COR_PRATA)
+            embed.add_field(name="Membro", value=user.mention)
+            embed.add_field(name="Jogo", value=g["name"])
+            embed.add_field(name="Desafio", value=c["name"])
+            embed.add_field(name="Tempo", value=fmt_tempo(seg))
+            embed.add_field(name="Build", value=build or "Não informada")
+            embed.add_field(name="Posição", value=ref)
+            if filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")):
+                embed.set_image(url=f"attachment://{filename}")
+            embed.set_footer(text=f"SL:{run_id}")
+        except Exception:
+            log.exception("Falha preparando card da run #%s; removendo registro incompleto", run_id)
+            try:
+                await db.conn.execute("DELETE FROM sl_runs WHERE id=? AND status='pending'", (run_id,))
+                await db.conn.commit()
+            except Exception:
+                log.exception("Falha ao limpar run #%s após erro de preparação", run_id)
+            return None
         try:
             msg = await canal.send(
                 embed=embed,
                 file=discord.File(io.BytesIO(dados), filename=filename),
                 view=RevisaoRunView(self),
             )
-        except discord.HTTPException:
-            await db.conn.execute("DELETE FROM sl_runs WHERE id=?", (run_id,))
-            await db.conn.commit()
+        except Exception:
+            log.exception("Falha ao enviar comprovante da run #%s à moderação", run_id)
+            try:
+                await db.conn.execute("DELETE FROM sl_runs WHERE id=? AND status='pending'", (run_id,))
+                await db.conn.commit()
+            except Exception:
+                log.exception("Falha ao limpar run #%s após erro de envio", run_id)
             return None
-        url = msg.embeds[0].image.url if msg.embeds and msg.embeds[0].image else ""
-        await db.conn.execute("UPDATE sl_runs SET proof_msg_id=?, proof_url=? WHERE id=?", (msg.id, url, run_id))
-        await db.conn.commit()
-        await db.log(user.id, "run_registrada", f"id={run_id} {g['name']}/{c['name']} {fmt_tempo(seg)}")
+        try:
+            url = msg.embeds[0].image.url if msg.embeds and msg.embeds[0].image else ""
+            cur = await db.conn.execute(
+                "UPDATE sl_runs SET proof_msg_id=?, proof_url=? WHERE id=? AND status='pending'",
+                (msg.id, url, run_id),
+            )
+            await db.conn.commit()
+            if cur.rowcount != 1:
+                raise RuntimeError("O registro de run deixou de existir durante o envio do comprovante.")
+        except Exception:
+            log.exception("Falha ao vincular comprovante à run #%s; removendo registro e mensagem", run_id)
+            try:
+                await msg.delete()
+            except discord.HTTPException:
+                log.exception("Falha ao apagar mensagem órfã da run #%s", run_id)
+            try:
+                await db.conn.execute("DELETE FROM sl_runs WHERE id=? AND status='pending'", (run_id,))
+                await db.conn.commit()
+            except Exception:
+                log.exception("Falha ao limpar run incompleta #%s", run_id)
+            return None
+        try:
+            await db.log(user.id, "run_registrada", f"id={run_id} {g['name']}/{c['name']} {fmt_tempo(seg)}")
+        except Exception:
+            log.exception("Run #%s registrada, mas falhou o log de auditoria", run_id)
         return run_id
 
     # -------------------------------------------------------- central Soulslike
@@ -340,6 +376,11 @@ class Soulslike(commands.Cog):
         state = self.pending_uploads.get(message.author.id)
         if not state:
             return
+        if time.monotonic() - float(state.get("created_at", 0)) > PENDING_UPLOAD_TTL:
+            self.pending_uploads.pop(message.author.id, None)
+            return await message.channel.send(
+                "Esse envio de comprovante expirou após 10 minutos. Abra a Central Soulslike e inicie uma nova run."
+            )
         if not message.attachments:
             return
         attachment = message.attachments[0]
@@ -434,7 +475,10 @@ class Soulslike(commands.Cog):
         await db.conn.commit()
         if cur.rowcount != 1:
             return await interaction.response.send_message("A run deixou de estar aprovada antes da operação.", ephemeral=True)
-        await db.log(interaction.user.id, "run_invalidada", f"id={numero} motivo={motivo}")
+        try:
+            await db.log(interaction.user.id, "run_invalidada", f"id={numero} motivo={motivo}")
+        except Exception:
+            log.exception("Run #%s invalidada, mas falhou o log de auditoria", numero)
         await interaction.response.send_message(f"Run `#{numero}` invalidada e fora do ranking.", ephemeral=True)
 
     # -------------------------------------------------------- decisões da moderação
@@ -461,62 +505,79 @@ class Soulslike(commands.Cog):
             return await interaction.response.send_message("Você não pode aprovar a sua própria run.", ephemeral=True)
 
         db = self.bot.db
-        antes = await db._one(
-            "SELECT MIN(seconds) AS m FROM sl_runs WHERE status='approved' AND game_id=? AND challenge_id=?",
-            (run["game_id"], run["challenge_id"]),
-        )
-        pb_antes = await db._one(
-            "SELECT MIN(seconds) AS m FROM sl_runs WHERE status='approved' AND user_id=? AND game_id=? AND challenge_id=?",
-            (run["user_id"], run["game_id"], run["challenge_id"]),
-        )
-        ja_tinha = await db._one(
-            "SELECT COUNT(*) AS c FROM sl_runs WHERE status='approved' AND user_id=? AND game_id=? AND challenge_id=?",
-            (run["user_id"], run["game_id"], run["challenge_id"]),
-        )
-        cur = await db.conn.execute(
-            "UPDATE sl_runs SET status='approved', reviewer_id=? WHERE id=? AND status='pending'",
-            (interaction.user.id, run["id"]),
-        )
-        await db.conn.commit()
-        if cur.rowcount != 1:
-            return await interaction.response.send_message("Esta run já foi processada por outro moderador.", ephemeral=True)
-        await db.log(interaction.user.id, "run_aprovada", f"id={run['id']} user={run['user_id']}")
-        progressao = self.bot.get_cog("ProgressaoXP")
-        if progressao:
-            await progressao.conceder_xp(interaction.guild, run["user_id"], 100, "run aprovada")
+        # Status, XP base e bônus de recorde são confirmados juntos. Isso impede que
+        # uma falha entre UPDATE e add_reward gere aprovação sem recompensa (ou bônus duplicado).
+        resultado = await db.aprovar_run_com_recompensa(run["id"], interaction.user.id)
+        if resultado is None:
+            return await interaction.response.send_message(
+                "Esta run já foi processada por outro moderador.", ephemeral=True
+            )
+        # A consulta prévia contém os aliases de exibição (jogo/desafio); preserva-os
+        # e mescla o estado transacional confirmado pelo banco.
+        run = {**dict(run), **resultado["run"]}
+        try:
+            await db.log(interaction.user.id, "run_aprovada", f"id={run['id']} user={run['user_id']}; xp={resultado['xp_awarded']}")
+        except Exception:
+            log.exception("Run #%s aprovada e recompensada, mas falhou o log de auditoria", run["id"])
 
         embed = interaction.message.embeds[0]
         embed.color = discord.Color.green()
         embed.add_field(name="Resultado", value=f"✅ Aprovada por {interaction.user.mention}", inline=False)
-        await interaction.response.edit_message(embed=embed, view=None)
+        try:
+            await interaction.response.edit_message(embed=embed, view=None)
+        except discord.HTTPException:
+            log.exception("Run #%s aprovada, mas a mensagem de revisão não pôde ser atualizada", run["id"])
+            try:
+                await interaction.followup.send(
+                    f"A run `#{run['id']}` foi aprovada e a recompensa foi creditada, mas a mensagem antiga não pôde ser atualizada.",
+                    ephemeral=True,
+                )
+            except discord.HTTPException:
+                pass
 
-        novo_recorde = antes is None or antes["m"] is None or run["seconds"] < antes["m"]
-        melhorou = pb_antes is None or pb_antes["m"] is None or run["seconds"] < pb_antes["m"]
-        if novo_recorde and progressao:
-            await progressao.conceder_xp(interaction.guild, run["user_id"], 100, "novo recorde")
-        tempo_no_ranking = run["seconds"] if melhorou else pb_antes["m"]
-        pos = await self._posicao(run["game_id"], run["challenge_id"], tempo_no_ranking, run["user_id"])
-        vezes = ja_tinha["c"] + 1
+        progressao = self.bot.get_cog("ProgressaoXP")
+        if progressao:
+            try:
+                await progressao.notificar_recompensa(
+                    interaction.guild, run["user_id"], resultado["old_level"],
+                    resultado["new_level"], resultado["xp_awarded"],
+                    "run aprovada e novo recorde" if resultado["is_record"] else "run aprovada",
+                )
+            except Exception:
+                log.exception("Run #%s aprovada; falha ao atualizar efeitos de patente", run["id"])
 
-        canal = await get_text_channel(self.bot, config.SOULSLIKE_CHANNEL_ID) if config.SOULSLIKE_CHANNEL_ID else None
-        if canal:
-            if novo_recorde:
-                titulo = "👑 NOVO RECORDE!"
-            elif melhorou:
-                titulo = "⚔️ NOVA RUN SOULSLIKE!"
-            else:
-                titulo = "🔁 ZEROU DE NOVO!"
-            linhas = [
-                f"## {titulo}",
-                f"<@{run['user_id']}> terminou **{run['jogo']}** no desafio **{run['desafio']}** em **{fmt_tempo(run['seconds'])}**.",
-                f"**Build:** {run['build'] or 'Não informada'}",
-                f"**Posição no ranking:** {pos}º" + ("" if melhorou else " _(melhor tempo pessoal)_"),
-            ]
-            if run["proof_url"]:
-                linhas.append(f"[📸 Ver comprovante]({run['proof_url']})")
-            if vezes > 1:
-                linhas.append(f"**Runs concluídas:** 🔁 {vezes}x")
-            await canal.send("\n".join(linhas))
+        melhorou = resultado["improved_personal"]
+        tempo_no_ranking = run["seconds"] if melhorou else resultado["previous_personal_best"]
+        try:
+            pos = await self._posicao(run["game_id"], run["challenge_id"], tempo_no_ranking, run["user_id"])
+        except Exception:
+            log.exception("Run #%s aprovada; falha ao calcular posição atual no ranking", run["id"])
+            pos = "—"
+        vezes = resultado["approved_count_before"] + 1
+
+        try:
+            canal = await get_text_channel(self.bot, config.SOULSLIKE_CHANNEL_ID) if config.SOULSLIKE_CHANNEL_ID else None
+            if canal:
+                if resultado["is_record"]:
+                    titulo = "👑 NOVO RECORDE!"
+                elif melhorou:
+                    titulo = "⚔️ NOVA RUN SOULSLIKE!"
+                else:
+                    titulo = "🔁 ZEROU DE NOVO!"
+                linhas = [
+                    f"## {titulo}",
+                    f"<@{run['user_id']}> terminou **{run['jogo']}** no desafio **{run['desafio']}** em **{fmt_tempo(run['seconds'])}**.",
+                    f"**Build:** {run['build'] or 'Não informada'}",
+                    f"**Posição no ranking:** {pos}º" + ("" if melhorou else " _(melhor tempo pessoal)_"),
+                    f"**Recompensa:** +{resultado['xp_awarded']} XP",
+                ]
+                if run["proof_url"]:
+                    linhas.append(f"[📸 Ver comprovante]({run['proof_url']})")
+                if vezes > 1:
+                    linhas.append(f"**Runs concluídas:** 🔁 {vezes}x")
+                await canal.send("\n".join(linhas))
+        except Exception:
+            log.exception("Run #%s aprovada, mas falhou a publicação no canal Soulslike", run["id"])
 
     async def rejeitar(self, interaction: discord.Interaction):
         if not await eh_moderador(interaction.user, self.bot.db):
@@ -695,14 +756,18 @@ class RunDadosModal(discord.ui.Modal, title="Registrar run Soulslike"):
         c = await self.cog.bot.db._one("SELECT * FROM sl_challenges WHERE id=?", (self.challenge_id,))
         if not g or not c:
             return await interaction.response.send_message("O jogo ou desafio não está mais disponível. Reabra a Central Soulslike.", ephemeral=True)
-        if interaction.user.id in self.cog.pending_uploads:
+        state = self.cog.pending_uploads.get(interaction.user.id)
+        if state and time.monotonic() - float(state.get("created_at", 0)) <= PENDING_UPLOAD_TTL:
             return await interaction.response.send_message(
-                "Você já tem um registro aguardando comprovante. Conclua ou reinicie esse envio antes de abrir outro.",
+                "Você já tem um registro aguardando comprovante. Conclua esse envio ou aguarde o prazo de 10 minutos antes de iniciar outro.",
                 ephemeral=True,
             )
+        if state:
+            self.cog.pending_uploads.pop(interaction.user.id, None)
         self.cog.pending_uploads[interaction.user.id] = {
             'game_id': self.game_id, 'challenge_id': self.challenge_id, 'seconds': seg,
             'build': (str(self.build).strip() or 'Não informada')[:100],
+            'created_at': time.monotonic(),
         }
         try:
             dm = await interaction.user.create_dm()
@@ -764,19 +829,22 @@ class CancelarRunButton(discord.ui.Button):
         if cur.rowcount != 1:
             return await interaction.response.send_message("A run não está mais pendente ou não pertence a você.", ephemeral=True)
         run = await db._one("SELECT proof_msg_id FROM sl_runs WHERE id=?", (self.run_id,))
-        mod_ch_id = await GuildConfig.get(db, interaction.guild_id, "mod_channel") or config.MOD_CHANNEL_ID
-        canal = await get_text_channel(self.cog.bot, mod_ch_id)
-        if canal and run and run['proof_msg_id']:
-            try:
+        try:
+            mod_ch_id = await GuildConfig.get(db, interaction.guild_id, "mod_channel")
+            canal = await get_text_channel(self.cog.bot, mod_ch_id)
+            if canal and run and run['proof_msg_id']:
                 msg = await canal.fetch_message(run['proof_msg_id'])
                 if msg.embeds:
                     embed = msg.embeds[0]
                     embed.color = discord.Color.dark_grey()
                     embed.add_field(name="Resultado", value="Cancelada pelo autor", inline=False)
                     await msg.edit(embed=embed, view=None)
-            except discord.HTTPException:
-                pass
-        await db.log(interaction.user.id, "run_cancelada", f"id={self.run_id}")
+        except Exception:
+            log.exception("Run #%s cancelada no banco, mas falhou a atualização da mensagem de moderação", self.run_id)
+        try:
+            await db.log(interaction.user.id, "run_cancelada", f"id={self.run_id}")
+        except Exception:
+            log.exception("Run #%s cancelada, mas falhou o log de auditoria", self.run_id)
         embed_atual = interaction.message.embeds[0] if interaction.message.embeds else None
         if embed_atual is not None and embed_atual.description:
             blocos = embed_atual.description.split("\n\n")
@@ -798,14 +866,28 @@ class ConfirmarView(discord.ui.View):
         super().__init__(timeout=180)
         self.cog, self.user, self.g, self.c = cog, user, g, c
         self.seg, self.build, self.dados, self.filename = seg, build, dados, filename
+        self._claimed = False
+        self._claim_lock = asyncio.Lock()
 
     @discord.ui.button(label="Confirmar e enviar", style=discord.ButtonStyle.success, emoji="✅")
     async def confirmar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user.id:
+            return await interaction.response.send_message("Esse comprovante pertence a outro jogador.", ephemeral=True)
+        async with self._claim_lock:
+            if self._claimed:
+                return await interaction.response.send_message("Este envio já está sendo processado.", ephemeral=True)
+            self._claimed = True
         await interaction.response.edit_message(content="⏳ Enviando para a moderação...", embed=None, view=None)
-        run_id = await self.cog.enviar_para_moderacao(self.user, self.g, self.c, self.seg, self.build, self.dados, self.filename)
+        try:
+            run_id = await self.cog.enviar_para_moderacao(
+                self.user, self.g, self.c, self.seg, self.build, self.dados, self.filename
+            )
+        except Exception:
+            log.exception("Falha inesperada ao enviar run para user=%s", self.user.id)
+            run_id = None
         if run_id is None:
             return await interaction.edit_original_response(
-                content="Não consegui enviar para a moderação. Avise um administrador (canal de aprovação não configurado ou sem permissão)."
+                content="Não consegui enviar para a moderação. Nenhum registro incompleto foi mantido; confira o canal de aprovação e tente novamente."
             )
         await interaction.edit_original_response(
             content=f"✅ Run enviada para a moderação! Número `#{run_id}`. Acompanhe pelo botão **Meu perfil** na Central Soulslike."
@@ -814,6 +896,8 @@ class ConfirmarView(discord.ui.View):
 
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.secondary)
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user.id:
+            return await interaction.response.send_message("Esse comprovante pertence a outro jogador.", ephemeral=True)
         await interaction.response.edit_message(content="Registro cancelado. Nada foi enviado.", embed=None, view=None)
         self.stop()
 
@@ -845,10 +929,15 @@ class MotivoModal(discord.ui.Modal, title="Rejeitar run"):
         self.cog, self.run_id = cog, run_id
 
     async def on_submit(self, interaction: discord.Interaction):
+        # Revalida a permissão no submit; abrir o modal não é uma autorização permanente.
+        if not isinstance(interaction.user, discord.Member) or not await eh_moderador(interaction.user, self.cog.bot.db):
+            return await interaction.response.send_message("Apenas moderadores.", ephemeral=True)
         db = self.cog.bot.db
         run = await db._one("SELECT * FROM sl_runs WHERE id=?", (self.run_id,))
         if run is None or run["status"] != "pending":
             return await interaction.response.send_message("Este registro já foi processado.", ephemeral=True)
+        if run["user_id"] == interaction.user.id and not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("Você não pode rejeitar a sua própria run.", ephemeral=True)
         cur = await db.conn.execute(
             "UPDATE sl_runs SET status='rejected', reviewer_id=?, reject_reason=? WHERE id=? AND status='pending'",
             (interaction.user.id, str(self.motivo), self.run_id),
@@ -856,7 +945,10 @@ class MotivoModal(discord.ui.Modal, title="Rejeitar run"):
         await db.conn.commit()
         if cur.rowcount != 1:
             return await interaction.response.send_message("Esta run já foi processada por outro moderador.", ephemeral=True)
-        await db.log(interaction.user.id, "run_rejeitada", f"id={self.run_id} motivo={self.motivo}")
+        try:
+            await db.log(interaction.user.id, "run_rejeitada", f"id={self.run_id} motivo={self.motivo}")
+        except Exception:
+            log.exception("Run #%s rejeitada, mas falhou o log de auditoria", self.run_id)
         embed = interaction.message.embeds[0]
         embed.color = discord.Color.red()
         embed.add_field(name="Resultado", value=f"❌ Rejeitada por {interaction.user.mention}\nMotivo: {self.motivo}", inline=False)

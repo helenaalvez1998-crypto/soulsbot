@@ -9,6 +9,8 @@ from admin_config import GuildConfig
 from levels import patente_por_nivel, nivel_por_xp, barra_progresso
 from utils import get_text_channel, upsert_panel  # noqa: F401
 
+log = logging.getLogger("cogs.platinas")
+
 
 async def eh_moderador(member: discord.Member, db=None) -> bool:
     if member.guild_permissions.manage_guild:
@@ -41,7 +43,11 @@ async def sincronizar_patente(guild: discord.Guild, member: discord.Member, nive
         if alvo not in member.roles:
             await member.add_roles(alvo, reason="Colizeu: nova patente")
     except discord.Forbidden:
-        pass  # o cargo do bot precisa estar ACIMA dos cargos de patente
+        log.warning("Sem permissão para sincronizar patente de %s; confira a hierarquia de cargos.", member.id)
+    except discord.HTTPException:
+        log.exception("Falha HTTP ao sincronizar patente de %s", member.id)
+    except Exception:
+        log.exception("Falha inesperada ao sincronizar patente de %s", member.id)
 
 
 class RevisaoView(discord.ui.View):
@@ -54,17 +60,46 @@ class RevisaoView(discord.ui.View):
     async def _processar(self, interaction: discord.Interaction, aprovar: bool):
         if not await eh_moderador(interaction.user, self.bot.db):
             return await interaction.response.send_message("Apenas moderadores.", ephemeral=True)
+        if not interaction.message or not interaction.message.embeds:
+            return await interaction.response.send_message("Mensagem de revisão inválida.", ephemeral=True)
 
+        footer = interaction.message.embeds[0].footer.text or ""
+        match = __import__("re").search(r"\bID:(\d+)\b", footer)
+        if not match:
+            return await interaction.response.send_message("Não foi possível localizar o ID desta platina.", ephemeral=True)
+        platina_id = int(match.group(1))
         db = self.bot.db
-        platina_id = int(interaction.message.embeds[0].footer.text.split(":")[1])
         p = await db.get_platina(platina_id)
         if p is None or p["status"] != "pending":
             return await interaction.response.send_message("Este registro já foi processado.", ephemeral=True)
 
         novo_status = "approved" if aprovar else "rejected"
-        await db.set_status(platina_id, novo_status, interaction.user.id)
-        await db.log(interaction.user.id, f"platina_{novo_status}", f"id={platina_id} user={p['user_id']}")
+        if aprovar:
+            xp_plat = await GuildConfig.get(db, interaction.guild_id, "xp_platina")
+            den_plat = await GuildConfig.get(db, interaction.guild_id, "denarios_platina")
+            if xp_plat is None:
+                xp_plat = config.XP_PLATINA
+            if den_plat is None:
+                den_plat = config.DENARIOS_PLATINA
+            decision = await db.aprovar_platina_com_recompensa(
+                platina_id, interaction.user.id, int(xp_plat), int(den_plat)
+            )
+            if decision is None:
+                return await interaction.response.send_message("Outro moderador já processou esta platina.", ephemeral=True)
+            antigo, novo, _, user_id = decision
+        else:
+            changed = await db.decidir_platina(platina_id, "rejected", interaction.user.id)
+            if not changed:
+                return await interaction.response.send_message("Outro moderador já processou esta platina.", ephemeral=True)
+            antigo = novo = None
+            user_id = int(p["user_id"])
 
+        try:
+            await db.log(interaction.user.id, f"platina_{novo_status}", f"id={platina_id} user={user_id}")
+        except Exception:
+            # A decisão e a recompensa já foram confirmadas pela transação principal.
+            # Uma falha secundária no log não pode deixar os botões parecendo pendentes.
+            log.exception("Decisão da platina #%s salva, mas falhou o registro de auditoria", platina_id)
         embed = interaction.message.embeds[0]
         embed.color = discord.Color.green() if aprovar else discord.Color.red()
         embed.add_field(
@@ -72,37 +107,46 @@ class RevisaoView(discord.ui.View):
             value=f"{'✅ Aprovada' if aprovar else '❌ Rejeitada'} por {interaction.user.mention}",
             inline=False,
         )
-        await interaction.response.edit_message(embed=embed, view=None)
+        try:
+            await interaction.response.edit_message(embed=embed, view=None)
+        except discord.HTTPException:
+            log.exception("Decisão da platina #%s foi salva, mas a mensagem não pôde ser atualizada", platina_id)
+            return await interaction.followup.send(
+                "A decisão foi salva no banco, mas não consegui atualizar a mensagem. Não clique novamente; a platina já foi processada.",
+                ephemeral=True,
+            )
 
-        membro = interaction.guild.get_member(p["user_id"])
+        membro = interaction.guild.get_member(user_id) if interaction.guild else None
         if aprovar:
-            xp_plat = await GuildConfig.get(db, interaction.guild_id, "xp_platina") or config.XP_PLATINA
-            den_plat = await GuildConfig.get(db, interaction.guild_id, "denarios_platina") or config.DENARIOS_PLATINA
-            antigo, novo, _ = await db.add_reward(p["user_id"], xp_plat, den_plat)
-            if membro:
+            if membro and novo > antigo:
                 await sincronizar_patente(interaction.guild, membro, novo)
-            plat_ch_id = await GuildConfig.get(db, interaction.guild_id, "platinas_channel")
-            canal = await get_text_channel(self.bot, plat_ch_id) if plat_ch_id else None
-            if canal:
-                linhas = [
-                    "# 🏆 Nova platina no Coliseu!",
-                    f"<@{p['user_id']}> conquistou **{p['game']}** na plataforma **{p['platform']}**.",
-                    f"[📸 Ver comprovante]({p['proof_url']})",
-                    f"**Recompensa:** +{xp_plat} XP · +{den_plat} Denários",
-                ]
-                if novo > antigo:
-                    linhas.extend(["", f"⬆️ **Novo nível:** {novo} — {patente_por_nivel(novo)}"])
-                await canal.send("\n".join(linhas))
+            try:
+                plat_ch_id = await GuildConfig.get(db, interaction.guild_id, "platinas_channel")
+                canal = await get_text_channel(self.bot, plat_ch_id) if plat_ch_id else None
+                if canal:
+                    linhas = [
+                        "# 🏆 Nova platina no Coliseu!",
+                        f"<@{user_id}> conquistou **{p['game']}** na plataforma **{p['platform']}**.",
+                        f"[📸 Ver comprovante]({p['proof_url']})",
+                        f"**Recompensa:** +{int(xp_plat)} XP · +{int(den_plat)} Denários",
+                    ]
+                    if novo > antigo:
+                        linhas.extend(["", f"⬆️ **Novo nível:** {novo} — {patente_por_nivel(novo)}"])
+                    await canal.send("\n".join(linhas))
+            except Exception:
+                logging.getLogger("colizeu").exception(
+                    "Platina #%s aprovada, mas falhou a configuração/publicação do anúncio", platina_id
+                )
             painel = self.bot.get_cog("Colizeu")
             if painel:
                 try:
                     await painel.atualizar()
                 except Exception:
-                    pass
+                    logging.getLogger("colizeu").exception("Falha ao atualizar o painel após aprovação")
             santuario = self.bot.get_cog("Santuario")
             if santuario:
                 try:
-                    await santuario.atualizar(p["user_id"])
+                    await santuario.atualizar(user_id)
                 except Exception:
                     logging.getLogger("colizeu").exception("Falha ao atualizar o santuário")
         elif membro:
@@ -289,6 +333,7 @@ class Platinas(commands.Cog):
             return await interaction.response.send_message("Anexe pelo menos um comprovante.", ephemeral=True)
         if len(capturas) > 10:
             return await interaction.response.send_message("Envie no máximo 10 comprovantes por registro.", ephemeral=True)
+        total_bytes = 0
         for arquivo_anexo in capturas:
             tipo = (arquivo_anexo.content_type or "").lower()
             nome = arquivo_anexo.filename.lower()
@@ -297,6 +342,16 @@ class Platinas(commands.Cog):
                 return await interaction.response.send_message(
                     f"Arquivo não suportado: {arquivo_anexo.filename}. Envie imagens ou vídeos.", ephemeral=True
                 )
+            tamanho = int(getattr(arquivo_anexo, "size", 0) or 0)
+            if tamanho > 20 * 1024 * 1024:
+                return await interaction.response.send_message(
+                    f"O arquivo {arquivo_anexo.filename} excede o limite de 20 MB.", ephemeral=True
+                )
+            total_bytes += tamanho
+        if total_bytes > 40 * 1024 * 1024:
+            return await interaction.response.send_message(
+                "O total dos comprovantes não pode ultrapassar 40 MB por registro.", ephemeral=True
+            )
 
         jogo, plataforma = jogo.strip()[:100], plataforma.strip()[:30]
         if not jogo:
@@ -315,29 +370,60 @@ class Platinas(commands.Cog):
             )
 
         await interaction.response.defer(ephemeral=True, thinking=True)
-        arquivos = [await anexo.to_file() for anexo in capturas]
-        embed = discord.Embed(title="🏆 Platina aguardando aprovação", color=config.COR_PRATA)
-        embed.add_field(name="Membro", value=interaction.user.mention)
-        embed.add_field(name="Jogo", value=jogo)
-        embed.add_field(name="Plataforma", value=plataforma)
-        embed.add_field(name="Data", value=d.strftime("%d/%m/%Y"))
-        embed.add_field(name="Comprovantes", value=f"{len(capturas)} arquivo(s) anexado(s)", inline=False)
-        primeiro_tipo = (capturas[0].content_type or "").lower()
-        if primeiro_tipo.startswith("image/") or capturas[0].filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")):
-            embed.set_image(url=f"attachment://{arquivos[0].filename}")
-        if len(capturas) > 1:
-            embed.add_field(name="Arquivos adicionais", value="\n".join(
-                f"{i}. {discord.utils.escape_markdown(a.filename)}" for i, a in enumerate(capturas[1:], start=2)
-            )[:1024], inline=False)
-
-        msg = await canal.send(embed=embed, files=arquivos, view=RevisaoView(self.bot))
-        urls = [(att.url, att.content_type) for att in msg.attachments]
-        url = urls[0][0] if urls else capturas[0].url
-        platina_id = await db.criar_platina(interaction.user.id, jogo, plataforma, d.isoformat(), url, msg.id)
-        await db.adicionar_comprovantes(platina_id, urls or [(a.url, a.content_type) for a in capturas])
-        embed.set_footer(text=f"ID:{platina_id}")
-        await msg.edit(embed=embed)
-        await db.log(interaction.user.id, "platina_registrada", f"id={platina_id} jogo={jogo}")
+        msg = None
+        platina_id = None
+        try:
+            # Conversão de anexos também precisa estar protegida: Discord já recebeu defer.
+            arquivos = [await anexo.to_file() for anexo in capturas]
+            embed = discord.Embed(title="🏆 Platina aguardando aprovação", color=config.COR_PRATA)
+            embed.add_field(name="Membro", value=interaction.user.mention)
+            embed.add_field(name="Jogo", value=jogo)
+            embed.add_field(name="Plataforma", value=plataforma)
+            embed.add_field(name="Data", value=d.strftime("%d/%m/%Y"))
+            embed.add_field(name="Comprovantes", value=f"{len(capturas)} arquivo(s) anexado(s)", inline=False)
+            primeiro_tipo = (capturas[0].content_type or "").lower()
+            if primeiro_tipo.startswith("image/") or capturas[0].filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")):
+                embed.set_image(url=f"attachment://{arquivos[0].filename}")
+            if len(capturas) > 1:
+                embed.add_field(name="Arquivos adicionais", value="\n".join(
+                    f"{i}. {discord.utils.escape_markdown(a.filename)}" for i, a in enumerate(capturas[1:], start=2)
+                )[:1024], inline=False)
+            msg = await canal.send(embed=embed, files=arquivos)
+            urls = [(att.url, att.content_type) for att in msg.attachments]
+            url = urls[0][0] if urls else capturas[0].url
+            platina_id = await db.criar_platina_unica(
+                interaction.user.id, jogo, plataforma, d.isoformat(), url, msg.id
+            )
+            if platina_id is None:
+                try:
+                    await msg.delete()
+                except discord.HTTPException:
+                    log.exception("Não foi possível apagar mensagem duplicada de platina")
+                return await interaction.edit_original_response(
+                    content="Você já registrou essa platina (pendente ou aprovada). A solicitação duplicada foi descartada."
+                )
+            await db.adicionar_comprovantes(platina_id, urls or [(a.url, a.content_type) for a in capturas])
+            embed.set_footer(text=f"ID:{platina_id}")
+            await msg.edit(embed=embed, view=RevisaoView(self.bot))
+        except Exception:
+            log.exception("Falha ao finalizar registro de platina para user=%s game=%s", interaction.user.id, jogo)
+            if platina_id is not None:
+                try:
+                    await db.excluir_platina_pendente(platina_id)
+                except Exception:
+                    log.exception("Falha ao remover registro incompleto de platina #%s", platina_id)
+            if msg is not None:
+                try:
+                    await msg.delete()
+                except discord.HTTPException:
+                    log.exception("Falha ao apagar mensagem de moderação órfã de platina")
+            return await interaction.edit_original_response(
+                content="Não consegui concluir o registro. Nenhuma platina pendente foi mantida; tente novamente."
+            )
+        try:
+            await db.log(interaction.user.id, "platina_registrada", f"id={platina_id} jogo={jogo}")
+        except Exception:
+            log.exception("Platina #%s registrada, mas falhou o log de auditoria", platina_id)
         await interaction.edit_original_response(content="✅ Registro enviado para a moderação!")
 
 
