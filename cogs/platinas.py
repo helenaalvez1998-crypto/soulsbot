@@ -7,7 +7,6 @@ from discord.ext import commands
 import config
 from admin_config import GuildConfig
 from levels import patente_por_nivel, nivel_por_xp, barra_progresso
-from ui import barra, cor_da_patente, fmt_data, patente_com_simbolo, progresso_nivel, rodape
 from utils import get_text_channel, upsert_panel  # noqa: F401
 
 
@@ -45,74 +44,6 @@ async def sincronizar_patente(guild: discord.Guild, member: discord.Member, nive
         pass  # o cargo do bot precisa estar ACIMA dos cargos de patente
 
 
-EXT_IMAGEM = (".png", ".jpg", ".jpeg", ".webp", ".gif")
-HAS_LAYOUT_VIEW = hasattr(discord.ui, "LayoutView") and hasattr(discord.ui, "MediaGallery")
-
-
-def _eh_imagem(anexo: discord.Attachment) -> bool:
-    return (anexo.content_type or "").lower().startswith("image/") or anexo.filename.lower().endswith(EXT_IMAGEM)
-
-
-def montar_card_platina(membro, p, xp: int, denarios: int, antigo: int, novo: int, xp_total: int,
-                        total_platinas: int, arquivos: list[tuple[discord.File, bool]]):
-    """Card de anúncio da platina (Components V2).
-
-    `arquivos` = [(discord.File, eh_imagem)]. Imagens vão na galeria; o resto vira anexo comum.
-    Se o discord.py não tiver LayoutView, devolve (None, embed) como reserva.
-    """
-    nome_membro = membro.display_name if membro else f"<@{p['user_id']}>"
-    avatar = membro.display_avatar.url if membro else None
-    data = fmt_data(p["earned_at"])
-    subiu = novo > antigo
-    cor = cor_da_patente(novo)
-
-    cabecalho = (
-        f"-# 🏆 PLATINA CONQUISTADA\n"
-        f"## {discord.utils.escape_markdown(p['game'])}\n"
-        f"<@{p['user_id']}> · 🎮 **{discord.utils.escape_markdown(p['platform'])}** · 📅 {data}"
-    )
-    recompensa = f"✨ **+{xp} XP**   ·   🪙 **+{denarios} Denários**"
-    if subiu:
-        _, no_nivel, necessario, frac = progresso_nivel(xp_total)
-        recompensa += (
-            f"\n\n⬆️ **Subiu de nível!**  {antigo} ➜ **{novo}**\n"
-            f"{patente_com_simbolo(novo)}\n"
-            f"{barra(frac)}  `{no_nivel}/{necessario} XP`"
-        )
-    rodape_txt = f"-# {rodape('Coliseu')} · platina nº {total_platinas} de {nome_membro}"
-
-    imagens = [f for f, img in arquivos if img]
-    outros = [f for f, img in arquivos if not img]
-
-    if not HAS_LAYOUT_VIEW:
-        embed = discord.Embed(title="🏆 Platina conquistada", description=cabecalho.split("\n", 1)[1], color=cor)
-        embed.add_field(name="Recompensa", value=recompensa, inline=False)
-        if avatar:
-            embed.set_thumbnail(url=avatar)
-        if imagens:
-            embed.set_image(url=f"attachment://{imagens[0].filename}")
-        embed.set_footer(text=rodape_txt.removeprefix("-# "))
-        return None, embed, imagens + outros
-
-    itens: list = []
-    topo = discord.ui.TextDisplay(cabecalho)
-    if avatar:
-        itens.append(discord.ui.Section(topo, accessory=discord.ui.Thumbnail(avatar)))
-    else:
-        itens.append(topo)
-    if imagens:
-        itens.append(discord.ui.MediaGallery(*[discord.MediaGalleryItem(f"attachment://{f.filename}") for f in imagens[:10]]))
-    itens.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
-    itens.append(discord.ui.TextDisplay(recompensa))
-    for f in outros:
-        itens.append(discord.ui.File(f"attachment://{f.filename}"))
-    itens.append(discord.ui.TextDisplay(rodape_txt))
-
-    view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.Container(*itens, accent_colour=cor))
-    return view, None, imagens + outros
-
-
 class RevisaoView(discord.ui.View):
     """Botões persistentes: continuam funcionando após reiniciar o bot."""
 
@@ -147,26 +78,21 @@ class RevisaoView(discord.ui.View):
         if aprovar:
             xp_plat = await GuildConfig.get(db, interaction.guild_id, "xp_platina") or config.XP_PLATINA
             den_plat = await GuildConfig.get(db, interaction.guild_id, "denarios_platina") or config.DENARIOS_PLATINA
-            antigo, novo, xp_total = await db.add_reward(p["user_id"], xp_plat, den_plat)
+            antigo, novo, _ = await db.add_reward(p["user_id"], xp_plat, den_plat)
             if membro:
                 await sincronizar_patente(interaction.guild, membro, novo)
             plat_ch_id = await GuildConfig.get(db, interaction.guild_id, "platinas_channel")
             canal = await get_text_channel(self.bot, plat_ch_id) if plat_ch_id else None
             if canal:
-                try:
-                    # Reenvia o comprovante junto do card: o link original pode expirar.
-                    arquivos = [(await a.to_file(), _eh_imagem(a)) for a in interaction.message.attachments[:10]]
-                    total = await db.contar_platinas(p["user_id"])
-                    view, embed, files = montar_card_platina(
-                        membro, p, xp_plat, den_plat, antigo, novo, xp_total, total, arquivos
-                    )
-                    mencoes = discord.AllowedMentions(users=[discord.Object(id=p["user_id"])])
-                    if view is not None:
-                        await canal.send(view=view, files=files, allowed_mentions=mencoes)
-                    else:
-                        await canal.send(content=f"<@{p['user_id']}>", embed=embed, files=files, allowed_mentions=mencoes)
-                except discord.HTTPException:
-                    logging.getLogger("colizeu").exception("Falha ao anunciar platina #%s", platina_id)
+                linhas = [
+                    "# 🏆 Nova platina no Coliseu!",
+                    f"<@{p['user_id']}> conquistou **{p['game']}** na plataforma **{p['platform']}**.",
+                    f"[📸 Ver comprovante]({p['proof_url']})",
+                    f"**Recompensa:** +{xp_plat} XP · +{den_plat} Denários",
+                ]
+                if novo > antigo:
+                    linhas.extend(["", f"⬆️ **Novo nível:** {novo} — {patente_por_nivel(novo)}"])
+                await canal.send("\n".join(linhas))
             painel = self.bot.get_cog("Colizeu")
             if painel:
                 try:
@@ -209,7 +135,8 @@ class ColiseuView(discord.ui.View):
             "Sua central de conquistas e jornadas.\n\n"
             "**🏆 Platinas** — registrar conquistas, consultar perfil e ranking.\n"
             "**✅ Zerados** — registrar jogos finalizados, sem precisar de platina.\n"
-            "**⚔️ Runs e desafios** — registrar tempos, conferir regras e recordes.\n\n"
+            "**⚔️ Runs e desafios** — registrar tempos, conferir regras e recordes.\n"
+            "**📜 Caçador de Troféus** — acompanhar coleções e conquistas.\n\n"
             "_Escolha uma área abaixo. A navegação acontece nesta mesma mensagem._"
         )
 
@@ -238,6 +165,15 @@ class ColiseuView(discord.ui.View):
             await interaction.response.send_message(embed=await view.embed(), view=view, ephemeral=True)
         else:
             await interaction.response.edit_message(content=None, embed=await view.embed(), view=view)
+
+    @discord.ui.button(label="Caçador de Troféus", emoji="📜", style=discord.ButtonStyle.secondary, custom_id="nara:coliseu:cacador", row=1)
+    async def abrir_cacador(self, interaction: discord.Interaction, button: discord.ui.Button):
+        cog = self.platinas_cog.bot.get_cog("CacadorTrofeus")
+        if cog is None:
+            return await interaction.response.send_message(
+                "O Caçador de Troféus ainda não está disponível. Avise a moderação.", ephemeral=True
+            )
+        await cog.abrir(interaction, editar=(self.user_id is not None))
 
     @discord.ui.button(label="Runs e desafios", emoji="⚔️", style=discord.ButtonStyle.danger, custom_id="nara:coliseu:runs", row=0)
     async def abrir_runs(self, interaction: discord.Interaction, button: discord.ui.Button):
