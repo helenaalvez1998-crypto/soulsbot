@@ -256,7 +256,7 @@ class PainelJogoView(discord.ui.View):
 
 class SeletorCategoria(discord.ui.Select):
     def __init__(self, view, categories):
-        self.parent = view
+        self.owner_view = view
         options = [
             discord.SelectOption(label=f"{c['category']} ({c['total']})"[:100], value=c["category"])
             for c in categories[:25]
@@ -264,9 +264,9 @@ class SeletorCategoria(discord.ui.Select):
         super().__init__(placeholder="Escolha uma coleção...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction):
-        if interaction.user.id != self.parent.user_id:
+        if interaction.user.id != self.owner_view.user_id:
             return await interaction.response.send_message("Este painel pertence a outro jogador.", ephemeral=True)
-        view = ListaItensView(self.parent.cog, self.parent.user_id, self.parent.game, self.values[0])
+        view = ListaItensView(self.owner_view.cog, self.owner_view.user_id, self.owner_view.game, self.values[0])
         await view.rebuild()
         await interaction.response.edit_message(embed=await view.embed(), view=view)
 
@@ -290,7 +290,7 @@ class CategoriasView(discord.ui.View):
 
 class SeletorItem(discord.ui.Select):
     def __init__(self, parent, items):
-        self.parent = parent
+        self.owner_view = parent
         options = []
         for item in items:
             label = _nome(item)
@@ -303,10 +303,10 @@ class SeletorItem(discord.ui.Select):
         super().__init__(placeholder="Selecione um item para ver detalhes...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction):
-        if interaction.user.id != self.parent.user_id:
+        if interaction.user.id != self.owner_view.user_id:
             return await interaction.response.send_message("Este painel pertence a outro jogador.", ephemeral=True)
-        self.parent.selected_item_id = int(self.values[0])
-        await interaction.response.edit_message(embed=await self.parent.embed(), view=self.parent)
+        self.owner_view.selected_item_id = int(self.values[0])
+        await interaction.response.edit_message(embed=await self.owner_view.embed(), view=self.owner_view)
 
 
 class ListaItensView(discord.ui.View):
@@ -387,36 +387,36 @@ class BotaoMarcarItem(discord.ui.Button):
                          emoji="✅" if obtido else "↩️",
                          style=discord.ButtonStyle.success if obtido else discord.ButtonStyle.secondary,
                          row=1)
-        self.parent, self.obtido = parent, obtido
+        self.owner_view, self.obtido = parent, obtido
 
     async def callback(self, interaction):
-        await self.parent._marcar(interaction, self.obtido)
+        await self.owner_view._marcar(interaction, self.obtido)
 
 
 class BotaoPagina(discord.ui.Button):
     def __init__(self, parent, delta, label):
         super().__init__(label=label, style=discord.ButtonStyle.secondary, row=2)
-        self.parent, self.delta = parent, delta
+        self.owner_view, self.delta = parent, delta
 
     async def callback(self, interaction):
-        if interaction.user.id != self.parent.user_id:
+        if interaction.user.id != self.owner_view.user_id:
             return await interaction.response.send_message("Este painel pertence a outro jogador.", ephemeral=True)
-        self.parent.page += self.delta
-        self.parent.selected_item_id = None
-        await self.parent.rebuild()
-        await interaction.response.edit_message(embed=await self.parent.embed(), view=self.parent)
+        self.owner_view.page += self.delta
+        self.owner_view.selected_item_id = None
+        await self.owner_view.rebuild()
+        await interaction.response.edit_message(embed=await self.owner_view.embed(), view=self.owner_view)
 
 
 class BotaoVoltarCategorias(discord.ui.Button):
     def __init__(self, parent):
         super().__init__(label="Categorias", emoji="↩️", style=discord.ButtonStyle.secondary, row=2)
-        self.parent = parent
+        self.owner_view = parent
 
     async def callback(self, interaction):
-        if interaction.user.id != self.parent.user_id:
+        if interaction.user.id != self.owner_view.user_id:
             return await interaction.response.send_message("Este painel pertence a outro jogador.", ephemeral=True)
-        cats = await svc.categorias_do_jogo(self.parent.cog.bot.db, self.parent.game["id"])
-        view = CategoriasView(self.parent.cog, self.parent.user_id, self.parent.game, cats)
+        cats = await svc.categorias_do_jogo(self.owner_view.cog.bot.db, self.owner_view.game["id"])
+        view = CategoriasView(self.owner_view.cog, self.owner_view.user_id, self.owner_view.game, cats)
         await interaction.response.edit_message(embed=await view.embed(), view=view)
 
 
@@ -434,7 +434,7 @@ class BotaoVoltarJogo(discord.ui.Button):
 
 class SeletorTrofeu(discord.ui.Select):
     def __init__(self, parent, trophies):
-        self.parent = parent
+        self.owner_view = parent
         options = [
             discord.SelectOption(label=svc.nome_exibicao(t["name_pt"], t["name_original"])[:100],
                                  value=str(t["id"]), description=(t["description_pt"] or t["grade"] or "Ver requisitos")[:100])
@@ -443,20 +443,20 @@ class SeletorTrofeu(discord.ui.Select):
         super().__init__(placeholder="Escolha um troféu...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction):
-        if interaction.user.id != self.parent.user_id:
+        if interaction.user.id != self.owner_view.user_id:
             return await interaction.response.send_message("Este painel pertence a outro jogador.", ephemeral=True)
-        self.parent.selected_trophy_id = int(self.values[0])
-        await interaction.response.edit_message(embed=await self.parent.embed(), view=self.parent)
+        self.owner_view.selected_trophy_id = int(self.values[0])
+        await interaction.response.edit_message(embed=await self.owner_view.embed(), view=self.owner_view)
 
 
 class BotaoAlternarTrofeu(discord.ui.Button):
     def __init__(self, parent):
         super().__init__(label="Marcar troféu conquistado", emoji="☑️",
                          style=discord.ButtonStyle.success, row=1)
-        self.parent = parent
+        self.owner_view = parent
 
     async def callback(self, interaction: discord.Interaction):
-        p = self.parent
+        p = self.owner_view
         if interaction.user.id != p.user_id:
             return await interaction.response.send_message("Este painel pertence a outro jogador.", ephemeral=True)
         done, total, reqs = await svc.progresso_trofeu(p.cog.bot.db, p.selected_trophy_id, p.user_id)
@@ -522,7 +522,7 @@ class TrofeusView(discord.ui.View):
 
 class SeletorCandidato(discord.ui.Select):
     def __init__(self, parent):
-        self.parent = parent
+        self.owner_view = parent
         opts = []
         for i, c in enumerate(parent.candidates[:5]):
             year = f" · {c['release_year']}" if c.get("release_year") else ""
@@ -535,21 +535,21 @@ class SeletorCandidato(discord.ui.Select):
         super().__init__(placeholder="Selecione o jogo correto...", min_values=1, max_values=1, options=opts)
 
     async def callback(self, interaction: discord.Interaction):
-        if interaction.user.id != self.parent.user_id:
+        if interaction.user.id != self.owner_view.user_id:
             return await interaction.response.send_message("Esta pesquisa pertence a outro membro.", ephemeral=True)
-        self.parent.selected = int(self.values[0])
-        await interaction.response.edit_message(embed=self.parent.embed(), view=self.parent)
+        self.owner_view.selected = int(self.values[0])
+        await interaction.response.edit_message(embed=self.owner_view.embed(), view=self.owner_view)
 
 
 class ConfirmarPesquisaJogo(discord.ui.Button):
     def __init__(self, parent):
         super().__init__(label="Confirmar jogo e pesquisar catálogo", emoji="🔎",
                          style=discord.ButtonStyle.success, row=1)
-        self.parent = parent
+        self.owner_view = parent
         self.claimed = False
 
     async def callback(self, interaction: discord.Interaction):
-        p = self.parent
+        p = self.owner_view
         if interaction.user.id != p.user_id:
             return await interaction.response.send_message("Esta pesquisa pertence a outro membro.", ephemeral=True)
         if p.selected is None:
