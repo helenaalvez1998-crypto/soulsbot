@@ -176,6 +176,18 @@ CREATE TABLE IF NOT EXISTS user_trophy_progress (
     FOREIGN KEY(trophy_id) REFERENCES game_trophies(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS game_aliases (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id         INTEGER NOT NULL,
+    alias           TEXT NOT NULL COLLATE NOCASE,
+    alias_norm      TEXT NOT NULL COLLATE NOCASE,
+    source          TEXT NOT NULL DEFAULT 'ai_research',
+    created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(game_id, alias_norm),
+    FOREIGN KEY(game_id) REFERENCES games_catalog(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_game_alias_norm ON game_aliases(alias_norm);
+
 CREATE TABLE IF NOT EXISTS catalog_import_jobs (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     requested_by    INTEGER NOT NULL,

@@ -140,3 +140,8 @@ Versão leve das platinas para quem quer registrar os jogos que finalizou, sem p
 - **`/remover_zerado <número>`**: o dono remove o próprio registro; moderadores removem qualquer um. A recompensa é devolvida.
 - Moderadores: **`/postar_painel_zerados`** publica o botão fixo no canal.
 - O perfil mostra a contagem de ✅ Zerados ao lado das platinas.
+
+
+### Caçador de Troféus — pesquisa assistida por IA
+
+Veja `CACADOR_TROFEUS.md`. Configure `GEMINI_API_KEY` e use `/jogo_buscar` para identificar o título oficial, confirmar o candidato e gerar um catálogo em revisão. A publicação exige auditoria e validação administrativa.

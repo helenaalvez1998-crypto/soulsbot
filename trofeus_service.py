@@ -142,15 +142,30 @@ async def requisitos_trofeu(db, trophy_id: int, user_id: int):
 
 async def progresso_trofeu(db, trophy_id: int, user_id: int):
     reqs = await requisitos_trofeu(db, trophy_id, user_id)
-    if not reqs:
-        row = await db._one(
-            "SELECT completed FROM user_trophy_progress WHERE user_id=? AND trophy_id=?",
-            (user_id, trophy_id),
-        )
-        return (1 if row and row["completed"] else 0), 1, []
-    total = len(reqs)
-    feitos = sum(1 for r in reqs if r["item_id"] is not None and r["obtained"])
+    row = await db._one(
+        "SELECT completed FROM user_trophy_progress WHERE user_id=? AND trophy_id=?",
+        (user_id, trophy_id),
+    )
+    if row and row["completed"]:
+        return 1, 1, reqs
+    linked = [r for r in reqs if r["item_id"] is not None]
+    # Troféus sem itens vinculados dependem de confirmação manual.
+    if not linked:
+        return 0, 1, reqs
+    total = len(linked)
+    feitos = sum(1 for r in linked if r["obtained"])
     return feitos, total, reqs
+
+
+async def definir_trofeu_concluido(db, user_id: int, trophy_id: int, concluido: bool):
+    await db.conn.execute(
+        """INSERT INTO user_trophy_progress(user_id,trophy_id,completed,updated_at)
+           VALUES (?,?,?,CURRENT_TIMESTAMP)
+           ON CONFLICT(user_id,trophy_id) DO UPDATE SET
+             completed=excluded.completed,updated_at=CURRENT_TIMESTAMP""",
+        (user_id, trophy_id, 1 if concluido else 0),
+    )
+    await db.conn.commit()
 
 
 async def importar_catalogo(db, payload: dict, publicar: bool = False):
@@ -272,3 +287,70 @@ async def importar_catalogo(db, payload: dict, publicar: bool = False):
         "game_id": game_id, "slug": slug, "name": nome, "status": status,
         "items_received": len(itens), "trophies_received": len(trofeus),
     }
+
+
+async def salvar_aliases(db, game_id: int, aliases: list[str], source: str = "ai_research"):
+    """Persiste aliases normalizados sem alterar o título canônico."""
+    import unicodedata
+    values = set()
+    for alias in aliases or []:
+        raw = " ".join(str(alias).split()).strip()[:120]
+        if len(raw) < 2:
+            continue
+        norm = unicodedata.normalize("NFKD", raw).encode("ascii", "ignore").decode().casefold()
+        norm = re.sub(r"[^a-z0-9]+", " ", norm).strip()
+        if norm:
+            values.add((raw, norm))
+    for raw, norm in values:
+        await db.conn.execute(
+            """INSERT OR IGNORE INTO game_aliases(game_id,alias,alias_norm,source)
+               VALUES (?,?,?,?)""", (game_id, raw, norm, source)
+        )
+    await db.conn.commit()
+
+
+async def auditar_catalogo(db, game_id: int) -> dict:
+    game = await buscar_jogo(db, game_id)
+    if not game:
+        raise ValueError("Jogo não encontrado.")
+    items = await db._all("SELECT source_url,verified,name_pt FROM game_items WHERE game_id=?", (game_id,))
+    trophies = await db._all("SELECT source_url,verified,name_pt FROM game_trophies WHERE game_id=?", (game_id,))
+    sources = json.loads(game["sources_json"] or "[]")
+    domains = set()
+    for source in sources:
+        try:
+            from urllib.parse import urlparse
+            host = urlparse(source.get("url", "")).netloc.lower()
+            if host:
+                domains.add(host.removeprefix("www."))
+        except Exception:
+            pass
+    all_rows = list(items) + list(trophies)
+    sourced = sum(1 for r in all_rows if (r["source_url"] or "").startswith("https://"))
+    verified = sum(1 for r in all_rows if r["verified"])
+    return {
+        "game": game, "items": len(items), "trophies": len(trophies),
+        "sourced": sourced, "total": len(all_rows), "verified": verified,
+        "domains": sorted(domains), "sources": sources,
+        "ready": bool(items and trophies and len(domains) >= 2 and all_rows and sourced == len(all_rows) and verified == len(all_rows)),
+    }
+
+
+async def buscar_jogo_por_nome_ou_alias(db, consulta: str):
+    """Resolve título canônico/alias já cadastrado antes de chamar o modelo."""
+    import unicodedata
+    raw = " ".join(str(consulta or "").split()).strip()
+    norm = unicodedata.normalize("NFKD", raw).encode("ascii", "ignore").decode().casefold()
+    norm = re.sub(r"[^a-z0-9]+", " ", norm).strip()
+    if not norm:
+        return None
+    row = await db._one(
+        """SELECT g.* FROM game_aliases a JOIN games_catalog g ON g.id=a.game_id
+           WHERE a.alias_norm=? AND g.status='ready' LIMIT 1""", (norm,)
+    )
+    if row:
+        return row
+    return await db._one(
+        "SELECT * FROM games_catalog WHERE lower(name)=lower(?) AND status='ready' LIMIT 1",
+        (raw,),
+    )
