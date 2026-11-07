@@ -17,6 +17,7 @@ import datetime as dt
 import json
 import re
 from urllib.parse import urlparse
+from collections import OrderedDict
 
 import config
 import loja
@@ -26,7 +27,9 @@ from links_sociais import REDES, normalizar_link
 
 DOMINIOS = {"eldenring.wiki.fextralife.com", "www.ign.com", "eldenring.wiki.gg"}
 UA = {"User-Agent": "NaraBot/1.0"}
-_cache_paginas: dict[str, str] = {}
+_cache_paginas: OrderedDict[str, str] = OrderedDict()
+_CACHE_MAX_PAGINAS = 256
+_MAX_HTML_BYTES = 1_000_000
 
 PAINEIS = {
     "coliseu": "Painel principal do Coliseu (platinas, zerados, runs)",
@@ -53,17 +56,42 @@ def _buscar_wiki_sync(consulta: str) -> str:
 def _abrir_pagina_sync(url: str) -> str:
     import requests
     from bs4 import BeautifulSoup
-    if urlparse(url).hostname not in DOMINIOS:
-        return "Domínio não permitido."
-    if url in _cache_paginas:
-        return _cache_paginas[url]
+
     try:
-        html = requests.get(url, headers=UA, timeout=10).text
+        parsed = urlparse(url)
+        if parsed.scheme != "https" or parsed.hostname not in DOMINIOS or parsed.username or parsed.password:
+            return "Domínio não permitido."
+        if url in _cache_paginas:
+            _cache_paginas.move_to_end(url)
+            return _cache_paginas[url]
+        response = requests.get(url, headers=UA, timeout=(4, 10), allow_redirects=True, stream=True)
+        try:
+            final = urlparse(response.url)
+            if final.scheme != "https" or final.hostname not in DOMINIOS:
+                return "Redirecionamento para domínio não permitido."
+            if int(response.headers.get("Content-Length") or 0) > _MAX_HTML_BYTES:
+                return "Página muito grande para leitura segura."
+            chunks = []
+            total = 0
+            for chunk in response.iter_content(chunk_size=65536):
+                if not chunk:
+                    continue
+                total += len(chunk)
+                if total > _MAX_HTML_BYTES:
+                    return "Página muito grande para leitura segura."
+                chunks.append(chunk)
+            html = b"".join(chunks).decode(response.encoding or "utf-8", errors="replace")
+            response.raise_for_status()
+        finally:
+            response.close()
+        texto = BeautifulSoup(html, "html.parser").get_text(" ", strip=True)[:8000]
+        _cache_paginas[url] = texto
+        _cache_paginas.move_to_end(url)
+        while len(_cache_paginas) > _CACHE_MAX_PAGINAS:
+            _cache_paginas.popitem(last=False)
+        return texto or "A página não contém texto legível."
     except Exception as e:
-        return f"Falha ao abrir a página: {e}"
-    texto = BeautifulSoup(html, "html.parser").get_text(" ", strip=True)[:8000]
-    _cache_paginas[url] = texto
-    return texto
+        return f"Falha ao abrir a página: {type(e).__name__}: {e}"
 
 
 # ------------------------------------------------------------------ utilidades

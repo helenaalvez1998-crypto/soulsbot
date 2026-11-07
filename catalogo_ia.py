@@ -11,6 +11,8 @@ import os
 import re
 from urllib.parse import urlparse
 
+from gemini_resilience import run_gemini_call
+
 
 def _client():
     from google import genai
@@ -18,11 +20,11 @@ def _client():
     key = os.getenv("GEMINI_API_KEY", "").strip()
     if not key:
         raise RuntimeError("GEMINI_API_KEY não está configurada no ambiente do bot.")
-    return genai.Client(api_key=key), types
+    return genai.Client(api_key=key, http_options=types.HttpOptions(timeout=60_000)), types
 
 
 def _model() -> str:
-    return os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
+    return os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip() or "gemini-3.8-flash"
 
 
 def _json_from_text(text: str) -> dict:
@@ -48,26 +50,37 @@ def _grounding_sources(response) -> list[dict]:
                 web = getattr(chunk, "web", None)
                 uri = getattr(web, "uri", "") if web else ""
                 title = getattr(web, "title", "") if web else ""
-                if uri.startswith("https://"):
-                    found[uri] = {"title": title or urlparse(uri).netloc, "url": uri}
+                parsed = urlparse(uri)
+                if parsed.scheme == "https" and parsed.hostname and not parsed.username and not parsed.password:
+                    found[uri] = {"title": title or parsed.hostname, "url": uri}
     except Exception:
         pass
     return list(found.values())[:20]
 
 
 async def _generate(prompt: str) -> tuple[str, list[dict]]:
+    """Executa SDK síncrono fora do event loop, com timeout HTTP e fechamento do cliente."""
     def run():
         client, types = _client()
-        response = client.models.generate_content(
-            model=_model(),
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                tools=[types.Tool(google_search=types.GoogleSearch())],
-                temperature=1.0,
-            ),
-        )
-        return response.text or "", _grounding_sources(response)
-    return await asyncio.to_thread(run)
+        try:
+            # 60 s limita a espera de rede mesmo quando asyncio cancela a tarefa externa.
+            response = run_gemini_call(lambda: client.models.generate_content(
+                model=_model(),
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    tools=[types.Tool(google_search=types.GoogleSearch())],
+                    temperature=0.2,
+                ),
+            ))
+            return response.text or "", _grounding_sources(response)
+        finally:
+            close = getattr(client, "close", None)
+            if callable(close):
+                close()
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(run), timeout=75)
+    except asyncio.TimeoutError as exc:
+        raise TimeoutError("A pesquisa no Gemini excedeu 75 segundos. Tente novamente.") from exc
 
 
 async def identificar_jogo(consulta: str) -> dict:
@@ -75,6 +88,32 @@ async def identificar_jogo(consulta: str) -> dict:
     consulta = " ".join((consulta or "").split())[:120]
     if len(consulta) < 2:
         raise ValueError("Digite pelo menos dois caracteres.")
+    import unicodedata
+    normalized = unicodedata.normalize("NFKD", consulta).encode("ascii", "ignore").decode().casefold()
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized).strip()
+    known = {
+        "god of war 2018", "god of war 18", "god of war ps4", "god of war 4",
+        "god of war iv", "gow 2018", "gow4", "gow 4"
+    }
+    if normalized in known:
+        return {
+            "input": consulta,
+            "candidates": [{
+                "canonical_title": "God of War",
+                "original_title": "God of War",
+                "release_year": 2018,
+                "developer": "Santa Monica Studio",
+                "publisher": "Sony Interactive Entertainment",
+                "platforms": ["PlayStation 4", "PC"],
+                "edition_scope": "Jogo base de 2018; DLC e conteúdo adicional devem ser confirmados separadamente.",
+                "aliases": sorted(known),
+                "confidence": 1.0,
+                "identity_evidence": "Correspondência canônica local para God of War (2018), distinto do jogo original de 2005 e de Ragnarök (2022)."
+            }],
+            "needs_clarification": False,
+            "notes": "Título reconhecido pela regra local. A pesquisa de catálogo e suas fontes ainda precisam ser executadas e revisadas.",
+            "sources": []
+        }
     prompt = f"""
 Você é um catalogador de videogames. Identifique o jogo que o usuário quis dizer.
 Entrada literal (pode conter erro, abreviação, tradução ou edição): {consulta!r}
@@ -100,6 +139,12 @@ Retorne SOMENTE JSON neste formato:
 No máximo 5 candidatos. Confidence entre 0 e 1. Se não houver correspondência confiável, candidates deve ser [].
 """
     text, sources = await _generate(prompt)
+    if not sources:
+        return {
+            "input": consulta, "candidates": [], "needs_clarification": True,
+            "notes": "A pesquisa não retornou referências verificáveis do Google Search. Nenhuma identificação foi aceita.",
+            "sources": [],
+        }
     data = _json_from_text(text)
     candidates = data.get("candidates", [])
     if not isinstance(candidates, list):
@@ -115,7 +160,7 @@ No máximo 5 candidatos. Confidence entre 0 e 1. Se não houver correspondência
         clean.append({
             "canonical_title": str(c["canonical_title"]).strip()[:120],
             "original_title": str(c.get("original_title") or c["canonical_title"]).strip()[:120],
-            "release_year": int(c["release_year"]) if str(c.get("release_year", "")).isdigit() else None,
+            "release_year": int(c["release_year"]) if str(c.get("release_year", "")).isdigit() and 1970 <= int(c["release_year"]) <= 2100 else None,
             "developer": str(c.get("developer", ""))[:120],
             "publisher": str(c.get("publisher", ""))[:120],
             "platforms": [str(x)[:40] for x in c.get("platforms", [])[:12]] if isinstance(c.get("platforms"), list) else [],
@@ -181,11 +226,15 @@ REGRAS:
 - Respeite o escopo do jogo base/DLC informado.
 """
     text, grounding = await _generate(prompt)
+    if not grounding:
+        raise RuntimeError("Google Search não retornou fontes verificáveis para o catálogo.")
     data = _json_from_text(text)
-    if not data.get("name"):
-        data["name"] = title
-    if not data.get("slug"):
-        data["slug"] = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+    # O título foi confirmado pelo usuário; o modelo não pode renomear o jogo.
+    data["name"] = title
+    year = candidato.get("release_year")
+    slug_base = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+    # Ano na chave evita colidir remakes/sequências com nomes canônicos iguais.
+    data["slug"] = f"{slug_base}-{int(year)}" if isinstance(year, int) and 1970 <= year <= 2100 else slug_base
     # A lista de fontes do modelo não é prova. Só URLs retornadas no grounding do Google
     # são aceitas como evidência de pesquisa.
     merged = {}
@@ -221,7 +270,12 @@ REGRAS:
                 reqs.append(req)
         trophy["requirements"] = reqs
         trophies.append(trophy)
-    data["items"], data["trophies"] = items, trophies
+    data["items"], data["trophies"] = items[:10000], trophies[:2000]
+    if not data["items"] or not data["trophies"]:
+        raise RuntimeError(
+            "As fontes encontradas não sustentaram pelo menos um item e um troféu. "
+            "O catálogo não será salvo como se estivesse completo."
+        )
     data["status"] = "review"
     data["research_sources"] = len(valid_urls)
     data["coverage_notes"] = str(data.get("coverage_notes", ""))[:1500]

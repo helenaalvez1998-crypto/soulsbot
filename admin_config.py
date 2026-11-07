@@ -24,8 +24,8 @@ KEYS = {
 
     # ── Cargos ────────────────────────────────────────────────────────
     "mod_role":           ("MOD_ROLE_ID", int),
-    "role_video":         ("ROLE_VIDEO", int),
-    "role_live":          ("ROLE_LIVE", int),
+    "role_video":         ("ROLE_VIDEO", str),
+    "role_live":          ("ROLE_LIVE", str),
 
     # ── Economia / Recompensas ────────────────────────────────────────
     "xp_platina":         ("XP_PLATINA", int),

@@ -1,6 +1,15 @@
+# Soulsbot
+
+Comece por [`LEIA-ME-PRIMEIRO.txt`](LEIA-ME-PRIMEIRO.txt), [`INSTALACAO_E_ATUALIZACAO.md`](INSTALACAO_E_ATUALIZACAO.md) e [`ESTRUTURA_DO_PROJETO.md`](ESTRUTURA_DO_PROJETO.md).
+
 # Nara — Bot de Discord
 
 Bot de Discord (discord.py) com perfis, XP, patentes, registro/aprovação de platinas e rankings.
+
+## Requisitos
+- Python **3.10 ou superior**.
+- Bot criado no Discord Developer Portal com as intents necessárias habilitadas.
+- `DISCORD_TOKEN` para inicialização; `GEMINI_API_KEY` para os recursos de IA e pesquisa de jogos.
 
 ## Rodar localmente
 ```bash
@@ -128,7 +137,7 @@ Os comandos de barra e os botões continuam existindo e funcionando como antes (
 ### Configuração
 No arquivo `.env`, defina `IA_CANAIS_LIVRES=ID_DO_CANAL_DE_DUVIDAS` (ative o Modo Desenvolvedor no Discord e copie o ID do canal).
 Para responder sem limites internos, configure `IA_LIMITE_DIARIO=0` e `IA_TETO_ESPONTANEO=0`; use `IA_COOLDOWN_CANAL=0`.
-As respostas ainda dependem da disponibilidade/cota da API Gemini. Variáveis obrigatórias: `GEMINI_API_KEY` e `GEMINI_MODEL`.
+As respostas ainda dependem da disponibilidade/cota da API Gemini. Variáveis obrigatórias: `GEMINI_API_KEY` e `GEMINI_MODEL`. O módulo `gemini_resilience.py` compartilha um circuit breaker entre Nara, Caçador e tradução de ofertas: bloqueia novas chamadas depois de quota esgotada/rate limit e persiste o prazo de pausa em `data/gemini_circuit.json`. Moderadores podem consultar `/gemini_status`.
 Sem elas, o módulo fica desativado. Testes do agente: `python -m unittest discover -s tests -v`.
 
 ## Zerados (`cogs/zerados.py`)
@@ -145,3 +154,8 @@ Versão leve das platinas para quem quer registrar os jogos que finalizou, sem p
 ### Caçador de Troféus — pesquisa assistida por IA
 
 Veja `CACADOR_TROFEUS.md`. Configure `GEMINI_API_KEY` e use `/jogo_buscar` para identificar o título oficial, confirmar o candidato e gerar um catálogo em revisão. A publicação exige auditoria e validação administrativa.
+
+
+## Caçador de Troféus e pesquisa de jogos
+
+O comando `/jogo_buscar` reconhece títulos/aliases existentes ou usa Gemini com Google Search grounding para sugerir candidatos, inclusive quando há abreviações ou erros de digitação. A pesquisa de catálogos só começa após confirmação do título e fica em revisão administrativa; não existe publicação automática pela IA. Consulte [`CACADOR_TROFEUS.md`](CACADOR_TROFEUS.md) para o fluxo e [`AUDITORIA_TECNICA.md`](AUDITORIA_TECNICA.md) para as correções, testes, limites e checklist de atualização. Para ativar a pesquisa, configure `GEMINI_API_KEY`; `GEMINI_MODEL` usa `gemini-3.8-flash` por padrão. Se a hospedagem definir `GEMINI_MODEL` nas variáveis do serviço, esse valor prevalece sobre o `.env`; confira o painel para não continuar executando um modelo antigo. Em erro `429`, veja `/gemini_status` e o painel de quota/billing do projeto antes de alterar o modelo.

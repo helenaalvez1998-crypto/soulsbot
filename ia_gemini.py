@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 
 from ia_nucleo import Adaptador, Registro
+from gemini_resilience import run_gemini_call
 
 _TIPOS = {"string": "STRING", "integer": "INTEGER", "boolean": "BOOLEAN"}
 
@@ -18,8 +19,15 @@ class GeminiAdaptador(Adaptador):
         from google import genai
         from google.genai import types
         self.types = types
-        self.client = genai.Client(api_key=api_key)
+        # Evita que uma indisponibilidade de rede deixe uma interação do Discord presa.
+        self.client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=60_000))
         self.modelo = modelo
+
+    def close(self):
+        """Libera conexões HTTP mantidas pelo SDK ao descarregar o cog."""
+        close = getattr(self.client, "close", None)
+        if callable(close):
+            close()
 
     # ---- montagem de conteúdos
     def conteudo_usuario(self, texto: str, imagens: list | None = None):
@@ -61,12 +69,20 @@ class GeminiAdaptador(Adaptador):
             tools=tools,
             automatic_function_calling=t.AutomaticFunctionCallingConfig(disable=True) if tools else None,
         )
-        return self.client.models.generate_content(model=self.modelo, contents=contents, config=cfg)
+        return run_gemini_call(lambda: self.client.models.generate_content(
+            model=self.modelo, contents=contents, config=cfg
+        ))
 
     def criar_gerador(self, system: str, registro: Registro):
         tools = self.ferramentas(registro)
 
         async def gerar(contents: list, usar_ferramentas: bool):
-            return await asyncio.to_thread(self._gerar_sync, system, contents, tools if usar_ferramentas else None)
+            try:
+                return await asyncio.wait_for(
+                    asyncio.to_thread(self._gerar_sync, system, contents, tools if usar_ferramentas else None),
+                    timeout=70,
+                )
+            except asyncio.TimeoutError as exc:
+                raise TimeoutError("O Gemini demorou mais de 70 segundos para responder.") from exc
 
         return gerar

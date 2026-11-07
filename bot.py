@@ -34,6 +34,13 @@ class NaraBot(commands.Bot):
         else:  # global pode levar até 1h para aparecer
             await self.tree.sync()
 
+    async def close(self):
+        """Encerra extensões e conexão SQLite também em shutdown/redeploy."""
+        try:
+            await super().close()
+        finally:
+            await self.db.close()
+
     async def on_ready(self):
         logging.info("Nara online como %s", self.user)
 

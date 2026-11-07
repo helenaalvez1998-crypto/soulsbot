@@ -1,0 +1,12 @@
+SOULSBOT — LEIA PRIMEIRO
+
+1. Extraia todos os arquivos para uma pasta do projeto.
+2. Leia INSTALACAO_E_ATUALIZACAO.md.
+3. Copie .env.example para .env e preencha token, IDs e chaves.
+4. Instale: pip install -r requirements.txt
+5. Inicie: python bot.py
+6. Para conferir a quota Gemini no Discord: /gemini_status (Gerenciar servidor).
+
+ATUALIZAÇÃO: faça backup de .env e data/ antes de substituir os arquivos. Nunca apague data/colizeu.db.
+
+O ZIP não contém credenciais, token Discord, banco SQLite nem dados da sua comunidade.

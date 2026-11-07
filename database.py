@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 import aiosqlite
 from levels import nivel_por_xp
 
@@ -188,6 +189,14 @@ CREATE TABLE IF NOT EXISTS game_aliases (
 );
 CREATE INDEX IF NOT EXISTS idx_game_alias_norm ON game_aliases(alias_norm);
 
+CREATE TABLE IF NOT EXISTS catalog_search_requests (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL,
+    created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_catalog_search_user_time
+    ON catalog_search_requests(user_id, created_at);
+
 CREATE TABLE IF NOT EXISTS catalog_import_jobs (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     requested_by    INTEGER NOT NULL,
@@ -209,21 +218,10 @@ CREATE TABLE IF NOT EXISTS logs (
 """
 
 
-class Database:
-    def __init__(self, path: str):
-        self.path = path
-        self.conn: aiosqlite.Connection | None = None
-
-    async def connect(self):
-        os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
-        self.conn = await aiosqlite.connect(self.path)
-        self.conn.row_factory = aiosqlite.Row
-        await self.conn.executescript(SCHEMA)
-        # migração para bancos criados antes da coluna proof_msg_id
-        cols = [r["name"] for r in await self._all("PRAGMA table_info(platinas)")]
-        if "proof_msg_id" not in cols:
-            await self.conn.execute("ALTER TABLE platinas ADD COLUMN proof_msg_id INTEGER")
-        await self.conn.commit()
+class DatabaseSession:
+    """Fachada mínima para operações dentro de uma conexão transacional isolada."""
+    def __init__(self, conn):
+        self.conn = conn
 
     async def _one(self, sql, args=()):
         async with self.conn.execute(sql, args) as cur:
@@ -232,6 +230,101 @@ class Database:
     async def _all(self, sql, args=()):
         async with self.conn.execute(sql, args) as cur:
             return await cur.fetchall()
+
+
+class Database:
+    def __init__(self, path: str):
+        self.path = path
+        self.conn: aiosqlite.Connection | None = None
+
+    async def connect(self):
+        os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
+        self.conn = await aiosqlite.connect(self.path, timeout=10)
+        self.conn.row_factory = aiosqlite.Row
+        await self.conn.execute("PRAGMA foreign_keys = ON")
+        await self.conn.execute("PRAGMA busy_timeout = 10000")
+        if self.path != ":memory:":
+            await self.conn.execute("PRAGMA journal_mode = WAL")
+            await self.conn.execute("PRAGMA synchronous = NORMAL")
+        await self.conn.executescript(SCHEMA)
+        # Migrações incrementais para bancos já existentes.
+        cols = [r["name"] for r in await self._all("PRAGMA table_info(platinas)")]
+        if "proof_msg_id" not in cols:
+            await self.conn.execute("ALTER TABLE platinas ADD COLUMN proof_msg_id INTEGER")
+        # Um alias conflitante não pode decidir qual jogo é o correto. Descarta aliases
+        # ambíguos antigos antes de impor unicidade global.
+        await self.conn.execute(
+            """DELETE FROM game_aliases WHERE alias_norm IN (
+                 SELECT alias_norm FROM game_aliases GROUP BY alias_norm
+                 HAVING COUNT(DISTINCT game_id) > 1
+               )"""
+        )
+        await self.conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_game_alias_norm_unique ON game_aliases(alias_norm)"
+        )
+        await self.conn.commit()
+
+    @asynccontextmanager
+    async def transaction(self):
+        """Transação isolada, sem expor a conexão compartilhada do bot a interleavings."""
+        if self.path == ":memory:":
+            # Banco em memória precisa preservar a conexão original. Não há suporte a
+            # múltiplas conexões independentes nesse modo de teste/execução.
+            conn = self.conn
+            owned = False
+        else:
+            conn = await aiosqlite.connect(self.path, timeout=10)
+            conn.row_factory = aiosqlite.Row
+            await conn.execute("PRAGMA foreign_keys = ON")
+            await conn.execute("PRAGMA busy_timeout = 10000")
+            owned = True
+        try:
+            await conn.execute("BEGIN IMMEDIATE")
+            yield DatabaseSession(conn)
+            await conn.commit()
+        except BaseException:
+            await conn.rollback()
+            raise
+        finally:
+            if owned:
+                await conn.close()
+
+    async def close(self):
+        if self.conn is not None:
+            await self.conn.close()
+            self.conn = None
+
+    async def _one(self, sql, args=()):
+        async with self.conn.execute(sql, args) as cur:
+            return await cur.fetchone()
+
+    async def _all(self, sql, args=()):
+        async with self.conn.execute(sql, args) as cur:
+            return await cur.fetchall()
+
+    async def reservar_pesquisa_catalogo(self, user_id: int, limite: int = 3, janela_minutos: int = 10):
+        """Rate limit persistente para impedir abuso/custo acidental da busca com IA."""
+        limite = max(1, min(20, int(limite)))
+        janela_minutos = max(1, min(1440, int(janela_minutos)))
+        async with self.transaction() as tx:
+            count = await tx._one(
+                """SELECT COUNT(*) AS total FROM catalog_search_requests
+                   WHERE user_id=? AND created_at >= datetime('now', ?)""",
+                (user_id, f"-{janela_minutos} minutes"),
+            )
+            total = int(count["total"] or 0)
+            if total >= limite:
+                oldest = await tx._one(
+                    """SELECT created_at FROM catalog_search_requests
+                       WHERE user_id=? AND created_at >= datetime('now', ?)
+                       ORDER BY created_at ASC LIMIT 1""",
+                    (user_id, f"-{janela_minutos} minutes"),
+                )
+                return False, janela_minutos, oldest["created_at"] if oldest else None
+            await tx.conn.execute("INSERT INTO catalog_search_requests(user_id) VALUES (?)", (user_id,))
+            # Limpeza oportunista para a tabela não crescer indefinidamente.
+            await tx.conn.execute("DELETE FROM catalog_search_requests WHERE created_at < datetime('now','-30 days')")
+            return True, limite - total - 1, None
 
     async def log(self, actor_id: int, action: str, details: str = ""):
         await self.conn.execute(
@@ -247,17 +340,75 @@ class Database:
         return await self._one("SELECT * FROM users WHERE user_id=?", (user_id,))
 
     async def add_reward(self, user_id: int, xp: int, denarios: int):
-        """Aplica XP/Denários sem deixar saldos negativos; devolve níveis antigo/novo e XP total."""
-        user = await self.get_user(user_id)
-        antigo = nivel_por_xp(user["xp"])
-        await self.conn.execute(
-            "UPDATE users SET xp = MAX(0, xp + ?), denarios = MAX(0, denarios + ?) WHERE user_id=?",
-            (xp, denarios, user_id),
-        )
-        await self.conn.commit()
-        atualizado = await self._one("SELECT xp FROM users WHERE user_id=?", (user_id,))
-        novo_xp = int(atualizado["xp"])
-        return antigo, nivel_por_xp(novo_xp), novo_xp
+        """Aplica XP/Denários atomicamente; devolve nível antigo, novo e XP total."""
+        async with self.transaction() as tx:
+            await tx.conn.execute("INSERT OR IGNORE INTO users(user_id) VALUES (?)", (user_id,))
+            user = await tx._one("SELECT xp FROM users WHERE user_id=?", (user_id,))
+            antigo = nivel_por_xp(int(user["xp"]))
+            await tx.conn.execute(
+                "UPDATE users SET xp=MAX(0,xp+?), denarios=MAX(0,denarios+?) WHERE user_id=?",
+                (int(xp), int(denarios), user_id),
+            )
+            atualizado = await tx._one("SELECT xp FROM users WHERE user_id=?", (user_id,))
+            novo_xp = int(atualizado["xp"])
+            return antigo, nivel_por_xp(novo_xp), novo_xp
+
+    async def aprovar_run_com_recompensa(self, run_id: int, reviewer_id: int):
+        """Aprova uma run e credita XP base/bônus na mesma transação indivisível.
+
+        A regra de recorde é calculada sob BEGIN IMMEDIATE para que dois moderadores
+        não concedam bônus duplicado ao aprovar runs simultaneamente.
+        """
+        async with self.transaction() as tx:
+            run = await tx._one(
+                "SELECT * FROM sl_runs WHERE id=? AND status='pending'", (int(run_id),)
+            )
+            if run is None:
+                return None
+            global_best = await tx._one(
+                "SELECT MIN(seconds) AS best FROM sl_runs WHERE status='approved' AND game_id=? AND challenge_id=?",
+                (run["game_id"], run["challenge_id"]),
+            )
+            personal_best = await tx._one(
+                "SELECT MIN(seconds) AS best FROM sl_runs WHERE status='approved' AND user_id=? AND game_id=? AND challenge_id=?",
+                (run["user_id"], run["game_id"], run["challenge_id"]),
+            )
+            approved_count = await tx._one(
+                "SELECT COUNT(*) AS total FROM sl_runs WHERE status='approved' AND user_id=? AND game_id=? AND challenge_id=?",
+                (run["user_id"], run["game_id"], run["challenge_id"]),
+            )
+            antes_global = global_best["best"] if global_best else None
+            antes_pessoal = personal_best["best"] if personal_best else None
+            is_record = antes_global is None or int(run["seconds"]) < int(antes_global)
+            improved_personal = antes_pessoal is None or int(run["seconds"]) < int(antes_pessoal)
+            cur = await tx.conn.execute(
+                "UPDATE sl_runs SET status='approved', reviewer_id=? WHERE id=? AND status='pending'",
+                (int(reviewer_id), int(run_id)),
+            )
+            if cur.rowcount != 1:
+                return None
+
+            xp_awarded = 100 + (100 if is_record else 0)
+            await tx.conn.execute("INSERT OR IGNORE INTO users(user_id) VALUES (?)", (run["user_id"],))
+            user_before = await tx._one("SELECT xp FROM users WHERE user_id=?", (run["user_id"],))
+            xp_before = int(user_before["xp"] or 0)
+            await tx.conn.execute(
+                "UPDATE users SET xp=MAX(0,xp+?) WHERE user_id=?", (xp_awarded, run["user_id"])
+            )
+            user_after = await tx._one("SELECT xp FROM users WHERE user_id=?", (run["user_id"],))
+            xp_after = int(user_after["xp"] or 0)
+            return {
+                "run": dict(run),
+                "is_record": bool(is_record),
+                "improved_personal": bool(improved_personal),
+                "previous_personal_best": antes_pessoal,
+                "approved_count_before": int(approved_count["total"] or 0),
+                "xp_awarded": xp_awarded,
+                "xp_before": xp_before,
+                "xp_after": xp_after,
+                "old_level": nivel_por_xp(xp_before),
+                "new_level": nivel_por_xp(xp_after),
+            }
 
     # ---------- loja cosmética ----------
     async def inventario_do_usuario(self, user_id: int):
@@ -268,60 +419,46 @@ class Database:
         )
 
     async def comprar_item(self, user_id: int, item: str, tipo: str, preco: int) -> str:
-        """Compra um item uma única vez e debita Denários apenas quando há saldo."""
-        await self.get_user(user_id)
-        existente = await self._one(
-            "SELECT 1 FROM inventario WHERE user_id=? AND item=?", (user_id, item)
-        )
-        if existente:
-            return "ja_tem"
-
-        cur = await self.conn.execute(
-            "UPDATE users SET denarios=denarios-? WHERE user_id=? AND denarios>=?",
-            (preco, user_id, preco),
-        )
-        if cur.rowcount != 1:
-            await self.conn.commit()
-            return "sem_saldo"
-
-        try:
-            await self.conn.execute(
-                "INSERT INTO inventario(user_id, item, tipo, equipado) VALUES (?,?,?,0)",
-                (user_id, item, tipo),
-            )
-        except Exception:
-            # Se outra interação comprou o mesmo item simultaneamente, devolve o débito.
-            await self.conn.execute(
-                "UPDATE users SET denarios=denarios+? WHERE user_id=?", (preco, user_id)
-            )
-            await self.conn.commit()
-            existente = await self._one(
+        """Compra única com débito/inserção indivisíveis, inclusive sob cliques simultâneos."""
+        preco = int(preco)
+        if preco < 0:
+            raise ValueError("Preço não pode ser negativo.")
+        async with self.transaction() as tx:
+            await tx.conn.execute("INSERT OR IGNORE INTO users(user_id) VALUES (?)", (user_id,))
+            existente = await tx._one(
                 "SELECT 1 FROM inventario WHERE user_id=? AND item=?", (user_id, item)
             )
             if existente:
                 return "ja_tem"
-            raise
-
-        await self.conn.commit()
-        return "ok"
+            cur = await tx.conn.execute(
+                "UPDATE users SET denarios=denarios-? WHERE user_id=? AND denarios>=?",
+                (preco, user_id, preco),
+            )
+            if cur.rowcount != 1:
+                return "sem_saldo"
+            await tx.conn.execute(
+                "INSERT INTO inventario(user_id,item,tipo,equipado) VALUES (?,?,?,0)",
+                (user_id, item, tipo),
+            )
+            return "ok"
 
     async def equipar_item(self, user_id: int, item: str, tipo: str) -> bool:
-        """Equipa um item que pertence ao usuário e desativa os outros do mesmo tipo."""
-        existente = await self._one(
-            "SELECT 1 FROM inventario WHERE user_id=? AND item=? AND tipo=?",
-            (user_id, item, tipo),
-        )
-        if not existente:
-            return False
-        await self.conn.execute(
-            "UPDATE inventario SET equipado=0 WHERE user_id=? AND tipo=?", (user_id, tipo)
-        )
-        await self.conn.execute(
-            "UPDATE inventario SET equipado=1 WHERE user_id=? AND item=? AND tipo=?",
-            (user_id, item, tipo),
-        )
-        await self.conn.commit()
-        return True
+        """Equipa item próprio e desativa itens do mesmo tipo na mesma transação."""
+        async with self.transaction() as tx:
+            existente = await tx._one(
+                "SELECT 1 FROM inventario WHERE user_id=? AND item=? AND tipo=?",
+                (user_id, item, tipo),
+            )
+            if not existente:
+                return False
+            await tx.conn.execute(
+                "UPDATE inventario SET equipado=0 WHERE user_id=? AND tipo=?", (user_id, tipo)
+            )
+            cur = await tx.conn.execute(
+                "UPDATE inventario SET equipado=1 WHERE user_id=? AND item=? AND tipo=?",
+                (user_id, item, tipo),
+            )
+            return cur.rowcount == 1
 
     async def desequipar_tipo(self, user_id: int, tipo: str):
         await self.conn.execute(
@@ -349,6 +486,26 @@ class Database:
         )
         await self.conn.commit()
         return cur.lastrowid
+
+    async def criar_platina_unica(self, user_id, game, platform, earned_at, proof_url, proof_msg_id=None):
+        """Cria registro sob BEGIN IMMEDIATE para impedir duplicata em cliques simultâneos."""
+        async with self.transaction() as tx:
+            existente = await tx._one(
+                """SELECT id FROM platinas WHERE user_id=? AND lower(game)=lower(?)
+                   AND lower(platform)=lower(?) AND status IN ('pending','approved') LIMIT 1""",
+                (user_id, game, platform),
+            )
+            if existente:
+                return None
+            cur = await tx.conn.execute(
+                "INSERT INTO platinas(user_id, game, platform, earned_at, proof_url, proof_msg_id) VALUES (?,?,?,?,?,?)",
+                (user_id, game, platform, earned_at, proof_url, proof_msg_id),
+            )
+            return cur.lastrowid
+
+    async def excluir_platina_pendente(self, platina_id: int):
+        async with self.transaction() as tx:
+            await tx.conn.execute("DELETE FROM platinas WHERE id=? AND status='pending'", (platina_id,))
 
     async def adicionar_comprovantes(self, platina_id: int, comprovantes):
         """Armazena URLs de todos os comprovantes associados à platina."""
@@ -379,12 +536,36 @@ class Database:
         """Registra a decisão somente se a platina ainda estiver pendente."""
         if status not in ("approved", "rejected"):
             return False
-        cur = await self.conn.execute(
-            "UPDATE platinas SET status=?, reviewer_id=? WHERE id=? AND status='pending'",
-            (status, reviewer_id, platina_id),
-        )
-        await self.conn.commit()
-        return cur.rowcount == 1
+        async with self.transaction() as tx:
+            cur = await tx.conn.execute(
+                "UPDATE platinas SET status=?, reviewer_id=? WHERE id=? AND status='pending'",
+                (status, reviewer_id, platina_id),
+            )
+            return cur.rowcount == 1
+
+    async def aprovar_platina_com_recompensa(self, platina_id: int, reviewer_id: int, xp: int, denarios: int):
+        """Aprova e credita recompensa na mesma transação; retorna None se já decidida."""
+        async with self.transaction() as tx:
+            cur = await tx.conn.execute(
+                "UPDATE platinas SET status='approved', reviewer_id=? WHERE id=? AND status='pending'",
+                (reviewer_id, platina_id),
+            )
+            if cur.rowcount != 1:
+                return None
+            row = await tx._one("SELECT user_id FROM platinas WHERE id=?", (platina_id,))
+            if not row:
+                raise RuntimeError("Platina desapareceu durante a aprovação.")
+            user_id = int(row["user_id"])
+            await tx.conn.execute("INSERT OR IGNORE INTO users(user_id) VALUES (?)", (user_id,))
+            before = await tx._one("SELECT xp FROM users WHERE user_id=?", (user_id,))
+            old_xp = int(before["xp"])
+            await tx.conn.execute(
+                "UPDATE users SET xp=MAX(0,xp+?), denarios=MAX(0,denarios+?) WHERE user_id=?",
+                (int(xp), int(denarios), user_id),
+            )
+            after = await tx._one("SELECT xp FROM users WHERE user_id=?", (user_id,))
+            new_xp = int(after["xp"])
+            return nivel_por_xp(old_xp), nivel_por_xp(new_xp), new_xp, user_id
 
     async def platinas_do_usuario(self, user_id: int):
         return await self._all(
@@ -446,6 +627,92 @@ class Database:
         )
         await self.conn.commit()
         return cur.lastrowid
+
+    async def registrar_zerado_com_recompensa(
+        self, user_id, game, platform, finished_at, comment="",
+        xp_configurado=0, denarios_configurados=0, limite_diario=0,
+    ):
+        """Deduplica, aplica limite diário, grava e credita recompensa numa única transação."""
+        async with self.transaction() as tx:
+            dup = await tx._one(
+                "SELECT id FROM zerados WHERE user_id=? AND lower(game)=lower(?) AND lower(platform)=lower(?) LIMIT 1",
+                (user_id, game, platform),
+            )
+            if dup:
+                return None
+            recent = await tx._one(
+                "SELECT COUNT(*) AS total FROM zerados WHERE user_id=? AND created_at >= datetime('now','-1 day')",
+                (user_id,),
+            )
+            total_recent = int(recent["total"] or 0)
+            xp = max(0, int(xp_configurado or 0))
+            denarios = max(0, int(denarios_configurados or 0))
+            limite = max(0, int(limite_diario or 0))
+            if limite > 0 and total_recent >= limite:
+                xp = denarios = 0
+            cur = await tx.conn.execute(
+                """INSERT INTO zerados(user_id, game, platform, finished_at, comment, xp_awarded, denarios_awarded)
+                   VALUES (?,?,?,?,?,?,?)""",
+                (user_id, game, platform, finished_at, comment, xp, denarios),
+            )
+            old_level = new_level = None
+            new_xp = None
+            if xp or denarios:
+                await tx.conn.execute("INSERT OR IGNORE INTO users(user_id) VALUES (?)", (user_id,))
+                before = await tx._one("SELECT xp FROM users WHERE user_id=?", (user_id,))
+                old_xp = int(before["xp"])
+                old_level = nivel_por_xp(old_xp)
+                await tx.conn.execute(
+                    "UPDATE users SET xp=MAX(0,xp+?), denarios=MAX(0,denarios+?) WHERE user_id=?",
+                    (xp, denarios, user_id),
+                )
+                after = await tx._one("SELECT xp FROM users WHERE user_id=?", (user_id,))
+                new_xp = int(after["xp"])
+                new_level = nivel_por_xp(new_xp)
+            return {
+                "id": cur.lastrowid, "xp": xp, "denarios": denarios,
+                "old_level": old_level, "new_level": new_level, "new_xp": new_xp,
+                "daily_limit_reached": bool(limite > 0 and total_recent >= limite),
+            }
+
+    async def criar_zerado_unico(self, user_id, game, platform, finished_at, comment="", xp=0, denarios=0):
+        """Cria zerado sem corrida entre a checagem de duplicidade e o INSERT."""
+        async with self.transaction() as tx:
+            dup = await tx._one(
+                "SELECT id FROM zerados WHERE user_id=? AND lower(game)=lower(?) AND lower(platform)=lower(?) LIMIT 1",
+                (user_id, game, platform),
+            )
+            if dup:
+                return None
+            cur = await tx.conn.execute(
+                """INSERT INTO zerados(user_id, game, platform, finished_at, comment, xp_awarded, denarios_awarded)
+                   VALUES (?,?,?,?,?,?,?)""",
+                (user_id, game, platform, finished_at, comment, xp, denarios),
+            )
+            return cur.lastrowid
+
+    async def remover_zerado_com_recompensa(self, zerado_id: int):
+        """Remove o registro e reverte o que ele concedeu, atomicamente."""
+        async with self.transaction() as tx:
+            row = await tx._one("SELECT * FROM zerados WHERE id=?", (zerado_id,))
+            if not row:
+                return None
+            await tx.conn.execute("DELETE FROM zerados WHERE id=?", (zerado_id,))
+            xp = int(row["xp_awarded"] or 0)
+            denarios = int(row["denarios_awarded"] or 0)
+            if xp or denarios:
+                await tx.conn.execute("INSERT OR IGNORE INTO users(user_id) VALUES (?)", (row["user_id"],))
+                await tx.conn.execute(
+                    "UPDATE users SET xp=MAX(0,xp-?), denarios=MAX(0,denarios-?) WHERE user_id=?",
+                    (xp, denarios, row["user_id"]),
+                )
+                xp_row = await tx._one("SELECT xp FROM users WHERE user_id=?", (row["user_id"],))
+                row = dict(row)
+                row["new_xp"] = int(xp_row["xp"])
+            else:
+                row = dict(row)
+                row["new_xp"] = None
+            return row
 
     async def get_zerado(self, zerado_id: int):
         return await self._one("SELECT * FROM zerados WHERE id=?", (zerado_id,))

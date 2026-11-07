@@ -1,0 +1,67 @@
+# Copie para .env (local) ou cadastre estas variáveis no painel da FadeHost.
+# NUNCA suba o .env para o GitHub.
+DISCORD_TOKEN=
+GUILD_ID=0
+MOD_CHANNEL_ID=0
+PLATINAS_CHANNEL_ID=0
+COLIZEU_CHANNEL_ID=0
+MOD_ROLE_ID=0
+PERFIS_CHANNEL_ID=0
+DB_PATH=data/colizeu.db
+
+# --- Ofertas de jogos ---
+# Opcional: chave da API GG.deals para comparação de preços em região brasileira.
+GG_DEALS_API_KEY=
+# Opcional: chave GRATUITA da IsThereAnyDeal (https://isthereanydeal.com/apps/my/ -> Register App).
+# Ativa as promoções da Nuuvem (loja brasileira, em reais) e giveaways extras.
+ITAD_API_KEY=
+# IDs de lojas da ITAD, separados por vírgula. Padrão: 50 (Nuuvem). Steam/Epic/GOG já são consultadas direto.
+ITAD_SHOPS=50
+# GOG (catálogo público em BRL, sem chave). Use false para desligar.
+OFFERS_GOG_ENABLED=true
+# Cartões limpos não mostram descrição. true = mostra um resumo curto (traduzido se houver Gemini).
+OFFERS_SHOW_DESCRIPTION=false
+
+# --- configurações herdadas da instalação anterior (nomes preservados) ---
+YOUTUBE_API_KEY=
+YOUTUBE_CHANNEL_ID=UCBuR1KPa9g9yYilBiy_7iqw
+CREATOR_VIDEO_CHANNEL_ID=1563040916074405979
+CREATOR_LIVE_CHANNEL_ID=1563040917298872340
+GAMES_CHANNEL_ID=1563071436724248627
+PROMOS_CHANNEL_ID=1563103272494039092
+# opcionais: YOUTUBE_VIDEO_CHECK_SECONDS=120  YOUTUBE_LIVE_CHECK_MINUTES=10
+#            OFFERS_CHECK_MINUTES=30  MAX_OFFERS_PER_CHECK=8  MIN_PROMO_DISCOUNT=50
+
+# Canal onde anúncios de runs e recordes Soulslike são publicados
+SOULSLIKE_CHANNEL_ID=0
+
+# --- IA da Nara + pesquisa do Caçador de Troféus ---
+# A mesma chave Gemini é usada pela Nara e pelo identificador/pesquisador de jogos.
+# Google Search grounding pesquisa fontes públicas; o uso pode gerar cobrança conforme o plano da API.
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.8-flash
+# Proteção global compartilhada entre Nara, Caçador e traduções de ofertas.
+# 429 de quota/billing: pausa padrão de 6 horas; 429 transitório: 60s; 503: 45s.
+GEMINI_QUOTA_COOLDOWN_SECONDS=21600
+GEMINI_RATE_LIMIT_COOLDOWN_SECONDS=60
+GEMINI_UNAVAILABLE_COOLDOWN_SECONDS=45
+GEMINI_CIRCUIT_STATE_FILE=data/gemini_circuit.json
+IA_LIMITE_DIARIO=0
+# Canais (IDs separados por vírgula) onde a IA responde dúvidas da comunidade SEM precisar de menção.
+# Vazio = só responde quando marcada. Perguntas que exigem pesquisa nos jogos sempre pedem a marcação.
+IA_CANAIS_LIVRES=
+IA_TETO_ESPONTANEO=0
+IA_COOLDOWN_CANAL=0
+# A IA pode AGIR (comprar, equipar, editar santuário, registrar zerado), sempre com botão de confirmação quando
+# gasta algo? false = só consulta, como antes.
+IA_ACOES=true
+# Ações de moderação pela IA (ex.: conceder XP). Desligado por padrão. Mesmo ligado: só moderador, com confirmação.
+IA_ACOES_MODERACAO=false
+
+# --- Jogos zerados ---
+# Canal onde os zerados são anunciados (vazio/0 = não anuncia, só registra)
+ZERADOS_CHANNEL_ID=0
+XP_ZERADO=50
+DENARIOS_ZERADO=10
+# Quantos zerados por 24h rendem XP (0 = sem limite)
+ZERADOS_XP_LIMITE_DIARIO=3

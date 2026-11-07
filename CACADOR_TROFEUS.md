@@ -1,60 +1,57 @@
-# Caçador de Troféus — primeira etapa
+# Caçador de Troféus — identificação, pesquisa e catálogo
 
-Esta versão adiciona a fundação do sistema ao Soulsbot:
+O Caçador mantém um catálogo separado da loja cosmética e salva o progresso de cada jogador. A IA ajuda a identificar jogos e preparar rascunhos de colecionáveis/troféus, mas **não publica dados automaticamente**.
 
-- Botão **Caçador de Troféus** no painel existente do Coliseu.
-- Comando `/cacador` como atalho.
-- Catálogo separado do inventário cosmético da loja.
-- Progresso individual por usuário.
-- Navegação por jogo, categoria, itens e troféus.
-- Nomes exibidos como `Nome em português (Original em inglês)`.
-- Solicitação de jogos ausentes pelo próprio jogador, diretamente no Discord.\n- Fila administrativa para acompanhar solicitações.\n- Importação administrativa de catálogos JSON para revisão.
-- Publicação administrativa após validação básica.
+## Como o jogador pesquisa um jogo
 
-## Comandos administrativos
+1. Abra `/cacador` ou o botão **Caçador de Troféus** no `/coliseu`.
+2. Use **Solicitar cadastro** e escreva o nome como lembrar: título original/traduzido, abreviação ou erro de digitação.
+3. O sistema procura primeiro um título/alias já catalogado. Se não houver correspondência, usa Gemini com Google Search grounding para sugerir até cinco candidatos.
+4. O jogador confere ano, estúdio, escopo e fontes e confirma o jogo correto. Quando houver ambiguidade, precisa selecionar o candidato.
+5. Só depois da confirmação o agente pesquisa o catálogo e cria um rascunho em revisão. Uma falha de API, JSON, fonte ou banco deve deixar o job com erro e não publicar o catálogo.
 
-- `/catalogo_importar arquivo:<arquivo.json>`: importa para revisão; não publica automaticamente.
-- `/catalogo_publicar slug:<slug>`: publica se houver pelo menos um item e um troféu.
+O mapa local de aliases de `God of War (2018)` é apenas um atalho de identificação. Ele não é fonte de dados de troféus e não dispensa a pesquisa nem a revisão.
 
-## Formato de importação
+## Como o administrador revisa e publica
 
-Veja `catalogo_exemplo.json`. O arquivo é apenas um exemplo de estrutura: seus dados são fictícios e marcados como não verificados. Não publique esse exemplo como catálogo real.
+- `/catalogo_admin`: abre o painel administrativo com os atalhos da fila e a explicação do processo.
+- `/catalogo_fila`: mostra os pedidos pendentes e detalhes/erros técnicos.
+- `/catalogo_auditar slug:<slug>`: mostra contagem de itens/troféus, evidências, domínios e estado de validação.
+- `/catalogo_validar slug:<slug>`: inicia a confirmação de revisão humana. Isso marca os registros como revisados; não é uma garantia automática de que cada requisito esteja correto.
+- `/catalogo_publicar slug:<slug>`: publica apenas se a auditoria transacional encontrar itens e troféus, todos os registros ligados a fontes HTTPS cadastradas, no mínimo dois domínios distintos e validação humana.
+- `/catalogo_importar arquivo:<arquivo.json>`: importa catálogo manual em estado de revisão; os dados continuam não verificados.
 
-## Limites desta etapa
+O painel de jogadores lista somente jogos em `ready`. A IA nunca transforma sozinha uma solicitação em catálogo público.
 
-Esta entrega registra solicitações de jogos ausentes, mas **não** implementa ainda a pesquisa autônoma na web nem conectores de fontes externas. A camada de importação e o modelo de dados estão preparados para receber os conectores autorizados na próxima etapa. Também não inclui um catálogo real completo de Dark Souls III.
+## Configuração de IA
+
+No `.env`:
+
+```dotenv
+GEMINI_API_KEY=sua_chave
+GEMINI_MODEL=gemini-3.8-flash
+```
+
+`GEMINI_API_KEY` é necessária para identificação e pesquisa automáticas. `GEMINI_MODEL` tem padrão `gemini-3.8-flash`; ajuste apenas para um modelo disponível na sua conta e que suporte Google Search grounding. O modelo atualmente documentado pelo Google para grounding é compatível com esse fluxo; confira a documentação e preços antes de aumentar o volume:
+
+- https://ai.google.dev/gemini-api/docs/google-search
+- https://ai.google.dev/gemini-api/docs/models
+
+O Caçador limita cada usuário a três identificações a cada dez minutos. A pesquisa de catálogo é iniciada somente após confirmação, mas consome chamadas Gemini e pesquisas Google e pode gerar cobrança/consumo de cota.
+
+## Limitações importantes
+
+- Não existe uma API única com cobertura completa de colecionáveis e troféus para todos os jogos.
+- A pesquisa depende de páginas públicas acessíveis e do grounding devolvido pelo Google. Se o modelo não encontrar fontes, o sistema falha fechado e solicita revisão manual.
+- URL citada apenas em texto pelo modelo não é aceita como evidência; cada item/troféu precisa apontar para uma URL devolvida no grounding e cadastrada no catálogo.
+- Títulos, aliases, nomes, DLC, NG+, itens perdíveis, locais e requisitos precisam ser conferidos antes da validação administrativa.
+- Duas fontes/domínios não provam completude; são um bloqueio mínimo para reduzir dados sem sustentação.
+- Reimportações preservam o progresso dos jogadores. Registros antigos que deixaram de aparecer no novo rascunho não são apagados automaticamente, para evitar perda de histórico; compare as versões manualmente.
+- O mapa local de títulos conhecidos é intencionalmente pequeno. Para outros jogos, a identificação depende da API Gemini e de fontes de pesquisa.
 
 ## Atualização
 
-Faça backup do SQLite antes de atualizar. As novas tabelas são criadas automaticamente na inicialização e não alteram as tabelas antigas.
+Faça backup de `data/colizeu.db` antes de substituir o código. Não substitua seu `.env` nem o banco de dados. As tabelas novas e índices são criados/migrados ao iniciar o bot.
 
 
-## Identificação e pesquisa automática de jogos
-
-O fluxo usa a chave `GEMINI_API_KEY` já usada pela Nara e o Google Search grounding do Gemini.
-Configure também `GEMINI_MODEL` com um modelo Gemini que suporte Google Search grounding.
-
-### Fluxo do membro
-1. Execute `/jogo_buscar nome:<texto>`. Pode informar abreviações, título traduzido ou nome com erro.
-2. O agente pesquisa correspondências e retorna títulos oficiais candidatos, ano, estúdio, escopo e confiança estimada.
-3. Se houver mais de um candidato, selecione o jogo correto. A entrada original nunca é gravada como título canônico.
-4. Confirme. A IA pesquisa fontes e tenta montar itens, troféus e relações.
-5. O catálogo entra em `review`; não aparece no painel dos jogadores até revisão e publicação administrativa.
-
-### Fluxo administrativo
-1. `/catalogo_fila` consulta solicitações recebidas pelo botão do Caçador.
-2. `/catalogo_auditar slug:<slug>` mostra cobertura, fontes, domínios e validação.
-3. Abra as fontes e revise nomes, localizações, requisitos, DLC, NG+ e cobertura.
-4. `/catalogo_validar slug:<slug>` é uma declaração explícita de que um administrador revisou manualmente todos os registros.
-5. `/catalogo_auditar` novamente; a publicação exige itens e troféus, fontes em todos os registros, pelo menos dois domínios e validação manual.
-6. `/catalogo_publicar slug:<slug>` publica o catálogo.
-
-### Garantias e limites
-- A IA identifica candidatos; não assume que o texto digitado é o nome oficial.
-- Títulos canônicos e aliases ficam separados e persistidos.
-- A pesquisa usa Google Search grounding. O sistema aceita como fontes somente URLs que o Gemini devolveu nos dados de grounding; fontes citadas em texto pelo modelo, mas não retornadas no grounding, não são aceitas.
-- Dados gerados começam com `verified=0`. Nenhum catálogo é publicado automaticamente.
-- A validação administrativa é uma declaração humana, não uma auditoria automática infalível.
-- Não existe API universal que forneça todos os troféus, armas, magias e localizações de todos os jogos. A cobertura depende das fontes disponíveis. `coverage_notes` registra lacunas declaradas pelo pesquisador.
-- Não há garantia de completude nem de precisão perfeita. Revise os dados antes de marcar como verificados.
-- A geração de catálogos pode consumir chamadas Gemini e pesquisas Google; verifique preços/limites da sua conta.
+Se a API Gemini responder `429 RESOURCE_EXHAUSTED`, o bot pausa as novas chamadas por meio do circuit breaker compartilhado. O comando `/gemini_status` mostra aos administradores o estado local; a causa definitiva (limite de geração, Search grounding ou faturamento) precisa ser conferida no painel do projeto Google AI Studio.
