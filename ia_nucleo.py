@@ -228,7 +228,7 @@ class Registro:
 # --------------------------------------------------------------------------- laço do agente
 class Adaptador:
     """Cola entre o laço e o SDK do modelo. A versão real fica em ia_gemini.py."""
-    def conteudo_usuario(self, texto: str): ...
+    def conteudo_usuario(self, texto: str, imagens: list | None = None): ...
     def conteudo_funcoes(self, respostas: list): ...
     def parte_resposta(self, nome: str, resultado: dict): ...
 
@@ -238,12 +238,14 @@ def _texto(parts) -> str:
 
 
 async def rodar_agente(gerar: Callable[[list, bool], Awaitable[Any]], adaptador: Adaptador, pedido: str,
-                       registro: Registro, ctx: Ctx, *, max_passos: int = MAX_PASSOS) -> str:
+                       registro: Registro, ctx: Ctx, *, max_passos: int = MAX_PASSOS,
+                       imagens: list | None = None) -> str:
     """Conversa com o modelo até ele responder em texto. Devolve o texto final.
 
     gerar(contents, usar_ferramentas) chama o modelo. O histórico (contents) é mantido aqui.
     """
-    contents = [adaptador.conteudo_usuario(pedido)]
+    # imagens = lista de (bytes, mime_type); só é passada ao adaptador quando existe (mantém compatibilidade)
+    contents = [adaptador.conteudo_usuario(pedido, imagens) if imagens else adaptador.conteudo_usuario(pedido)]
     for _ in range(max_passos):
         resp = await gerar(contents, True)
         candidatos = getattr(resp, "candidates", None) or []

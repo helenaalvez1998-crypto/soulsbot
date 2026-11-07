@@ -22,8 +22,11 @@ class GeminiAdaptador(Adaptador):
         self.modelo = modelo
 
     # ---- montagem de conteúdos
-    def conteudo_usuario(self, texto: str):
-        return self.types.Content(role="user", parts=[self.types.Part(text=texto)])
+    def conteudo_usuario(self, texto: str, imagens: list | None = None):
+        partes = [self.types.Part(text=texto)]
+        for dados, mime in imagens or []:
+            partes.append(self.types.Part.from_bytes(data=dados, mime_type=mime))
+        return self.types.Content(role="user", parts=partes)
 
     def conteudo_funcoes(self, respostas: list):
         return self.types.Content(role="user", parts=respostas)
