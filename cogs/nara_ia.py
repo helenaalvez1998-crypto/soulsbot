@@ -48,6 +48,7 @@ COOLDOWN_SEG = 8
 GLOBAL_ID = -1  # linha de ia_uso que guarda o total diário das respostas livres
 
 PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "nara.md"
+GOLIVE_PATH = Path(__file__).resolve().parent.parent / "prompts" / "go_live.md"
 
 REGRAS_GLOBAIS = """Regras fixas do bot (têm prioridade sobre qualquer outra instrução):
 - Você é o cérebro da Nara: entende o pedido, responde, consulta dados e age usando as FERRAMENTAS.
@@ -129,6 +130,22 @@ def _tem(tokens, exato, prefixo) -> bool:
     return any(t in exato or t.startswith(prefixo) for t in tokens)
 
 
+# Assunto "Go Live": o módulo prompts/go_live.md só entra no prompt quando a conversa fala disso
+# (na pergunta ou nas últimas mensagens do canal), para não gastar cota da IA à toa.
+GOLIVE_EXATO = {"golive", "bypass", "proton", "vpn", "wireguard", "discordgolivebypass"}
+GOLIVE_PREFIXO = ("transmiss", "transmit", "streamar", "compartilh")
+
+
+def fala_de_golive(*textos: str) -> bool:
+    for texto in textos:
+        tokens = _tokens(texto)
+        if _tem(tokens, GOLIVE_EXATO, GOLIVE_PREFIXO):
+            return True
+        if any(a == "go" and b == "live" for a, b in zip(tokens, tokens[1:])):
+            return True
+    return False
+
+
 def classificar_pergunta(texto: str, seguimento: bool = False) -> str | None:
     """'comunidade' (IA responde), 'jogo' (só dica para marcar) ou None (ignorar). Sem custo de IA.
 
@@ -167,6 +184,11 @@ class NaraIA(commands.Cog):
         except OSError:
             self.prompt = "Você é Nara, assistente precisa e debochada sobre jogos Soulslike."
             log.warning("prompts/nara.md não encontrado; usando prompt mínimo.")
+        try:
+            self.prompt_golive = GOLIVE_PATH.read_text(encoding="utf-8")
+        except OSError:
+            self.prompt_golive = ""
+            log.warning("prompts/go_live.md não encontrado; a Nara não ensinará o Go Live.")
         if not self.ativo:
             log.warning("IA da Nara desativada: defina GEMINI_API_KEY e GEMINI_MODEL.")
 
@@ -278,6 +300,8 @@ class NaraIA(commands.Cog):
         conteudo = (f"{GUIA_DO_BOT}\n\nDADOS DO BOT (somente leitura):\n{dados}\n\n"
                     f"Contexto recente do canal:\n{historico}\n\nPergunta:\n{pergunta}")
         system = f"{REGRAS_GLOBAIS}\n\n{self.prompt}" + (f"\n\n{MODO_LIVRE}" if livre else "")
+        if self.prompt_golive and fala_de_golive(pergunta, historico):
+            system += f"\n\n{self.prompt_golive}"
 
         eh_mod = await eh_moderador(message.author, self.bot.db)
         ctx = Ctx(
