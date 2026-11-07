@@ -89,6 +89,104 @@ CREATE TABLE IF NOT EXISTS inventario (
     PRIMARY KEY (user_id, item)
 );
 CREATE INDEX IF NOT EXISTS idx_inventario_user_tipo ON inventario(user_id, tipo, equipado);
+
+CREATE TABLE IF NOT EXISTS games_catalog (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug            TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    name            TEXT NOT NULL,
+    name_original   TEXT NOT NULL DEFAULT '',
+    status          TEXT NOT NULL DEFAULT 'review', -- review | ready | archived
+    platforms_json  TEXT NOT NULL DEFAULT '[]',
+    cover_url       TEXT NOT NULL DEFAULT '',
+    sources_json    TEXT NOT NULL DEFAULT '[]',
+    created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS game_items (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id         INTEGER NOT NULL,
+    category        TEXT NOT NULL,
+    name_pt         TEXT NOT NULL,
+    name_original   TEXT NOT NULL DEFAULT '',
+    description_pt  TEXT NOT NULL DEFAULT '',
+    location_pt     TEXT NOT NULL DEFAULT '',
+    acquisition_pt  TEXT NOT NULL DEFAULT '',
+    dlc             TEXT NOT NULL DEFAULT '',
+    ng_cycle        TEXT NOT NULL DEFAULT '',
+    missable        INTEGER NOT NULL DEFAULT 0,
+    source_url      TEXT NOT NULL DEFAULT '',
+    verified        INTEGER NOT NULL DEFAULT 0,
+    updated_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(game_id, category, name_original),
+    FOREIGN KEY(game_id) REFERENCES games_catalog(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_game_items_game_category ON game_items(game_id, category);
+
+CREATE TABLE IF NOT EXISTS game_trophies (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id         INTEGER NOT NULL,
+    name_pt         TEXT NOT NULL,
+    name_original   TEXT NOT NULL DEFAULT '',
+    description_pt  TEXT NOT NULL DEFAULT '',
+    grade           TEXT NOT NULL DEFAULT '',
+    is_platinum     INTEGER NOT NULL DEFAULT 0,
+    source_url      TEXT NOT NULL DEFAULT '',
+    verified        INTEGER NOT NULL DEFAULT 0,
+    updated_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(game_id, name_original),
+    FOREIGN KEY(game_id) REFERENCES games_catalog(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_game_trophies_game ON game_trophies(game_id);
+
+CREATE TABLE IF NOT EXISTS trophy_requirements (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    trophy_id       INTEGER NOT NULL,
+    item_id         INTEGER,
+    description_pt  TEXT NOT NULL DEFAULT '',
+    quantity        INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY(trophy_id) REFERENCES game_trophies(id) ON DELETE CASCADE,
+    FOREIGN KEY(item_id) REFERENCES game_items(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS user_game_progress (
+    user_id         INTEGER NOT NULL,
+    game_id         INTEGER NOT NULL,
+    last_viewed     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(user_id, game_id),
+    FOREIGN KEY(game_id) REFERENCES games_catalog(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS user_collected_items (
+    user_id         INTEGER NOT NULL,
+    item_id         INTEGER NOT NULL,
+    obtained        INTEGER NOT NULL DEFAULT 1,
+    updated_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(user_id, item_id),
+    FOREIGN KEY(item_id) REFERENCES game_items(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS user_trophy_progress (
+    user_id         INTEGER NOT NULL,
+    trophy_id       INTEGER NOT NULL,
+    completed       INTEGER NOT NULL DEFAULT 0,
+    updated_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(user_id, trophy_id),
+    FOREIGN KEY(trophy_id) REFERENCES game_trophies(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS catalog_import_jobs (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    requested_by    INTEGER NOT NULL,
+    game_name       TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'queued',
+    progress        INTEGER NOT NULL DEFAULT 0,
+    details         TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS logs (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     actor_id   INTEGER NOT NULL,

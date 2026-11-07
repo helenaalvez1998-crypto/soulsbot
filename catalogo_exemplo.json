@@ -1,0 +1,51 @@
+{
+  "slug": "dark-souls-iii",
+  "name": "Dark Souls III",
+  "name_original": "Dark Souls III",
+  "platforms": [
+    "PC",
+    "PlayStation",
+    "Xbox"
+  ],
+  "cover_url": "",
+  "sources": [
+    {
+      "name": "Fonte autorizada",
+      "url": "https://example.org/catalogo",
+      "accessed_at": "2026-11-07"
+    }
+  ],
+  "items": [
+    {
+      "category": "Anéis",
+      "name_pt": "Anel de Havel",
+      "name_original": "Havel's Ring",
+      "description_pt": "Aumenta a carga máxima de equipamentos.",
+      "location_pt": "Exemplo de localização a validar.",
+      "acquisition_pt": "Exemplo de método de obtenção a validar.",
+      "dlc": "",
+      "ng_cycle": "Jogo base",
+      "missable": false,
+      "source_url": "https://example.org/item",
+      "verified": false
+    }
+  ],
+  "trophies": [
+    {
+      "name_pt": "Mestre dos Anéis",
+      "name_original": "Master of Rings",
+      "description_pt": "Colete todos os anéis.",
+      "grade": "Prata",
+      "is_platinum": false,
+      "source_url": "https://example.org/trophy",
+      "verified": false,
+      "requirements": [
+        {
+          "item_name_original": "Havel's Ring",
+          "description_pt": "Obter o Anel de Havel",
+          "quantity": 1
+        }
+      ]
+    }
+  ]
+}

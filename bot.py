@@ -8,7 +8,7 @@ from database import Database
 logging.basicConfig(level=logging.INFO)
 
 EXTENSOES = ("cogs.admin", "cogs.perfil", "cogs.platinas", "cogs.loja", "cogs.ranking", "cogs.colizeu",
-            "cogs.cargos", "cogs.progressao", "cogs.youtube", "cogs.ofertas", "cogs.zerados", "cogs.santuario", "cogs.soulslike", "cogs.nara_ia")
+            "cogs.cargos", "cogs.progressao", "cogs.youtube", "cogs.ofertas", "cogs.zerados", "cogs.santuario", "cogs.soulslike", "cogs.nara_ia", "cogs.trofeus")
 
 
 class NaraBot(commands.Bot):
