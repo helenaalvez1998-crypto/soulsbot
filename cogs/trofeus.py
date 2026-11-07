@@ -10,6 +10,8 @@ import config
 import trofeus_service as svc
 import catalogo_ia
 from gemini_resilience import GeminiUnavailableError
+from deepseek_resilience import DeepSeekUnavailableError
+from ia_provedores import TodosProvedoresPesquisaIndisponiveis
 
 log = logging.getLogger("nara.trofeus")
 
@@ -154,10 +156,13 @@ class SolicitarJogoModal(discord.ui.Modal, title="Solicitar cadastro de jogo"):
         except Exception as exc:
             log.exception("Falha ao identificar jogo solicitado pelo painel")
             try:
-                detalhe_erro = (
-                    f"{exc.admin_message} Detalhe do provedor: {exc.technical_message}"
-                    if isinstance(exc, GeminiUnavailableError) else str(exc)
-                )
+                if hasattr(exc, "admin_message"):
+                    detalhe_erro = (
+                        f"{exc.admin_message} Detalhe do provedor: "
+                        f"{getattr(exc, 'technical_message', str(exc))}"
+                    )
+                else:
+                    detalhe_erro = str(exc)
                 await self.cog.bot.db.conn.execute(
                     """INSERT INTO catalog_import_jobs(requested_by,game_name,status,progress,details,updated_at)
                        VALUES (?,?, 'needs_review', 0, ?, CURRENT_TIMESTAMP)""",
@@ -166,12 +171,12 @@ class SolicitarJogoModal(discord.ui.Modal, title="Solicitar cadastro de jogo"):
                 await self.cog.bot.db.conn.commit()
             except Exception:
                 log.exception("Falha ao salvar solicitação administrativa para %s", nome)
-            reason = (exc.user_message if isinstance(exc, GeminiUnavailableError) else str(exc)).strip() or type(exc).__name__
+            reason = str(getattr(exc, "user_message", str(exc))).strip() or type(exc).__name__
             try:
                 await interaction.followup.send(
                     f"**A identificação automática falhou.** Solicitação: **{discord.utils.escape_markdown(nome)}**\n"
                     f"Motivo: {discord.utils.escape_markdown(reason[:700])}\n"
-                    "Nenhum nome canônico foi criado. O administrador pode consultar `/catalogo_fila` e `/gemini_status`.",
+                    "Nenhum nome canônico foi criado. O administrador pode consultar `/catalogo_fila` e `/gemini_status` (estado dos dois provedores).",
                     ephemeral=True,
                 )
             except discord.HTTPException:
