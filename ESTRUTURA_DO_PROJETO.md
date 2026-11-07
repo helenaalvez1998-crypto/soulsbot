@@ -28,9 +28,11 @@ Soulsbot/
 ├── ia_nucleo.py               # agente: política, validação e riscos
 ├── ia_ferramentas.py          # ferramentas que o agente pode invocar
 ├── ia_gemini.py               # adaptador do SDK Gemini para a Nara
-├── gemini_resilience.py       # quota, rate limit e circuit breaker global
+├── gemini_resilience.py       # circuit breakers independentes dos dois projetos Gemini
+├── tavily_resilience.py       # limite mensal gratuito e circuit breaker da busca web
+├── ia_provedores.py            # busca Tavily Free + failover entre dois Gemini
 ├── ia_confirmacao.py         # views/botões de confirmação de ações
-├── catalogo_ia.py             # identificação de jogos e pesquisa grounding
+├── catalogo_ia.py             # identificação de jogos e validação de fontes
 ├── trofeus_service.py         # regras e consultas do Caçador de Troféus
 ├── conquistas.py / levels.py  # conquistas, XP e patentes
 ├── loja.py / utils.py / ui.py # utilitários compartilhados
@@ -47,8 +49,8 @@ Soulsbot/
 
 1. **Discord (`cogs/`)**: comandos, modais, botões, permissões e respostas.
 2. **Domínio (`*_service.py`, `ia_nucleo.py`)**: regras de negócio, validação, economia e progressão.
-3. **Infraestrutura (`database.py`, `config.py`, `gemini_resilience.py`)**: persistência, configuração, limites e chamadas externas.
-4. **IA (`nara_local.py`, `catalogo_ia.py`, `ia_gemini.py`, `ia_ferramentas.py`, `prompts/`)**: respostas locais, pesquisa grounded e ações controladas.
+3. **Infraestrutura (`database.py`, `config.py`, `gemini_resilience.py`, `tavily_resilience.py`)**: persistência, configuração, limites e chamadas externas.
+4. **IA (`nara_local.py`, `catalogo_ia.py`, `ia_gemini.py`, `ia_ferramentas.py`, `prompts/`)**: respostas locais, pesquisa baseada em fontes recuperadas e ações controladas.
 5. **Qualidade (`tests/`)**: regressões, transações, concorrência, parsing e simulações de falhas externas.
 
 ## Arquivos locais que não devem ser substituídos

@@ -7,9 +7,9 @@ Comece por [`LEIA-ME-PRIMEIRO.txt`](LEIA-ME-PRIMEIRO.txt), [`INSTALACAO_E_ATUALI
 Bot de Discord (discord.py) com perfis, XP, patentes, registro/aprovação de platinas e rankings.
 
 ## Requisitos
-- Python **3.10 ou superior**.
+- Python **3.11 ou superior**.
 - Bot criado no Discord Developer Portal com as intents necessárias habilitadas.
-- `DISCORD_TOKEN` para inicialização; `DEEPSEEK_API_KEY` e/ou `GEMINI_API_KEY` são usadas para pesquisa externa; DeepSeek é principal e Gemini reserva por padrão.
+- `DISCORD_TOKEN` para inicialização; duas chaves Gemini de projetos Google diferentes (`GEMINI_API_KEY` e `GEMINI_BACKUP_API_KEY`) para análise com failover, mais `TAVILY_API_KEY` do plano gratuito para buscar fontes web. O bot não ativa billing nem compra créditos.
 
 ## Rodar localmente
 ```bash
@@ -79,7 +79,7 @@ Variáveis opcionais: `OFFERS_CHECK_MINUTES` (30), `MAX_OFFERS_PER_CHECK` (8), `
 - `cogs/progressao.py` – níveis, XP e patentes exibidos como funções da Nara
 - `cogs/nara_ia.py` – roteamento local, consultas de perfil e pesquisa avançada da Nara
 - `nara_local.py` – FAQ, classificador local, detecção de pesquisa necessária e bloqueio de imagens
-- `ia_nucleo.py`, `ia_ferramentas.py`, `ia_gemini.py`, `ia_deepseek.py`, `ia_multi.py`, `ia_provedores.py`, `ia_confirmacao.py` – agente multi-provedor, ferramentas e segurança
+- `ia_nucleo.py`, `ia_ferramentas.py`, `ia_gemini.py`, `ia_multi.py`, `ia_provedores.py`, `ia_confirmacao.py` – agente Gemini multi-projeto, ferramentas e segurança
 - `tests/` – testes do agente
 
 ## Santuários (perfil em thread privada)
@@ -114,8 +114,8 @@ A Nara não envia toda conversa aos modelos externos. `cogs/nara_ia.py` consulta
 
 - **Respostas locais:** saudação, identidade, capacidades, comandos, XP, patentes, Denários, loja, Coliseu, registros, comprovantes, rankings e dúvidas frequentes.
 - **Consultas SQLite:** perfil, XP/nível, saldo privado, platinas aprovadas, zerados, runs, inventário e rankings. A Nara lê somente os dados do próprio membro, exceto rankings públicos.
-- **Pesquisa de catálogo:** pedidos sobre listas de troféus, platinas, conquistas, DLCs e colecionáveis são encaminhados para `/jogo_buscar`. O comando consulta primeiro aliases/catálogos locais; se não encontrar, usa DeepSeek Search + DeepSeek Flash e alterna para Gemini + Google Search grounding se DeepSeek atingir quota/saldo, rate limit ou ficar indisponível. O usuário confirma o título e o resultado fica em revisão administrativa.
-- **Pesquisa conversacional:** desligada por padrão (`NARA_CHAT_IA_ENABLED=false`). Mesmo pesquisas explícitas de guias no chat não acionam IA. Isso preserva quota; a pesquisa de catálogos é feita por `/jogo_buscar`. Se ativada, o agente usa DeepSeek primeiro e Gemini como reserva.
+- **Pesquisa de catálogo:** pedidos sobre listas de troféus, platinas, conquistas, DLCs e colecionáveis são encaminhados para `/jogo_buscar`. O comando consulta primeiro aliases/catálogos locais; se não encontrar, usa Tavily Free (busca web) e Gemini principal para analisar as fontes; se o principal atingir quota, rate limit ou ficar indisponível, outro projeto Gemini assume a análise. O usuário confirma o título e o resultado fica em revisão administrativa.
+- **Pesquisa conversacional:** desligada por padrão (`NARA_CHAT_IA_ENABLED=false`). Mesmo pesquisas explícitas de guias no chat não acionam IA. Isso preserva quota; a pesquisa de catálogos é feita por `/jogo_buscar`. Se ativada, o agente usa Gemini principal e Gemini reserva.
 - **Canal `IA_CANAIS_LIVRES`:** responde dúvidas que tenham uma intenção local reconhecida. Não envia conversa aleatória ao modelo; para pesquisa de jogo, pede que o usuário marque a Nara ou use `/jogo_buscar`.
 - **Fallback:** mensagens marcadas que não correspondam ao FAQ recebem orientação local; não são enviadas automaticamente a nenhum modelo.
 
@@ -125,9 +125,9 @@ A Nara de conversa é **somente texto**. O código não baixa, abre, salva ou en
 
 ### Quando a IA externa é utilizada
 
-Com `NARA_CHAT_IA_ENABLED=false` e `OFFERS_SHOW_DESCRIPTION=false`, o único fluxo regular que usa IA externa é o Caçador de Troféus quando `/jogo_buscar` não encontra o jogo/alias/catálogo local. DeepSeek Search + `deepseek-flash` é o principal; quando Search, geração, saldo, quota ou serviço DeepSeek falha, o bot usa Gemini + Google Search grounding como reserva. Os circuit breakers são independentes e persistidos em `data/deepseek_circuit.json` e `data/gemini_circuit.json`. Administradores consultam ambos com `/gemini_status`.
+Com `NARA_CHAT_IA_ENABLED=false` e `OFFERS_SHOW_DESCRIPTION=false`, o único fluxo regular que usa IA externa é o Caçador quando `/jogo_buscar` não encontra o jogo/alias/catálogo local. A busca usa Tavily Free (Basic); Gemini principal analisa as fontes e o segundo projeto Gemini assume quando o principal atinge quota ou fica indisponível. Os circuit breakers Gemini são separados e persistidos em `data/gemini_circuit.json` e `data/gemini_backup_circuit.json`; a quota de busca Tavily é controlada em `data/tavily_circuit.json`. Administradores consultam os três estados com `/gemini_status`.
 
-`DEEPSEEK_API_KEY` + `DEEPSEEK_MODEL=deepseek-flash` habilitam o principal. `GEMINI_API_KEY` + `GEMINI_MODEL` habilitam o reserva. Recomenda-se configurar as duas chaves. O histórico neutro e os prompts são compartilhados no agente conversacional; as permissões e validações continuam no código, não no prompt. Consulte `INSTALACAO_E_ATUALIZACAO.md` para as variáveis e `CACADOR_TROFEUS.md` para o fluxo de pesquisa.
+`GEMINI_API_KEY` + `GEMINI_MODEL` configuram o principal. `GEMINI_BACKUP_API_KEY` + `GEMINI_BACKUP_MODEL` configuram a reserva. As chaves devem pertencer a projetos Google diferentes para que os limites por projeto sejam independentes; duas chaves do mesmo projeto compartilham quota. A pesquisa web é fornecida pela Tavily Free, separada dos modelos Gemini. O histórico neutro e os prompts são compartilhados no agente conversacional; permissões e validações continuam no código.
 ## Zerados (`cogs/zerados.py`)
 Versão leve das platinas para quem quer registrar os jogos que finalizou, sem precisar platinar.
 - **`/zerados`** abre o painel (registrar, lista, ranking total/mensal). Também há o botão **Zerados** dentro do `/coliseu`.
@@ -141,9 +141,9 @@ Versão leve das platinas para quem quer registrar os jogos que finalizou, sem p
 
 ### Caçador de Troféus — pesquisa assistida por IA
 
-Veja `CACADOR_TROFEUS.md`. Configure `DEEPSEEK_API_KEY` (principal) e `GEMINI_API_KEY` (reserva), depois use `/jogo_buscar` para identificar o título oficial, confirmar o candidato e gerar um catálogo em revisão. A publicação exige auditoria e validação administrativa.
+Veja `CACADOR_TROFEUS.md`. Configure `GEMINI_API_KEY` como principal e `GEMINI_BACKUP_API_KEY` de outro projeto Google como reserva. Depois use `/jogo_buscar` para identificar o título, confirmar o candidato e gerar catálogo em revisão. A publicação exige auditoria e validação administrativa.
 
 
 ## Caçador de Troféus e pesquisa de jogos
 
-O comando `/jogo_buscar` reconhece títulos/aliases existentes sem consumir modelo ou usa DeepSeek Search + Flash, com failover para Gemini Search grounding, para sugerir candidatos, inclusive quando há abreviações ou erros de digitação. A pesquisa aprofundada do catálogo só começa após confirmação do título e fica em revisão administrativa; não existe publicação automática pela IA. Consulte [`CACADOR_TROFEUS.md`](CACADOR_TROFEUS.md) para o fluxo e [`AUDITORIA_TECNICA.md`](AUDITORIA_TECNICA.md) para as correções, testes, limites e checklist de atualização. Para ativar a pesquisa, configure `DEEPSEEK_API_KEY` e `GEMINI_API_KEY`; DeepSeek usa `deepseek-flash` por padrão e Gemini é a reserva. Se a hospedagem definir `GEMINI_MODEL` nas variáveis do serviço, esse valor prevalece sobre o `.env`; confira o painel para não continuar executando um modelo antigo. Em erro de quota ou `429`, consulte `/gemini_status`: o comando mostra os dois circuit breakers e qual provedor está pausado; confira os painéis de saldo/quota do fornecedor correspondente.
+O comando `/jogo_buscar` reconhece títulos/aliases existentes sem consumir modelo ou usa Tavily Free para buscar fontes e Gemini principal para analisar; se o primeiro Gemini falhar, tenta o segundo projeto Gemini. A pesquisa aprofundada começa após confirmação do título e fica em revisão administrativa; a IA não publica automaticamente. Configure `GEMINI_API_KEY`, `GEMINI_BACKUP_API_KEY` de projetos distintos e `TAVILY_API_KEY` do plano gratuito. Os modelos são definidos por `GEMINI_MODEL` e `GEMINI_BACKUP_MODEL`. Em erro de quota ou `429`, consulte `/gemini_status` para ver o estado dos dois circuit breakers.

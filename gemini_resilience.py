@@ -1,9 +1,9 @@
-"""Resiliência compartilhada para todas as chamadas do Gemini.
+"""Circuit breakers independentes para dois projetos Gemini.
 
-Classifica 429/503, aplica circuit breaker global do processo e persiste o bloqueio
-em data/gemini_circuit.json para não voltar a martelar a API após um restart.
-Não faz uma segunda política de retry: o SDK oficial já faz retries para falhas
-transitórias. Aqui tratamos o erro final que escapou do SDK.
+As quotas são isoladas por projeto Google, não por chave. Use chaves de projetos
+separados para que o segundo projeto funcione como reserva operacional. Cada
+projeto tem estado persistido próprio; nenhuma chamada paga é iniciada pelo bot
+além das funcionalidades habilitadas no projeto Google.
 """
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ import os
 import re
 import threading
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, TypeVar
@@ -22,33 +23,35 @@ T = TypeVar("T")
 
 
 class GeminiUnavailableError(RuntimeError):
-    """Falha conhecida de quota, rate limit ou indisponibilidade do Gemini."""
+    """Quota, rate limit ou indisponibilidade de uma das contas/projetos Gemini."""
 
-    def __init__(self, kind: str, retry_after_seconds: int, technical_message: str):
+    def __init__(self, kind: str, retry_after_seconds: int, technical_message: str,
+                 provider: str = "primary"):
         self.kind = kind
+        self.provider = provider if provider in {"primary", "backup"} else "primary"
         self.retry_after_seconds = max(1, int(retry_after_seconds))
         self.technical_message = (technical_message or "Falha sem detalhes retornados pelo SDK")[:1200]
+        provider_label = "Gemini principal" if self.provider == "primary" else "Gemini reserva"
         if kind == "quota":
             user_message = (
-                "A IA do Google atingiu a quota disponível. As funções que dependem do Gemini foram "
-                "pausadas para evitar novas chamadas recusadas. A administração precisa verificar "
-                "o uso, os limites e o faturamento do projeto Gemini."
+                f"A quota disponível do {provider_label} foi atingida. O Soulsbot pausou esse projeto "
+                "e tentou usar o outro projeto Gemini, quando configurado."
             )
             admin_message = (
-                "Quota Gemini esgotada ou limite de faturamento atingido. Verifique o projeto, "
-                "os limites de geração e de Google Search grounding, os créditos e o billing. "
-                f"O bot ficará em pausa por até {self.retry_after_seconds // 60 or 1} minuto(s) antes de uma nova tentativa."
+                f"Quota esgotada ou limite de billing no {provider_label}. Confira o projeto Google, "
+                "os limites e a disponibilidade gratuita do modelo Gemini. "
+                f"Circuito pausado por até {self.retry_after_seconds // 60 or 1} minuto(s)."
             )
         elif kind == "rate_limit":
             minutes = max(1, (self.retry_after_seconds + 59) // 60)
-            user_message = (
-                "O Gemini está limitando temporariamente as solicitações. Aguarde aproximadamente "
-                f"{minutes} minuto(s) e tente novamente."
-            )
-            admin_message = f"Rate limit Gemini (429). Circuit breaker ativo por {self.retry_after_seconds}s."
+            user_message = f"O {provider_label} está limitando temporariamente as solicitações."
+            admin_message = f"Rate limit no {provider_label}. Circuito pausado por {self.retry_after_seconds}s."
+        elif kind == "auth":
+            user_message = f"A chave ou a permissão do {provider_label} não foi aceita; a Nara tentará o outro projeto."
+            admin_message = f"Credencial/permissão inválida no {provider_label} (401/403). Confira a chave, o projeto e o acesso ao modelo."
         else:
-            user_message = "O serviço Gemini está temporariamente indisponível. Tente novamente mais tarde."
-            admin_message = f"Gemini indisponível temporariamente. Circuit breaker ativo por {self.retry_after_seconds}s."
+            user_message = f"O {provider_label} está temporariamente indisponível."
+            admin_message = f"Indisponibilidade no {provider_label}. Circuito pausado por {self.retry_after_seconds}s."
         self.user_message = user_message
         self.admin_message = admin_message
         super().__init__(user_message)
@@ -57,14 +60,30 @@ class GeminiUnavailableError(RuntimeError):
         return self.user_message
 
 
+@dataclass
+class _Circuit:
+    blocked_until: float = 0.0
+    kind: str = ""
+    reason: str = ""
+    loaded: bool = False
+
+
 _LOCK = threading.RLock()
-_BLOCKED_UNTIL = 0.0  # timestamp Unix, não monotonic, para permitir persistência
-_BLOCK_KIND = ""
-_BLOCK_REASON = ""
-_STATE_LOADED = False
+_CIRCUITS = {"primary": _Circuit(), "backup": _Circuit()}
 
 
-def _int_env(name: str, default: int, minimum: int = 1, maximum: int = 86400) -> int:
+def _provider(provider: str) -> str:
+    value = str(provider or "primary").strip().lower()
+    if value not in _CIRCUITS:
+        raise ValueError("Provedor Gemini inválido; use 'primary' ou 'backup'.")
+    return value
+
+
+def _prefix(provider: str) -> str:
+    return "GEMINI_BACKUP" if provider == "backup" else "GEMINI"
+
+
+def _int_env(name: str, default: int, minimum: int = 1, maximum: int = 604800) -> int:
     try:
         value = int(os.getenv(name, str(default)).strip())
         return min(maximum, max(minimum, value))
@@ -73,51 +92,56 @@ def _int_env(name: str, default: int, minimum: int = 1, maximum: int = 86400) ->
         return default
 
 
-def _state_path() -> Path:
-    configured = os.getenv("GEMINI_CIRCUIT_STATE_FILE", "data/gemini_circuit.json").strip()
-    return Path(configured or "data/gemini_circuit.json")
+def _state_path(provider: str = "primary") -> Path:
+    provider = _provider(provider)
+    if provider == "backup":
+        raw = os.getenv("GEMINI_BACKUP_CIRCUIT_STATE_FILE", "data/gemini_backup_circuit.json")
+        return Path(raw.strip() or "data/gemini_backup_circuit.json")
+    raw = os.getenv("GEMINI_CIRCUIT_STATE_FILE", "data/gemini_circuit.json")
+    return Path(raw.strip() or "data/gemini_circuit.json")
 
 
-def _load_state_locked() -> None:
-    global _STATE_LOADED, _BLOCKED_UNTIL, _BLOCK_KIND, _BLOCK_REASON
-    if _STATE_LOADED:
+def _load_locked(provider: str) -> None:
+    state = _CIRCUITS[provider]
+    if state.loaded:
         return
-    _STATE_LOADED = True
-    path = _state_path()
+    state.loaded = True
+    path = _state_path(provider)
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
         blocked_until = float(payload.get("blocked_until", 0))
         if blocked_until > time.time():
-            _BLOCKED_UNTIL = blocked_until
-            _BLOCK_KIND = str(payload.get("kind", "unavailable"))[:40]
-            _BLOCK_REASON = str(payload.get("reason", "Bloqueio persistido"))[:500]
-            log.warning("Circuit breaker Gemini restaurado: tipo=%s, restante=%ss.",
-                        _BLOCK_KIND, max(1, int(_BLOCKED_UNTIL - time.time())))
-        elif path.exists():
+            state.blocked_until = blocked_until
+            state.kind = str(payload.get("kind", "unavailable"))[:40]
+            state.reason = str(payload.get("reason", "Bloqueio persistido"))[:500]
+            log.warning("Circuit breaker Gemini %s restaurado: tipo=%s, restante=%ss.",
+                        provider, state.kind, max(1, int(state.blocked_until - time.time())))
+        else:
             path.unlink(missing_ok=True)
     except FileNotFoundError:
         return
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
-        log.warning("Não foi possível ler o estado persistido do Gemini; usando estado em memória.", exc_info=True)
+        log.warning("Não foi possível ler o circuito Gemini %s; usando memória.", provider, exc_info=True)
 
 
-def _save_state_locked() -> None:
-    path = _state_path()
+def _save_locked(provider: str) -> None:
+    state = _CIRCUITS[provider]
+    path = _state_path(provider)
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
-            "blocked_until": _BLOCKED_UNTIL,
-            "blocked_until_utc": datetime.fromtimestamp(_BLOCKED_UNTIL, timezone.utc).isoformat(),
-            "kind": _BLOCK_KIND,
-            "reason": _BLOCK_REASON[:500],
+            "provider": provider,
+            "blocked_until": state.blocked_until,
+            "blocked_until_utc": datetime.fromtimestamp(state.blocked_until, timezone.utc).isoformat()
+                if state.blocked_until else None,
+            "kind": state.kind,
+            "reason": state.reason[:500],
         }
-        temp = path.with_suffix(path.suffix + ".tmp")
-        temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        temp.replace(path)
+        temporary = path.with_suffix(path.suffix + ".tmp")
+        temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        temporary.replace(path)
     except OSError:
-        # Alguns hosts usam filesystem somente leitura. O circuit breaker em memória continua ativo.
-        log.warning("Não foi possível persistir o circuit breaker Gemini; o bloqueio ficará em memória.",
-                    exc_info=True)
+        log.warning("Não foi possível persistir o circuito Gemini %s.", provider, exc_info=True)
 
 
 def _extract_text(exc: BaseException) -> str:
@@ -134,155 +158,134 @@ def _extract_text(exc: BaseException) -> str:
 
 def _status_code(exc: BaseException, text: str) -> int | None:
     for attr in ("code", "status_code", "status"):
-        value = getattr(exc, attr, None)
         try:
-            if value is not None:
-                code = int(value)
-                if 100 <= code <= 599:
-                    return code
+            value = getattr(exc, attr, None)
+            if value is not None and 100 <= int(value) <= 599:
+                return int(value)
         except (TypeError, ValueError):
             pass
-    match = re.search(r"\b(?:HTTP(?:/\d(?:\.\d)?)?\s*)?(408|429|500|502|503|504)\b", text, re.I)
+    match = re.search(r"\b(?:HTTP(?:/\d(?:\.\d)?)?\s*)?(401|403|408|429|500|502|503|504)\b", text, re.I)
     return int(match.group(1)) if match else None
 
 
-def _retry_after_seconds(exc: BaseException, text: str) -> int | None:
-    # Alguns payloads do Google incluem retryDelay: "12s"; headers podem não
-    # ficar expostos no erro do SDK, por isso também analisamos a mensagem.
+def _retry_after(exc: BaseException, text: str) -> int | None:
     match = re.search(r"retryDelay\s*[\"']?\s*:\s*[\"'](\d+(?:\.\d+)?)s", text, re.I)
     if not match:
         match = re.search(r"retry\s+after\s+(\d+(?:\.\d+)?)\s+seconds?", text, re.I)
     if match:
         return min(3600, max(1, int(float(match.group(1)) + 0.999)))
-    response = getattr(exc, "response", None)
-    headers = getattr(response, "headers", None)
-    if headers:
-        try:
-            value = headers.get("Retry-After")
-            if value:
-                return min(3600, max(1, int(float(value) + 0.999)))
-        except (TypeError, ValueError):
-            pass
-    return None
-
-
-def classify_gemini_error(exc: BaseException) -> tuple[str, int] | None:
-    """Retorna (tipo, segundos) apenas para erros recuperáveis/limitadores conhecidos."""
-    text = _extract_text(exc)
-    status = _status_code(exc, text)
-    if status not in (408, 429, 500, 502, 503, 504) and "RESOURCE_EXHAUSTED" not in text.upper():
+    headers = getattr(getattr(exc, "response", None), "headers", None)
+    try:
+        value = headers.get("Retry-After") if headers else None
+        return min(3600, max(1, int(float(value) + 0.999))) if value else None
+    except (TypeError, ValueError):
         return None
 
+
+def classify_gemini_error(exc: BaseException, provider: str = "primary") -> tuple[str, int] | None:
+    provider = _provider(provider)
+    prefix = _prefix(provider)
+    text = _extract_text(exc)
+    status = _status_code(exc, text)
+    if status in (401, 403):
+        return "auth", _int_env(f"{prefix}_AUTH_COOLDOWN_SECONDS", 3600, 60, 86400)
+    if status not in (408, 429, 500, 502, 503, 504) and "RESOURCE_EXHAUSTED" not in text.upper():
+        return None
     lowered = text.casefold()
     if status == 429 or "resource_exhausted" in lowered:
         quota_signals = (
-            "you exceeded your current quota", "check your plan and billing",
-            "quota exceeded", "daily quota", "quota per day", "requests per day",
-            "billing", "insufficient credits", "prepay", "spend cap",
-            "per_day", "requestsperday", "quota_limit", "free_tier",
+            "you exceeded your current quota", "check your plan and billing", "quota exceeded",
+            "daily quota", "quota per day", "requests per day", "billing", "insufficient credits",
+            "prepay", "spend cap", "per_day", "requestsperday", "quota_limit", "free_tier",
         )
-        is_hard_quota = any(signal in lowered for signal in quota_signals)
-        retry = _retry_after_seconds(exc, text)
-        if is_hard_quota:
-            return "quota", _int_env("GEMINI_QUOTA_COOLDOWN_SECONDS", 21600, 60, 604800)
-        return "rate_limit", retry or _int_env("GEMINI_RATE_LIMIT_COOLDOWN_SECONDS", 60, 5, 3600)
-
+        if any(signal in lowered for signal in quota_signals):
+            return "quota", _int_env(f"{prefix}_QUOTA_COOLDOWN_SECONDS", 21600, 60)
+        return "rate_limit", _retry_after(exc, text) or _int_env(f"{prefix}_RATE_LIMIT_COOLDOWN_SECONDS", 60, 5, 3600)
     if status in (408, 500, 502, 503, 504):
-        retry = _retry_after_seconds(exc, text)
-        return "unavailable", retry or _int_env("GEMINI_UNAVAILABLE_COOLDOWN_SECONDS", 45, 5, 3600)
+        return "unavailable", _retry_after(exc, text) or _int_env(f"{prefix}_UNAVAILABLE_COOLDOWN_SECONDS", 45, 5, 3600)
     return None
 
 
-def _register_block(kind: str, seconds: int, reason: str) -> None:
-    global _BLOCKED_UNTIL, _BLOCK_KIND, _BLOCK_REASON
+def _register_block(provider: str, kind: str, seconds: int, reason: str) -> None:
     with _LOCK:
-        _load_state_locked()
+        _load_locked(provider)
+        state = _CIRCUITS[provider]
         proposed = time.time() + max(1, seconds)
-        # Nunca encurta um bloqueio já vigente nem troca sua classificação por uma
-        # falha simultânea que tenha prazo menor.
-        if proposed >= _BLOCKED_UNTIL:
-            _BLOCK_KIND = kind
-            _BLOCK_REASON = reason[:500]
-        _BLOCKED_UNTIL = max(_BLOCKED_UNTIL, proposed)
-        _save_state_locked()
-    log.error("Circuit breaker Gemini ativado: tipo=%s, duração=%ss, motivo=%s",
-              kind, seconds, reason[:300])
+        if proposed >= state.blocked_until:
+            state.kind = kind
+            state.reason = reason[:500]
+        state.blocked_until = max(state.blocked_until, proposed)
+        _save_locked(provider)
+    log.error("Circuit breaker Gemini %s ativado: tipo=%s, duração=%ss, motivo=%s",
+              provider, kind, seconds, reason[:300])
 
 
-def check_gemini_available() -> None:
-    global _BLOCKED_UNTIL, _BLOCK_KIND, _BLOCK_REASON
+def check_gemini_available(provider: str = "primary") -> None:
+    provider = _provider(provider)
     with _LOCK:
-        _load_state_locked()
-        remaining = int(_BLOCKED_UNTIL - time.time())
+        _load_locked(provider)
+        state = _CIRCUITS[provider]
+        remaining = int(state.blocked_until - time.time())
         if remaining > 0:
-            kind = _BLOCK_KIND or "unavailable"
-            reason = _BLOCK_REASON or "limite temporário"
+            kind, reason = state.kind or "unavailable", state.reason or "limite temporário"
         else:
-            if _BLOCKED_UNTIL:
-                _BLOCKED_UNTIL = 0.0
-                _BLOCK_KIND = ""
-                _BLOCK_REASON = ""
-                _save_state_locked()
+            if state.blocked_until:
+                state.blocked_until, state.kind, state.reason = 0.0, "", ""
+                _save_locked(provider)
             return
-    raise GeminiUnavailableError(kind, remaining, reason)
+    raise GeminiUnavailableError(kind, remaining, reason, provider=provider)
 
 
-def run_gemini_call(call: Callable[[], T]) -> T:
-    """Executa uma chamada síncrona ao SDK com circuit breaker global."""
-    check_gemini_available()
+def run_gemini_call(call: Callable[[], T], provider: str = "primary") -> T:
+    provider = _provider(provider)
+    check_gemini_available(provider)
     try:
-        result = call()
+        return call()
     except GeminiUnavailableError:
         raise
     except Exception as exc:
-        classified = classify_gemini_error(exc)
+        classified = classify_gemini_error(exc, provider)
         if classified is None:
             raise
         kind, cooldown = classified
-        _register_block(kind, cooldown, _extract_text(exc))
-        raise GeminiUnavailableError(kind, cooldown, _extract_text(exc)) from exc
-    else:
-        # Não limpa aqui: outra chamada concorrente pode ter aberto o circuito
-        # depois do nosso check inicial. O check seguinte limpa bloqueios expirados.
-        return result
+        reason = _extract_text(exc)
+        _register_block(provider, kind, cooldown, reason)
+        raise GeminiUnavailableError(kind, cooldown, reason, provider=provider) from exc
 
 
-def clear_gemini_circuit() -> None:
-    """Limpa bloqueio após uma chamada bem-sucedida (ou por ferramenta administrativa/testes)."""
-    global _BLOCKED_UNTIL, _BLOCK_KIND, _BLOCK_REASON
+def clear_gemini_circuit(provider: str = "primary") -> None:
+    provider = _provider(provider)
     with _LOCK:
-        _load_state_locked()
-        _BLOCKED_UNTIL = 0.0
-        _BLOCK_KIND = ""
-        _BLOCK_REASON = ""
+        _load_locked(provider)
+        state = _CIRCUITS[provider]
+        state.blocked_until, state.kind, state.reason = 0.0, "", ""
         try:
-            _state_path().unlink(missing_ok=True)
+            _state_path(provider).unlink(missing_ok=True)
         except OSError:
-            log.debug("Não foi possível remover o estado persistido do circuit breaker.", exc_info=True)
+            log.debug("Não foi possível remover o circuito Gemini %s.", provider, exc_info=True)
 
 
-def gemini_status() -> dict[str, Any]:
+def gemini_status(provider: str = "primary") -> dict[str, Any]:
+    provider = _provider(provider)
     with _LOCK:
-        _load_state_locked()
-        remaining = max(0, int(_BLOCKED_UNTIL - time.time()))
+        _load_locked(provider)
+        state = _CIRCUITS[provider]
+        remaining = max(0, int(state.blocked_until - time.time()))
         return {
+            "provider": provider,
             "blocked": remaining > 0,
-            "kind": _BLOCK_KIND or None,
+            "kind": state.kind or None,
             "remaining_seconds": remaining,
-            "reason": _BLOCK_REASON[:300] if remaining else None,
-            "state_file": str(_state_path()),
+            "reason": state.reason[:300] if remaining else None,
+            "state_file": str(_state_path(provider)),
         }
 
 
+def all_gemini_status() -> dict[str, dict[str, Any]]:
+    return {name: gemini_status(name) for name in ("primary", "backup")}
+
+
 def _reset_for_tests() -> None:
-    """Reset interno para testes unitários; não usar em produção."""
-    global _BLOCKED_UNTIL, _BLOCK_KIND, _BLOCK_REASON, _STATE_LOADED
     with _LOCK:
-        _BLOCKED_UNTIL = 0.0
-        _BLOCK_KIND = ""
-        _BLOCK_REASON = ""
-        _STATE_LOADED = True
-        try:
-            _state_path().unlink(missing_ok=True)
-        except OSError:
-            pass
+        for state in _CIRCUITS.values():
+            state.blocked_until, state.kind, state.reason, state.loaded = 0.0, "", "", False

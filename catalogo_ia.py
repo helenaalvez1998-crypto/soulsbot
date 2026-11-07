@@ -1,8 +1,8 @@
-"""Pesquisa multi-provedor e geração de rascunhos de catálogos.
+"""Pesquisa com dois projetos Gemini e geração de rascunhos em revisão.
 
-DeepSeek Search + Flash é principal; Gemini + Google Search grounding é reserva.
-A IA identifica e pesquisa; o código valida as URLs e mantém tudo em revisão.
-Nenhum dado gerado pela IA é publicado automaticamente.
+O projeto Gemini principal é tentado primeiro; outro projeto Gemini assume
+quando a quota/serviço principal falha. Fontes são validadas e nada é publicado
+automaticamente.
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def _json_from_text(text: str) -> dict:
 
 
 async def _generate(prompt: str, search_queries: list[str] | None = None) -> tuple[str, list[dict]]:
-    """Pesquisa DeepSeek primeiro e alterna para Gemini + grounding se necessário."""
+    """Pesquisa com Gemini principal e alternância para o projeto Gemini reserva."""
     queries = search_queries or [
         "video game official title developer publisher release date platforms " + prompt[:60]
     ]
@@ -75,7 +75,7 @@ async def identificar_jogo(consulta: str) -> dict:
 Você é um catalogador de videogames. Identifique o jogo que o usuário quis dizer.
 Entrada literal (pode conter erro, abreviação, tradução ou edição): {consulta!r}
 
-Pesquise na web. Priorize fontes oficiais (site do estúdio/editora, Steam, PlayStation,
+Use as fontes web anexadas a esta solicitação. Priorize fontes oficiais (site do estúdio/editora, Steam, PlayStation,
 Xbox, Nintendo) para identidade, e bases reconhecidas para desambiguação.
 NÃO transforme o texto digitado em nome oficial sem verificar. NÃO invente jogos.
 Diferencie jogo-base, remake/remaster, edição/versão, DLC e sequência.
@@ -142,7 +142,7 @@ async def pesquisar_catalogo(candidato: dict, incluir_dlc: bool = True) -> dict:
     scope = str(candidato.get("edition_scope", "jogo base"))
     prompt = f"""
 Você é um pesquisador de guias de videogame. Monte um RASCUNHO verificável de catálogo
-para o jogo oficialmente identificado abaixo. Pesquise fontes atuais na web.
+para o jogo oficialmente identificado abaixo usando as fontes atuais anexadas à solicitação.
 Jogo: {title}
 Título original: {candidato.get('original_title', title)}
 Escopo informado: {scope}
@@ -190,8 +190,8 @@ REGRAS:
         f'"{title}" missable trophies collectibles requirements guide',
         f'"{title}" all trophies achievements platinum requirements walkthrough',
     ]
-    text, grounding = await _generate(prompt, search_queries)
-    if not grounding:
+    text, sources = await _generate(prompt, search_queries)
+    if not sources:
         raise RuntimeError("Nenhum dos provedores de pesquisa retornou fontes HTTPS verificáveis para o catálogo.")
     data = _json_from_text(text)
     # O título foi confirmado pelo usuário; o modelo não pode renomear o jogo.
@@ -200,16 +200,16 @@ REGRAS:
     slug_base = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
     # Ano na chave evita colidir remakes/sequências com nomes canônicos iguais.
     data["slug"] = f"{slug_base}-{int(year)}" if isinstance(year, int) and 1970 <= year <= 2100 else slug_base
-    # A lista do modelo não é prova. Só URLs retornadas pelo Search/Grounding usado
-    # nesta execução são aceitas como evidência de pesquisa.
+    # A lista do modelo não é prova. Só URLs retornadas pela Tavily nesta execução
+    # são aceitas como evidência de pesquisa.
     merged = {}
-    for src in grounding:
+    for src in sources:
         if not isinstance(src, dict):
             continue
         url = str(src.get("url", "")).strip()
         if url.startswith("https://"):
             merged[url] = {"title": str(src.get("title", ""))[:180], "url": url,
-                           "kind": str(src.get("kind") or "grounded_web")[:40]}
+                           "kind": str(src.get("kind") or "web_search")[:40]}
     data["sources"] = list(merged.values())[:30]
     valid_urls = set(merged)
     # Fail closed: reject malformed records and URLs that were not surfaced as sources.

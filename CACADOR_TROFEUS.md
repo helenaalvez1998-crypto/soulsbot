@@ -1,60 +1,59 @@
 # Caçador de Troféus — identificação, pesquisa e catálogo
 
-O Caçador mantém um catálogo separado da loja cosmética e salva o progresso de cada jogador. A IA ajuda a identificar jogos e preparar rascunhos de colecionáveis/troféus, mas **não publica dados automaticamente**.
+O Caçador mantém um catálogo separado da loja cosmética e salva o progresso de cada jogador. A IA identifica jogos e prepara rascunhos de colecionáveis/troféus, mas **não publica dados automaticamente**.
 
 ## Como o jogador pesquisa um jogo
 
 1. Abra `/cacador` ou o botão **Caçador de Troféus** no `/coliseu`.
 2. Use **Solicitar cadastro** e escreva o nome como lembrar: título original/traduzido, abreviação ou erro de digitação.
-3. O sistema procura primeiro um título/alias já catalogado. Se não houver correspondência, usa DeepSeek Search + DeepSeek Flash para sugerir até cinco candidatos; se o principal atingir quota/saldo, rate limit ou indisponibilidade, alterna automaticamente para Gemini com Google Search grounding.
-4. O jogador confere ano, estúdio, escopo e fontes e confirma o jogo correto. Quando houver ambiguidade, precisa selecionar o candidato.
-5. Só depois da confirmação o agente pesquisa o catálogo e cria um rascunho em revisão. Uma falha de API, JSON, fonte ou banco deve deixar o job com erro e não publicar o catálogo.
+3. O sistema procura primeiro um título/alias já catalogado. Se não encontrar, pesquisa fontes com Tavily Free e usa Gemini principal para analisar os resultados; outro projeto Gemini assume se o primeiro falhar.
+4. Se o principal atingir quota, rate limit ou ficar indisponível, o mesmo pedido é tentado pelo segundo projeto Gemini configurado.
+5. O jogador confere ano, estúdio, escopo e fontes e confirma o jogo correto. Depois da confirmação começa a pesquisa detalhada do catálogo.
+6. O resultado fica em revisão administrativa. Falhas de API, JSON, fonte ou banco não publicam catálogo.
 
-O mapa local de aliases de `God of War (2018)` é apenas um atalho de identificação. Ele não é fonte de dados de troféus e não dispensa a pesquisa nem a revisão.
+O mapa local de aliases de `God of War (2018)` é apenas um atalho de identificação; não é fonte de troféus e não dispensa pesquisa/revisão.
 
 ## Como o administrador revisa e publica
 
-- `/catalogo_admin`: abre o painel administrativo com os atalhos da fila e a explicação do processo.
-- `/catalogo_fila`: mostra os pedidos pendentes e detalhes/erros técnicos.
-- `/catalogo_auditar slug:<slug>`: mostra contagem de itens/troféus, evidências, domínios e estado de validação.
-- `/catalogo_validar slug:<slug>`: inicia a confirmação de revisão humana. Isso marca os registros como revisados; não é uma garantia automática de que cada requisito esteja correto.
-- `/catalogo_publicar slug:<slug>`: publica apenas se a auditoria transacional encontrar itens e troféus, todos os registros ligados a fontes HTTPS cadastradas, no mínimo dois domínios distintos e validação humana.
-- `/catalogo_importar arquivo:<arquivo.json>`: importa catálogo manual em estado de revisão; os dados continuam não verificados.
+- `/catalogo_admin`: abre o painel administrativo.
+- `/catalogo_fila`: mostra solicitações e erros técnicos.
+- `/catalogo_auditar slug:<slug>`: mostra itens, troféus, fontes e estado de validação.
+- `/catalogo_validar slug:<slug>`: registra revisão humana.
+- `/catalogo_publicar slug:<slug>`: publica somente se a auditoria transacional encontrar itens/troféus, fontes HTTPS, pelo menos dois domínios distintos e validação humana.
+- `/catalogo_importar arquivo:<arquivo.json>`: importa para revisão; os dados começam não verificados.
 
-O painel de jogadores lista somente jogos em `ready`. A IA nunca transforma sozinha uma solicitação em catálogo público.
+O painel de jogadores lista somente jogos em `ready`. A IA não transforma uma solicitação em catálogo público sozinha.
 
-## Configuração de IA
-
-No `.env`:
+## Configuração Gemini
 
 ```dotenv
-DEEPSEEK_API_KEY=sua_chave_deepseek
-DEEPSEEK_MODEL=deepseek-flash
-GEMINI_API_KEY=sua_chave_google
-GEMINI_MODEL=gemini-3.8-flash
-AI_PRIMARY_PROVIDER=deepseek
+GEMINI_API_KEY=sua_chave_do_projeto_principal
+GEMINI_MODEL=gemini-3.5-flash-lite
+GEMINI_BACKUP_API_KEY=sua_chave_de_outro_projeto_google
+GEMINI_BACKUP_MODEL=gemini-3.5-flash-lite
+TAVILY_API_KEY=sua_chave_do_plano_free
+TAVILY_MAX_QUERIES_PER_JOB=4
 ```
 
-Configure `DEEPSEEK_API_KEY` (principal) e `GEMINI_API_KEY` (reserva). `DEEPSEEK_MODEL` usa `deepseek-flash`; Search e Chat são chamadas separadas. `GEMINI_MODEL` deve ser um modelo disponível no projeto e compatível com Google Search grounding. O modelo atualmente documentado pelo Google para grounding é compatível com esse fluxo; confira a documentação e preços antes de aumentar o volume:
+A Tavily Free faz as consultas web; o Gemini principal analisa os resultados e o outro projeto Gemini assume em caso de quota/rate limit/indisponibilidade. As duas chaves devem pertencer a projetos Google diferentes para que os circuit breakers e as quotas por projeto sejam independentes. Duas chaves do mesmo projeto compartilham quota. Não é necessário ativar billing; sem billing, ao atingir os limites gratuitos o pedido falha de forma controlada.
 
-- https://ai.google.dev/gemini-api/docs/google-search
-- https://ai.google.dev/gemini-api/docs/models
+A busca externa usa somente Tavily Free/Search Basic (1.000 créditos mensais publicados no plano gratuito; até 4 consultas por tarefa neste bot). Os modelos Gemini recebem as fontes como texto e não ativam Google Search grounding. Não vincule faturamento no Google nem habilite Pay-as-you-go/upgrade na Tavily; quando os créditos gratuitos terminarem, a pesquisa pausa sem cobrança.
 
-O Caçador limita cada usuário a três identificações a cada dez minutos. A pesquisa de catálogo é iniciada somente após confirmação, mas consome pesquisas DeepSeek Search + tokens do modelo; se houver failover, pode usar Google Search grounding e tokens Gemini. Ambos podem gerar cobrança/consumo de quota.
+Referências oficiais:
+- https://docs.tavily.com/documentation/api-reference/endpoint/search
+- https://tavily.com/pricing
+- https://ai.google.dev/gemini-api/docs/rate-limits
+- https://ai.google.dev/gemini-api/docs/pricing
 
 ## Limitações importantes
 
-- Não existe uma API única com cobertura completa de colecionáveis e troféus para todos os jogos.
-- A pesquisa depende de páginas públicas acessíveis e do grounding devolvido pelo Google. Se o modelo não encontrar fontes, o sistema falha fechado e solicita revisão manual.
-- URL citada apenas em texto pelo modelo não é aceita como evidência; cada item/troféu precisa apontar para uma URL devolvida no grounding e cadastrada no catálogo.
-- Títulos, aliases, nomes, DLC, NG+, itens perdíveis, locais e requisitos precisam ser conferidos antes da validação administrativa.
-- Duas fontes/domínios não provam completude; são um bloqueio mínimo para reduzir dados sem sustentação.
-- Reimportações preservam o progresso dos jogadores. Registros antigos que deixaram de aparecer no novo rascunho não são apagados automaticamente, para evitar perda de histórico; compare as versões manualmente.
-- O mapa local de títulos conhecidos é intencionalmente pequeno. Para outros jogos, a identificação depende de um provedor configurado (DeepSeek principal ou Gemini reserva) e de fontes de pesquisa.
+- Não existe API única com cobertura completa de colecionáveis e troféus para todos os jogos.
+- Se a busca não retornar fontes HTTPS verificáveis, o sistema falha fechado.
+- URL mencionada apenas no texto do modelo não é aceita como evidência; os registros precisam usar URLs retornadas pela Tavily nesta pesquisa.
+- Títulos, aliases, DLC, NG+, itens perdíveis, locais e requisitos precisam de revisão humana.
+- Duas fontes/domínios são um bloqueio mínimo; não provam completude.
+- Reimportações preservam o progresso de jogadores. Registros ausentes no novo rascunho não são apagados automaticamente.
 
 ## Atualização
 
-Faça backup de `data/colizeu.db` antes de substituir o código. Não substitua seu `.env` nem o banco de dados. As tabelas novas e índices são criados/migrados ao iniciar o bot.
-
-
-Se DeepSeek ou Gemini atingir quota/saldo, rate limit ou indisponibilidade, o roteador tenta automaticamente o outro provedor. Cada API tem circuit breaker e estado persistente independentes. `/gemini_status` mostra os dois estados. Confirme saldo DeepSeek no painel DeepSeek e limites/billing Gemini no Google AI Studio.
+Faça backup de `data/colizeu.db` antes de substituir o código. Não substitua o `.env` nem apague o banco. `/gemini_status` exibe os dois circuit breakers de IA.

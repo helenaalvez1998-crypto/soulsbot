@@ -243,7 +243,7 @@ def is_pesquisa_de_jogo(mensagem: str) -> bool:
     """Pesquisa conversacional por wiki. Nesta versão, o conjunto de fontes de chat é Elden Ring.
 
     Catálogo de troféus/platinas de qualquer jogo não passa por aqui: é encaminhado para
-    `/jogo_buscar`, cuja integração usa Google Search grounding e revisão própria.
+    `/jogo_buscar`, cuja integração usa Tavily Free para busca web e Gemini para análise/revisão própria.
     """
     t = normalizar(mensagem)
     if not t or is_pesquisa_de_catalogo(mensagem) or not _tem_pedido_explicito(t):

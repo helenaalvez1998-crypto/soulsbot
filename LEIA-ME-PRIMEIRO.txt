@@ -2,13 +2,13 @@ SOULSBOT — LEIA PRIMEIRO
 
 1. Extraia todos os arquivos para uma pasta do projeto.
 2. Leia INSTALACAO_E_ATUALIZACAO.md.
-3. Copie .env.example para .env e preencha token, IDs e chaves.
+3. Copie .env.example para .env e preencha token, IDs, duas chaves Gemini de projetos diferentes e a chave gratuita Tavily.
 4. Instale: pip install -r requirements.txt
 5. Inicie: python bot.py
-6. Perguntas básicas da Nara funcionam sem Gemini. Configure GEMINI_API_KEY para o Caçador de Troféus.
+6. Perguntas básicas da Nara funcionam sem Gemini. Configure GEMINI_API_KEY, GEMINI_BACKUP_API_KEY de outro projeto Google e TAVILY_API_KEY do plano gratuito para o Caçador de Troféus.
 7. Para economia máxima, mantenha NARA_CHAT_IA_ENABLED=false e OFFERS_SHOW_DESCRIPTION=false. Assim, o Gemini fica reservado ao /jogo_buscar quando o catálogo local não resolve a pesquisa.
-8. Se habilitar pesquisa conversacional, use NARA_CHAT_IA_ENABLED=true e mantenha IA_LIMITE_DIARIO=3.
-8. Para conferir a quota Gemini no Discord: /gemini_status (Gerenciar servidor).
+9. Se habilitar pesquisa conversacional, use NARA_CHAT_IA_ENABLED=true e mantenha IA_LIMITE_DIARIO=3.
+10. Para conferir os circuit breakers dos dois Gemini e da busca gratuita: /gemini_status (Gerenciar servidor).
 
 ATUALIZAÇÃO: faça backup de .env e data/ antes de substituir os arquivos. Nunca apague data/colizeu.db.
 

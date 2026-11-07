@@ -17,9 +17,12 @@ _TIPOS = {"string": "STRING", "integer": "INTEGER", "boolean": "BOOLEAN"}
 
 
 class GeminiAdaptador(Adaptador):
-    def __init__(self, api_key: str, modelo: str):
+    def __init__(self, api_key: str, modelo: str, provider: str = "primary"):
         if not api_key:
-            raise ValueError("GEMINI_API_KEY não foi configurada.")
+            raise ValueError("Chave do projeto Gemini não foi configurada.")
+        if provider not in {"primary", "backup"}:
+            raise ValueError("provider deve ser primary ou backup.")
+        self.provider = provider
         from google import genai
         from google.genai import types
         self.types = types
@@ -97,7 +100,7 @@ class GeminiAdaptador(Adaptador):
             fc = getattr(part, "function_call", None)
             if fc:
                 calls.append(ChamadaAgente(
-                    id=f"gemini_{uuid.uuid4().hex}_{index}",
+                    id=f"gemini_{self.provider}_{uuid.uuid4().hex}_{index}",
                     nome=str(fc.name),
                     argumentos=dict(fc.args or {}),
                 ))
@@ -112,7 +115,7 @@ class GeminiAdaptador(Adaptador):
         )
         response = run_gemini_call(lambda: self.client.models.generate_content(
             model=self.modelo, contents=self._google_contents(contents), config=cfg
-        ))
+        ), provider=self.provider)
         return self.normalizar_resposta(response)
 
     def criar_gerador(self, system: str, registro: Registro):
