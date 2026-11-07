@@ -68,3 +68,11 @@ Não vincule faturamento às contas Google nem habilite Pay-as-you-go na Tavily 
 - Cobertura de colecionáveis/troféus varia por jogo, edição, plataforma e DLC. A revisão humana das fontes continua obrigatória.
 - A Tavily Free tem limite mensal; depois de consumido, a pesquisa web fica pausada até renovação. Gemini backup não substitui o mecanismo de busca.
 - Duas chaves Gemini do mesmo projeto não fornecem uma quota reserva separada.
+
+## Correção adicional — componentes Discord UI (07/11/2026)
+
+- Corrigida colisão com `discord.ui.Item.parent`, propriedade interna gerenciada pelo `discord.py` e sem setter público.
+- Os componentes customizados do Caçador de Troféus agora guardam a referência à view em `self.owner_view`, sem sobrescrever `self.parent`.
+- A correção abrange seletores e botões de categorias, itens, troféus e confirmação de pesquisa de jogos.
+- Adicionado teste AST de regressão para impedir atribuições futuras a `self.parent` em `cogs/trofeus.py`.
+- Validação após correção: 132 testes `pytest` aprovados; compilação Python executada separadamente.

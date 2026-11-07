@@ -13,3 +13,5 @@ SOULSBOT — LEIA PRIMEIRO
 ATUALIZAÇÃO: faça backup de .env e data/ antes de substituir os arquivos. Nunca apague data/colizeu.db.
 
 O ZIP não contém credenciais, token Discord, banco SQLite nem dados da sua comunidade.
+
+Correção Discord UI: componentes do Caçador usam `owner_view` para não colidir com a propriedade interna `parent` do discord.py.
