@@ -226,11 +226,35 @@ class Registro:
 
 
 # --------------------------------------------------------------------------- laço do agente
+@dataclass
+class ChamadaAgente:
+    id: str
+    nome: str
+    argumentos: dict
+
+
+@dataclass
+class RespostaFerramenta:
+    id_chamada: str
+    nome: str
+    resultado: dict
+
+
+@dataclass
+class MensagemAgente:
+    """Histórico neutro entre provedores; nunca contém anexos nem dados multimodais."""
+    role: str
+    texto: str = ""
+    chamadas: list[ChamadaAgente] = field(default_factory=list)
+    respostas_ferramentas: list[RespostaFerramenta] = field(default_factory=list)
+    nativo: Any = None
+
+
 class Adaptador:
-    """Cola entre o laço e o SDK do modelo. A versão real fica em ia_gemini.py."""
-    def conteudo_usuario(self, texto: str, imagens: list | None = None): ...
+    """Contrato neutro para adaptadores Gemini/DeepSeek e para o roteador failover."""
+    def conteudo_usuario(self, texto: str): ...
     def conteudo_funcoes(self, respostas: list): ...
-    def parte_resposta(self, nome: str, resultado: dict): ...
+    def parte_resposta(self, nome: str, resultado: dict, call_id: str | None = None): ...
 
 
 def _texto(parts) -> str:
@@ -238,32 +262,46 @@ def _texto(parts) -> str:
 
 
 async def rodar_agente(gerar: Callable[[list, bool], Awaitable[Any]], adaptador: Adaptador, pedido: str,
-                       registro: Registro, ctx: Ctx, *, max_passos: int = MAX_PASSOS,
-                       imagens: list | None = None) -> str:
-    """Conversa com o modelo até ele responder em texto. Devolve o texto final.
-
-    gerar(contents, usar_ferramentas) chama o modelo. O histórico (contents) é mantido aqui.
-    """
-    # imagens = lista de (bytes, mime_type); só é passada ao adaptador quando existe (mantém compatibilidade)
-    contents = [adaptador.conteudo_usuario(pedido, imagens) if imagens else adaptador.conteudo_usuario(pedido)]
+                       registro: Registro, ctx: Ctx, *, max_passos: int = MAX_PASSOS) -> str:
+    """Conversa com o modelo até obter texto final; histórico neutro permite failover entre APIs."""
+    contents = [adaptador.conteudo_usuario(pedido)]
     for _ in range(max_passos):
         resp = await gerar(contents, True)
+        normalizar = getattr(adaptador, "normalizar_resposta", None)
+        if callable(normalizar):
+            mensagem = normalizar(resp)
+            chamadas = list(getattr(mensagem, "chamadas", None) or [])
+            if not chamadas:
+                return str(getattr(mensagem, "texto", "") or "").strip()
+            contents.append(mensagem)
+            respostas = []
+            for fc in chamadas:
+                resultado = await registro.executar(fc.nome, dict(fc.argumentos or {}), ctx)
+                respostas.append(adaptador.parte_resposta(fc.nome, resultado, call_id=fc.id))
+            contents.append(adaptador.conteudo_funcoes(respostas))
+            continue
+
+        # Compatibilidade com adaptadores antigos usados por integrações/testes legados.
         candidatos = getattr(resp, "candidates", None) or []
         conteudo = getattr(candidatos[0], "content", None) if candidatos else None
         parts = list(getattr(conteudo, "parts", None) or [])
-        chamadas = [p.function_call for p in parts if getattr(p, "function_call", None)]
-        if not chamadas:
+        chamadas_antigas = [p.function_call for p in parts if getattr(p, "function_call", None)]
+        if not chamadas_antigas:
             return _texto(parts)
-
-        contents.append(conteudo)  # preserva o turno do modelo exatamente como veio (inclui assinaturas)
+        contents.append(conteudo)
         respostas = []
-        for fc in chamadas:
+        for fc in chamadas_antigas:
             resultado = await registro.executar(fc.name, dict(fc.args or {}), ctx)
-            respostas.append(adaptador.parte_resposta(fc.name, resultado))
+            try:
+                respostas.append(adaptador.parte_resposta(fc.name, resultado, call_id=getattr(fc, "id", None)))
+            except TypeError:
+                respostas.append(adaptador.parte_resposta(fc.name, resultado))
         contents.append(adaptador.conteudo_funcoes(respostas))
 
-    # Estourou as voltas: pede o fecho sem ferramentas, para nunca ficar sem resposta.
     resp = await gerar(contents, False)
+    normalizar = getattr(adaptador, "normalizar_resposta", None)
+    if callable(normalizar):
+        return str(getattr(normalizar(resp), "texto", "") or "").strip()
     candidatos = getattr(resp, "candidates", None) or []
     conteudo = getattr(candidatos[0], "content", None) if candidatos else None
     return _texto(list(getattr(conteudo, "parts", None) or []))

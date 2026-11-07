@@ -30,6 +30,13 @@ UA = {"User-Agent": "NaraBot/1.0"}
 _cache_paginas: OrderedDict[str, str] = OrderedDict()
 _CACHE_MAX_PAGINAS = 256
 _MAX_HTML_BYTES = 1_000_000
+_TEXT_CONTENT_TYPES = {"text/html", "application/xhtml+xml", "text/plain"}
+
+
+def _conteudo_e_textual(content_type: str | None) -> bool:
+    """A ferramenta da Nara só lê HTML/texto; bloqueia imagens, PDFs, vídeos e binários."""
+    mime = (content_type or "").split(";", 1)[0].strip().lower()
+    return mime in _TEXT_CONTENT_TYPES
 
 PAINEIS = {
     "coliseu": "Painel principal do Coliseu (platinas, zerados, runs)",
@@ -66,9 +73,12 @@ def _abrir_pagina_sync(url: str) -> str:
             return _cache_paginas[url]
         response = requests.get(url, headers=UA, timeout=(4, 10), allow_redirects=True, stream=True)
         try:
+            response.raise_for_status()
             final = urlparse(response.url)
             if final.scheme != "https" or final.hostname not in DOMINIOS:
                 return "Redirecionamento para domínio não permitido."
+            if not _conteudo_e_textual(response.headers.get("Content-Type")):
+                return "Conteúdo bloqueado: a Nara só abre páginas textuais e não lê imagens, PDFs ou arquivos binários."
             if int(response.headers.get("Content-Length") or 0) > _MAX_HTML_BYTES:
                 return "Página muito grande para leitura segura."
             chunks = []
@@ -81,7 +91,6 @@ def _abrir_pagina_sync(url: str) -> str:
                     return "Página muito grande para leitura segura."
                 chunks.append(chunk)
             html = b"".join(chunks).decode(response.encoding or "utf-8", errors="replace")
-            response.raise_for_status()
         finally:
             response.close()
         texto = BeautifulSoup(html, "html.parser").get_text(" ", strip=True)[:8000]

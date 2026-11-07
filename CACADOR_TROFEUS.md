@@ -6,7 +6,7 @@ O Caçador mantém um catálogo separado da loja cosmética e salva o progresso 
 
 1. Abra `/cacador` ou o botão **Caçador de Troféus** no `/coliseu`.
 2. Use **Solicitar cadastro** e escreva o nome como lembrar: título original/traduzido, abreviação ou erro de digitação.
-3. O sistema procura primeiro um título/alias já catalogado. Se não houver correspondência, usa Gemini com Google Search grounding para sugerir até cinco candidatos.
+3. O sistema procura primeiro um título/alias já catalogado. Se não houver correspondência, usa DeepSeek Search + DeepSeek Flash para sugerir até cinco candidatos; se o principal atingir quota/saldo, rate limit ou indisponibilidade, alterna automaticamente para Gemini com Google Search grounding.
 4. O jogador confere ano, estúdio, escopo e fontes e confirma o jogo correto. Quando houver ambiguidade, precisa selecionar o candidato.
 5. Só depois da confirmação o agente pesquisa o catálogo e cria um rascunho em revisão. Uma falha de API, JSON, fonte ou banco deve deixar o job com erro e não publicar o catálogo.
 
@@ -28,16 +28,19 @@ O painel de jogadores lista somente jogos em `ready`. A IA nunca transforma sozi
 No `.env`:
 
 ```dotenv
-GEMINI_API_KEY=sua_chave
+DEEPSEEK_API_KEY=sua_chave_deepseek
+DEEPSEEK_MODEL=deepseek-flash
+GEMINI_API_KEY=sua_chave_google
 GEMINI_MODEL=gemini-3.8-flash
+AI_PRIMARY_PROVIDER=deepseek
 ```
 
-`GEMINI_API_KEY` é necessária para identificação e pesquisa automáticas. `GEMINI_MODEL` tem padrão `gemini-3.8-flash`; ajuste apenas para um modelo disponível na sua conta e que suporte Google Search grounding. O modelo atualmente documentado pelo Google para grounding é compatível com esse fluxo; confira a documentação e preços antes de aumentar o volume:
+Configure `DEEPSEEK_API_KEY` (principal) e `GEMINI_API_KEY` (reserva). `DEEPSEEK_MODEL` usa `deepseek-flash`; Search e Chat são chamadas separadas. `GEMINI_MODEL` deve ser um modelo disponível no projeto e compatível com Google Search grounding. O modelo atualmente documentado pelo Google para grounding é compatível com esse fluxo; confira a documentação e preços antes de aumentar o volume:
 
 - https://ai.google.dev/gemini-api/docs/google-search
 - https://ai.google.dev/gemini-api/docs/models
 
-O Caçador limita cada usuário a três identificações a cada dez minutos. A pesquisa de catálogo é iniciada somente após confirmação, mas consome chamadas Gemini e pesquisas Google e pode gerar cobrança/consumo de cota.
+O Caçador limita cada usuário a três identificações a cada dez minutos. A pesquisa de catálogo é iniciada somente após confirmação, mas consome pesquisas DeepSeek Search + tokens do modelo; se houver failover, pode usar Google Search grounding e tokens Gemini. Ambos podem gerar cobrança/consumo de quota.
 
 ## Limitações importantes
 
@@ -47,11 +50,11 @@ O Caçador limita cada usuário a três identificações a cada dez minutos. A p
 - Títulos, aliases, nomes, DLC, NG+, itens perdíveis, locais e requisitos precisam ser conferidos antes da validação administrativa.
 - Duas fontes/domínios não provam completude; são um bloqueio mínimo para reduzir dados sem sustentação.
 - Reimportações preservam o progresso dos jogadores. Registros antigos que deixaram de aparecer no novo rascunho não são apagados automaticamente, para evitar perda de histórico; compare as versões manualmente.
-- O mapa local de títulos conhecidos é intencionalmente pequeno. Para outros jogos, a identificação depende da API Gemini e de fontes de pesquisa.
+- O mapa local de títulos conhecidos é intencionalmente pequeno. Para outros jogos, a identificação depende de um provedor configurado (DeepSeek principal ou Gemini reserva) e de fontes de pesquisa.
 
 ## Atualização
 
 Faça backup de `data/colizeu.db` antes de substituir o código. Não substitua seu `.env` nem o banco de dados. As tabelas novas e índices são criados/migrados ao iniciar o bot.
 
 
-Se a API Gemini responder `429 RESOURCE_EXHAUSTED`, o bot pausa as novas chamadas por meio do circuit breaker compartilhado. O comando `/gemini_status` mostra aos administradores o estado local; a causa definitiva (limite de geração, Search grounding ou faturamento) precisa ser conferida no painel do projeto Google AI Studio.
+Se DeepSeek ou Gemini atingir quota/saldo, rate limit ou indisponibilidade, o roteador tenta automaticamente o outro provedor. Cada API tem circuit breaker e estado persistente independentes. `/gemini_status` mostra os dois estados. Confirme saldo DeepSeek no painel DeepSeek e limites/billing Gemini no Google AI Studio.

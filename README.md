@@ -9,7 +9,7 @@ Bot de Discord (discord.py) com perfis, XP, patentes, registro/aprovação de pl
 ## Requisitos
 - Python **3.10 ou superior**.
 - Bot criado no Discord Developer Portal com as intents necessárias habilitadas.
-- `DISCORD_TOKEN` para inicialização; `GEMINI_API_KEY` para os recursos de IA e pesquisa de jogos.
+- `DISCORD_TOKEN` para inicialização; `DEEPSEEK_API_KEY` e/ou `GEMINI_API_KEY` são usadas para pesquisa externa; DeepSeek é principal e Gemini reserva por padrão.
 
 ## Rodar localmente
 ```bash
@@ -77,8 +77,9 @@ Variáveis opcionais: `OFFERS_CHECK_MINUTES` (30), `MAX_OFFERS_PER_CHECK` (8), `
 - `cogs/colizeu.py` – painel de ranking do canal #colizeu
 - `cogs/loja.py` e `loja.py` – painel público da loja, loja privada, catálogo cosmético e compras com Denários
 - `cogs/progressao.py` – níveis, XP e patentes exibidos como funções da Nara
-- `cogs/nara_ia.py` – IA da Nara (Gemini), com regras em `prompts/nara.md`
-- `ia_nucleo.py`, `ia_ferramentas.py`, `ia_gemini.py`, `ia_confirmacao.py` – agente: ferramentas, segurança, Gemini e botões
+- `cogs/nara_ia.py` – roteamento local, consultas de perfil e pesquisa avançada da Nara
+- `nara_local.py` – FAQ, classificador local, detecção de pesquisa necessária e bloqueio de imagens
+- `ia_nucleo.py`, `ia_ferramentas.py`, `ia_gemini.py`, `ia_deepseek.py`, `ia_multi.py`, `ia_provedores.py`, `ia_confirmacao.py` – agente multi-provedor, ferramentas e segurança
 - `tests/` – testes do agente
 
 ## Santuários (perfil em thread privada)
@@ -107,39 +108,26 @@ Comandos: `/nivel`, `/ranking-xp`. O bot precisa das intents **Message Content**
 
 As patentes são criadas automaticamente quando necessárias: Cinzas Novatas, Guerreiro Caído, Combatente Sombrio, Cavaleiro Errante, Gladiador do Abismo, Guardião das Cinzas, Executor da Ruína, Lenda do Coliseu, Arauto das Almas e Sentinela Imortal.
 
-## IA da Nara (Gemini): o cérebro do bot
-`cogs/nara_ia.py` recebe toda mensagem dirigida à Nara e entrega à IA, que interpreta o pedido e decide: responder,
-consultar dados ou agir usando as funções do bot. A personalidade está em `prompts/nara.md`.
-Os comandos de barra e os botões continuam existindo e funcionando como antes (são rápidos e não gastam cota).
+## Nara econômica: respostas locais primeiro, IA só quando necessária
 
-- **Marcada** (menção ou resposta a uma mensagem do bot): conversa, consulta, age e pode pesquisar nas wikis.
-- **Canal de dúvidas** (`IA_CANAIS_LIVRES`): responde a toda mensagem do canal, sem pesquisa na web, e também pode agir.
+A Nara não envia toda conversa aos modelos externos. `cogs/nara_ia.py` consulta primeiro `nara_local.py`, que classifica saudações, ajuda, regras, perguntas frequentes e consultas de dados. Essas respostas não fazem chamadas HTTP nem consomem quota de modelo.
 
-### O que a IA consegue fazer (`ia_ferramentas.py`)
-| Nível | Ferramentas | Como acontece |
-|---|---|---|
-| Consulta | perfil, platinas, zerados, rankings, Hall da Fama, loja, buscar membro, wiki | direto |
-| Própria e reversível | equipar / desequipar item | direto |
-| Com confirmação | comprar item, editar santuário, adicionar/remover rede, registrar zerado | a IA prepara; o membro toca em **Confirmar** |
-| Atalho | abrir painéis (platina e run exigem comprovante, então a IA entrega o botão certo) | botão |
-| Moderação | conceder XP (desligada por padrão: `IA_ACOES_MODERACAO=true`) | só moderador + confirmação |
+- **Respostas locais:** saudação, identidade, capacidades, comandos, XP, patentes, Denários, loja, Coliseu, registros, comprovantes, rankings e dúvidas frequentes.
+- **Consultas SQLite:** perfil, XP/nível, saldo privado, platinas aprovadas, zerados, runs, inventário e rankings. A Nara lê somente os dados do próprio membro, exceto rankings públicos.
+- **Pesquisa de catálogo:** pedidos sobre listas de troféus, platinas, conquistas, DLCs e colecionáveis são encaminhados para `/jogo_buscar`. O comando consulta primeiro aliases/catálogos locais; se não encontrar, usa DeepSeek Search + DeepSeek Flash e alterna para Gemini + Google Search grounding se DeepSeek atingir quota/saldo, rate limit ou ficar indisponível. O usuário confirma o título e o resultado fica em revisão administrativa.
+- **Pesquisa conversacional:** desligada por padrão (`NARA_CHAT_IA_ENABLED=false`). Mesmo pesquisas explícitas de guias no chat não acionam IA. Isso preserva quota; a pesquisa de catálogos é feita por `/jogo_buscar`. Se ativada, o agente usa DeepSeek primeiro e Gemini como reserva.
+- **Canal `IA_CANAIS_LIVRES`:** responde dúvidas que tenham uma intenção local reconhecida. Não envia conversa aleatória ao modelo; para pesquisa de jogo, pede que o usuário marque a Nara ou use `/jogo_buscar`.
+- **Fallback:** mensagens marcadas que não correspondam ao FAQ recebem orientação local; não são enviadas automaticamente a nenhum modelo.
 
-### Segurança (`ia_nucleo.py`)
-- A IA só escolhe a ferramenta. Permissão, validação, limites e confirmação são checados em **código**.
-- Quem age é sempre quem escreveu a mensagem; nenhuma ferramenta aceita "agir por outro membro".
-- O resumo mostrado junto aos botões vem do código, não do modelo.
-- Cada ação é registrada na tabela `logs` (`ia_acao`, `ia_negado`, `loja_compra`...).
-- `IA_ACOES=false` volta ao modo só consulta. Reutiliza `gravar_zerado` (novo, extraído de `registrar_zerado`), então o
-  painel e a IA seguem as mesmas regras de recompensa.
-- Para adicionar uma ferramenta nova: crie uma função em `criar_registro` com `add(...)`, escolha o `Risco` e, se gastar
-  algo, escreva um `preparar` que valide e devolva o texto do botão.
+### Imagens e prints
 
-### Configuração
-No arquivo `.env`, defina `IA_CANAIS_LIVRES=ID_DO_CANAL_DE_DUVIDAS` (ative o Modo Desenvolvedor no Discord e copie o ID do canal).
-Para responder sem limites internos, configure `IA_LIMITE_DIARIO=0` e `IA_TETO_ESPONTANEO=0`; use `IA_COOLDOWN_CANAL=0`.
-As respostas ainda dependem da disponibilidade/cota da API Gemini. Variáveis obrigatórias: `GEMINI_API_KEY` e `GEMINI_MODEL`. O módulo `gemini_resilience.py` compartilha um circuit breaker entre Nara, Caçador e tradução de ofertas: bloqueia novas chamadas depois de quota esgotada/rate limit e persiste o prazo de pausa em `data/gemini_circuit.json`. Moderadores podem consultar `/gemini_status`.
-Sem elas, o módulo fica desativado. Testes do agente: `python -m unittest discover -s tests -v`.
+A Nara de conversa é **somente texto**. O código não baixa, abre, salva ou envia imagens/anexos visuais a nenhum provedor de IA. Prints enviados em conversa recebem uma orientação para usar o formulário de `/coliseu`. Os módulos específicos de registro de platina/run continuam aceitando comprovantes para a revisão da moderação; esses arquivos não são encaminhados à Nara.
 
+### Quando a IA externa é utilizada
+
+Com `NARA_CHAT_IA_ENABLED=false` e `OFFERS_SHOW_DESCRIPTION=false`, o único fluxo regular que usa IA externa é o Caçador de Troféus quando `/jogo_buscar` não encontra o jogo/alias/catálogo local. DeepSeek Search + `deepseek-flash` é o principal; quando Search, geração, saldo, quota ou serviço DeepSeek falha, o bot usa Gemini + Google Search grounding como reserva. Os circuit breakers são independentes e persistidos em `data/deepseek_circuit.json` e `data/gemini_circuit.json`. Administradores consultam ambos com `/gemini_status`.
+
+`DEEPSEEK_API_KEY` + `DEEPSEEK_MODEL=deepseek-flash` habilitam o principal. `GEMINI_API_KEY` + `GEMINI_MODEL` habilitam o reserva. Recomenda-se configurar as duas chaves. O histórico neutro e os prompts são compartilhados no agente conversacional; as permissões e validações continuam no código, não no prompt. Consulte `INSTALACAO_E_ATUALIZACAO.md` para as variáveis e `CACADOR_TROFEUS.md` para o fluxo de pesquisa.
 ## Zerados (`cogs/zerados.py`)
 Versão leve das platinas para quem quer registrar os jogos que finalizou, sem precisar platinar.
 - **`/zerados`** abre o painel (registrar, lista, ranking total/mensal). Também há o botão **Zerados** dentro do `/coliseu`.
@@ -153,9 +141,9 @@ Versão leve das platinas para quem quer registrar os jogos que finalizou, sem p
 
 ### Caçador de Troféus — pesquisa assistida por IA
 
-Veja `CACADOR_TROFEUS.md`. Configure `GEMINI_API_KEY` e use `/jogo_buscar` para identificar o título oficial, confirmar o candidato e gerar um catálogo em revisão. A publicação exige auditoria e validação administrativa.
+Veja `CACADOR_TROFEUS.md`. Configure `DEEPSEEK_API_KEY` (principal) e `GEMINI_API_KEY` (reserva), depois use `/jogo_buscar` para identificar o título oficial, confirmar o candidato e gerar um catálogo em revisão. A publicação exige auditoria e validação administrativa.
 
 
 ## Caçador de Troféus e pesquisa de jogos
 
-O comando `/jogo_buscar` reconhece títulos/aliases existentes ou usa Gemini com Google Search grounding para sugerir candidatos, inclusive quando há abreviações ou erros de digitação. A pesquisa de catálogos só começa após confirmação do título e fica em revisão administrativa; não existe publicação automática pela IA. Consulte [`CACADOR_TROFEUS.md`](CACADOR_TROFEUS.md) para o fluxo e [`AUDITORIA_TECNICA.md`](AUDITORIA_TECNICA.md) para as correções, testes, limites e checklist de atualização. Para ativar a pesquisa, configure `GEMINI_API_KEY`; `GEMINI_MODEL` usa `gemini-3.8-flash` por padrão. Se a hospedagem definir `GEMINI_MODEL` nas variáveis do serviço, esse valor prevalece sobre o `.env`; confira o painel para não continuar executando um modelo antigo. Em erro `429`, veja `/gemini_status` e o painel de quota/billing do projeto antes de alterar o modelo.
+O comando `/jogo_buscar` reconhece títulos/aliases existentes sem consumir modelo ou usa DeepSeek Search + Flash, com failover para Gemini Search grounding, para sugerir candidatos, inclusive quando há abreviações ou erros de digitação. A pesquisa aprofundada do catálogo só começa após confirmação do título e fica em revisão administrativa; não existe publicação automática pela IA. Consulte [`CACADOR_TROFEUS.md`](CACADOR_TROFEUS.md) para o fluxo e [`AUDITORIA_TECNICA.md`](AUDITORIA_TECNICA.md) para as correções, testes, limites e checklist de atualização. Para ativar a pesquisa, configure `DEEPSEEK_API_KEY` e `GEMINI_API_KEY`; DeepSeek usa `deepseek-flash` por padrão e Gemini é a reserva. Se a hospedagem definir `GEMINI_MODEL` nas variáveis do serviço, esse valor prevalece sobre o `.env`; confira o painel para não continuar executando um modelo antigo. Em erro de quota ou `429`, consulte `/gemini_status`: o comando mostra os dois circuit breakers e qual provedor está pausado; confira os painéis de saldo/quota do fornecedor correspondente.

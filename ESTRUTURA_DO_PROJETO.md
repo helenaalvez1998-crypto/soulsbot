@@ -24,6 +24,7 @@ Soulsbot/
 │   ├── trofeus.py
 │   ├── youtube.py
 │   └── zerados.py
+├── nara_local.py              # respostas locais, roteamento econômico e bloqueio de imagens
 ├── ia_nucleo.py               # agente: política, validação e riscos
 ├── ia_ferramentas.py          # ferramentas que o agente pode invocar
 ├── ia_gemini.py               # adaptador do SDK Gemini para a Nara
@@ -34,6 +35,8 @@ Soulsbot/
 ├── conquistas.py / levels.py  # conquistas, XP e patentes
 ├── loja.py / utils.py / ui.py # utilitários compartilhados
 ├── prompts/                  # prompts editáveis da Nara
+│   ├── nara.md               # personalidade/referência geral
+│   └── nara_pesquisa.md      # prompt curto para pesquisa conversacional opcional (desligada por padrão)
 ├── tests/                    # testes unitários e de regressão
 ├── data/                     # banco, estado do circuit breaker e dados locais
 ├── env.example               # modelo seguro de variáveis de ambiente
@@ -45,7 +48,7 @@ Soulsbot/
 1. **Discord (`cogs/`)**: comandos, modais, botões, permissões e respostas.
 2. **Domínio (`*_service.py`, `ia_nucleo.py`)**: regras de negócio, validação, economia e progressão.
 3. **Infraestrutura (`database.py`, `config.py`, `gemini_resilience.py`)**: persistência, configuração, limites e chamadas externas.
-4. **IA (`catalogo_ia.py`, `ia_gemini.py`, `ia_ferramentas.py`, `prompts/`)**: identificação, grounded search e ações controladas.
+4. **IA (`nara_local.py`, `catalogo_ia.py`, `ia_gemini.py`, `ia_ferramentas.py`, `prompts/`)**: respostas locais, pesquisa grounded e ações controladas.
 5. **Qualidade (`tests/`)**: regressões, transações, concorrência, parsing e simulações de falhas externas.
 
 ## Arquivos locais que não devem ser substituídos

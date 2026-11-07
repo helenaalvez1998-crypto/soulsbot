@@ -1,30 +1,18 @@
-"""Pesquisa de jogos e geração de rascunhos de catálogo com Gemini + Google Search grounding.
+"""Pesquisa multi-provedor e geração de rascunhos de catálogos.
 
-A IA identifica e pesquisa; o código normaliza, valida e mantém tudo em revisão.
+DeepSeek Search + Flash é principal; Gemini + Google Search grounding é reserva.
+A IA identifica e pesquisa; o código valida as URLs e mantém tudo em revisão.
 Nenhum dado gerado pela IA é publicado automaticamente.
 """
 from __future__ import annotations
 
-import asyncio
 import json
-import os
+import logging
 import re
-from urllib.parse import urlparse
 
-from gemini_resilience import run_gemini_call
+from ia_provedores import gerar_pesquisa_com_failover
 
-
-def _client():
-    from google import genai
-    from google.genai import types
-    key = os.getenv("GEMINI_API_KEY", "").strip()
-    if not key:
-        raise RuntimeError("GEMINI_API_KEY não está configurada no ambiente do bot.")
-    return genai.Client(api_key=key, http_options=types.HttpOptions(timeout=60_000)), types
-
-
-def _model() -> str:
-    return os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip() or "gemini-3.8-flash"
+log = logging.getLogger("nara.trofeus.ai")
 
 
 def _json_from_text(text: str) -> dict:
@@ -40,47 +28,16 @@ def _json_from_text(text: str) -> dict:
     return data
 
 
-def _grounding_sources(response) -> list[dict]:
-    found = {}
-    try:
-        candidates = getattr(response, "candidates", None) or []
-        for candidate in candidates:
-            meta = getattr(candidate, "grounding_metadata", None)
-            for chunk in (getattr(meta, "grounding_chunks", None) or []):
-                web = getattr(chunk, "web", None)
-                uri = getattr(web, "uri", "") if web else ""
-                title = getattr(web, "title", "") if web else ""
-                parsed = urlparse(uri)
-                if parsed.scheme == "https" and parsed.hostname and not parsed.username and not parsed.password:
-                    found[uri] = {"title": title or parsed.hostname, "url": uri}
-    except Exception:
-        pass
-    return list(found.values())[:20]
 
-
-async def _generate(prompt: str) -> tuple[str, list[dict]]:
-    """Executa SDK síncrono fora do event loop, com timeout HTTP e fechamento do cliente."""
-    def run():
-        client, types = _client()
-        try:
-            # 60 s limita a espera de rede mesmo quando asyncio cancela a tarefa externa.
-            response = run_gemini_call(lambda: client.models.generate_content(
-                model=_model(),
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    tools=[types.Tool(google_search=types.GoogleSearch())],
-                    temperature=0.2,
-                ),
-            ))
-            return response.text or "", _grounding_sources(response)
-        finally:
-            close = getattr(client, "close", None)
-            if callable(close):
-                close()
-    try:
-        return await asyncio.wait_for(asyncio.to_thread(run), timeout=75)
-    except asyncio.TimeoutError as exc:
-        raise TimeoutError("A pesquisa no Gemini excedeu 75 segundos. Tente novamente.") from exc
+async def _generate(prompt: str, search_queries: list[str] | None = None) -> tuple[str, list[dict]]:
+    """Pesquisa DeepSeek primeiro e alterna para Gemini + grounding se necessário."""
+    queries = search_queries or [
+        "video game official title developer publisher release date platforms " + prompt[:60]
+    ]
+    text, sources, provider = await gerar_pesquisa_com_failover(prompt, queries)
+    log.info("Pesquisa de catálogo concluída pelo provedor %s; fontes HTTPS=%d", provider, len(sources))
+    # Fonte é sempre URL HTTPS devolvida pelo mecanismo de pesquisa, nunca URL inventada pelo modelo.
+    return text, sources
 
 
 async def identificar_jogo(consulta: str) -> dict:
@@ -138,11 +95,13 @@ Retorne SOMENTE JSON neste formato:
 }}
 No máximo 5 candidatos. Confidence entre 0 e 1. Se não houver correspondência confiável, candidates deve ser [].
 """
-    text, sources = await _generate(prompt)
+    text, sources = await _generate(
+        prompt, [f'"{consulta}" video game official title release year developer publisher platforms']
+    )
     if not sources:
         return {
             "input": consulta, "candidates": [], "needs_clarification": True,
-            "notes": "A pesquisa não retornou referências verificáveis do Google Search. Nenhuma identificação foi aceita.",
+            "notes": "A pesquisa não retornou referências verificáveis em fontes HTTPS de nenhum provedor. Nenhuma identificação foi aceita.",
             "sources": [],
         }
     data = _json_from_text(text)
@@ -225,9 +184,15 @@ REGRAS:
 - Não invente URL. Se não encontrar fonte específica, não inclua o registro.
 - Respeite o escopo do jogo base/DLC informado.
 """
-    text, grounding = await _generate(prompt)
+    search_queries = [
+        f'"{title}" official trophy achievement list base game DLC',
+        f'"{title}" complete collectibles weapons armor accessories spells locations guide',
+        f'"{title}" missable trophies collectibles requirements guide',
+        f'"{title}" all trophies achievements platinum requirements walkthrough',
+    ]
+    text, grounding = await _generate(prompt, search_queries)
     if not grounding:
-        raise RuntimeError("Google Search não retornou fontes verificáveis para o catálogo.")
+        raise RuntimeError("Nenhum dos provedores de pesquisa retornou fontes HTTPS verificáveis para o catálogo.")
     data = _json_from_text(text)
     # O título foi confirmado pelo usuário; o modelo não pode renomear o jogo.
     data["name"] = title
@@ -235,15 +200,16 @@ REGRAS:
     slug_base = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
     # Ano na chave evita colidir remakes/sequências com nomes canônicos iguais.
     data["slug"] = f"{slug_base}-{int(year)}" if isinstance(year, int) and 1970 <= year <= 2100 else slug_base
-    # A lista de fontes do modelo não é prova. Só URLs retornadas no grounding do Google
-    # são aceitas como evidência de pesquisa.
+    # A lista do modelo não é prova. Só URLs retornadas pelo Search/Grounding usado
+    # nesta execução são aceitas como evidência de pesquisa.
     merged = {}
     for src in grounding:
         if not isinstance(src, dict):
             continue
         url = str(src.get("url", "")).strip()
         if url.startswith("https://"):
-            merged[url] = {"title": str(src.get("title", ""))[:180], "url": url, "kind": "grounded_web"}
+            merged[url] = {"title": str(src.get("title", ""))[:180], "url": url,
+                           "kind": str(src.get("kind") or "grounded_web")[:40]}
     data["sources"] = list(merged.values())[:30]
     valid_urls = set(merged)
     # Fail closed: reject malformed records and URLs that were not surfaced as sources.

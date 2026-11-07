@@ -29,6 +29,19 @@ Revisão estática e testes de serviços para inicialização, configuração, S
 - A leitura de páginas externas exige HTTPS, domínio permitido, redirecionamento ainda em domínio permitido e limite de tamanho; cache com limite de 256 páginas.
 - Ação do agente continua sujeita a validação em código e confirmação do usuário; permissões de moderação são revalidadas no fluxo de confirmação.
 
+
+### Failover automático DeepSeek ↔ Gemini (revisão atual)
+
+- Adicionado `ia_deepseek.py`: adaptador DeepSeek Flash com chamadas de ferramentas no formato Chat Completions e histórico neutro, sem entrada multimodal.
+- Adicionado `ia_multi.py`: roteador conversacional. DeepSeek é principal por padrão; Gemini assume se o principal atingir quota/saldo, rate limit, chave inválida ou indisponibilidade. O provedor que falhou não é reconsultado no mesmo turno; numa nova solicitação volta a ser tentado quando o circuito expirar.
+- Adicionado `deepseek_resilience.py`: classifica HTTP 402 (saldo), 429 (rate limit), 401/403 (credencial/permissão) e 5xx/timeout, com circuit breaker e estado persistente independentes de Gemini.
+- Adicionado `ia_provedores.py`: Catálogo usa DeepSeek Search + DeepSeek Flash, validando URLs retornadas pelo Search; em erro do Search/modelo ou ausência de fontes, alterna para Gemini + Google Search grounding. Não aceita URLs inventadas pelo modelo.
+- Tradução opcional de ofertas também utiliza DeepSeek primeiro e Gemini como reserva; permanece desligada por padrão para economia.
+- `/gemini_status` agora apresenta os estados dos dois fornecedores e informa as chaves/modelos configurados sem revelar credenciais.
+- O histórico do agente foi normalizado em `MensagemAgente`, permitindo que uma conversa com tool calling mude de provedor sem perder o vínculo entre a chamada da ferramenta e sua resposta. Permissões, argumentos, confirmação e auditoria continuam no núcleo Python.
+- Adicionadas variáveis `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL=deepseek-flash`, `DEEPSEEK_BASE_URL`, circuit breakers e `AI_PRIMARY_PROVIDER`. Configure ambas as chaves para failover completo.
+- Testes simulam DeepSeek principal, erro 402/429/503, fallback para Gemini, fallback inverso quando Gemini é principal, ausência de fontes, persistência dos circuit breakers e correlação de IDs em tool calls.
+
 ### Discord, callbacks e recuperação
 
 - Corrigida duplicidade de `cog_load` no Caçador, que fazia uma definição sobrescrever a outra.
@@ -47,9 +60,8 @@ Revisão estática e testes de serviços para inicialização, configuração, S
 
 ## Testes executados nesta revisão
 
-- `python -m compileall -q .`: compilou os **40 arquivos Python** sem erros.
-- `pytest -q`: **48 testes passaram**, incluindo os oito novos cenários de resiliência Gemini.
-- `python -m unittest discover -s tests -q`: **21 testes passaram**.
+- `python -m compileall -q .`: compilou todos os arquivos Python sem erros nesta versão.
+- `pytest -q`: **128 testes passaram** nesta rodada, incluindo roteamento local, separação de pesquisas de catálogo, política de quota, filtros de pesquisa e proteção de imagens. `python -m unittest discover -s tests -q`: **21 testes passaram**.
 - Varredura AST: sem erros de sintaxe ou métodos duplicados em classes/módulos.
 - Auditoria de comandos: **37 comandos** com nomes explícitos, sem duplicatas e dentro do limite de 32 caracteres.
 - Testes SQLite simulam falha no crédito de XP e confirmam rollback da aprovação da run.
@@ -57,14 +69,14 @@ Revisão estática e testes de serviços para inicialização, configuração, S
 
 ## O que não foi possível validar aqui
 
-Este ambiente não tem as dependências de runtime do bot (`discord.py`, `aiosqlite`, `google-genai`) instaladas e não contém token Discord nem chave Gemini. Portanto, **não foi possível iniciar o bot em um servidor real, fazer chamadas reais ao Discord/Gemini, validar intents/permissões de um servidor, confirmar o formato de respostas da API em produção nem medir latência/custos reais**. Os testes de SQLite usam SQLite real por um adaptador de teste; não substituem um teste de integração com `aiosqlite`.
+Este ambiente não tem as dependências de runtime do bot (`discord.py`, `aiosqlite`, `google-genai`) instaladas e não contém token Discord nem chaves Gemini e DeepSeek. Portanto, **não foi possível iniciar o bot em um servidor real, fazer chamadas reais ao Discord/Gemini, validar intents/permissões de um servidor, confirmar o formato de respostas da API em produção nem medir latência/custos reais**. Os testes de SQLite usam SQLite real por um adaptador de teste; não substituem um teste de integração com `aiosqlite`.
 
 ## Checklist de implantação
 
 1. Fazer backup do SQLite atual.
 2. Substituir os arquivos de código/documentação sem sobrescrever `.env` e `data/`.
 3. Instalar dependências de `requirements.txt` em ambiente virtual limpo.
-4. Configurar `DISCORD_TOKEN` e, para funções de IA, `GEMINI_API_KEY`. `GEMINI_MODEL` pode ficar no padrão documentado.
+4. Configurar `DISCORD_TOKEN`, `DEEPSEEK_API_KEY` e `GEMINI_API_KEY`. Para failover completo, as duas chaves precisam pertencer a projetos ativos e com saldo/quota. `DEEPSEEK_MODEL=deepseek-flash` e `GEMINI_MODEL` podem ficar nos padrões documentados.
 5. Conferir intents **Message Content**, **Server Members** e **Voice States**, permissões de canais e hierarquia de cargos.
 6. Iniciar e conferir os logs do processo e o `/status_ofertas`.
 7. Testar `/jogo_buscar god of war 2018`, confirmar o candidato e abrir `/catalogo_admin` e `/catalogo_fila`.
@@ -84,3 +96,38 @@ Este ambiente não tem as dependências de runtime do bot (`discord.py`, `aiosql
 - A Nara, o Caçador de Troféus e a tradução das ofertas compartilham o mesmo circuit breaker. Uma falha de quota em uma função impede as outras de continuar gastando chamadas até o fim da pausa.
 - O SDK oficial já aplica retries para falhas temporárias; o bot não adiciona uma segunda sequência automática de retries. Depois que o SDK devolve a falha final, o circuito pausa novas chamadas.
 - A classificação usa os detalhes/mensagem do erro final. Um `429` isolado não identifica a quota específica; o diagnóstico definitivo continua no painel de quota/billing e de Search grounding do Google.
+
+
+## Economia de quota e bloqueio de imagens da Nara
+
+- Adicionado `nara_local.py`: classifica saudações, identidade, ajuda, comandos, regras do servidor, XP, patentes, Denários, loja, registros, comprovantes, rankings e consultas frequentes sem modelo ou rede.
+- Perfil, saldo privado, platinas, zerados, runs, inventário e rankings são lidos diretamente do SQLite. Consultas locais não incrementam o contador de uso Gemini.
+- `decidir_rota` permite testar a decisão: mensagens básicas vão para resposta local; bate-papo no canal livre que não é dirigido à Nara é ignorado; pesquisa de jogo precisa ser explícita; mensagem de pesquisa em canal livre pede menção; apenas pesquisa explícita e marcada pode ir à rota multi-provedor DeepSeek/Gemini, se o chat estiver habilitado.
+- A Nara não baixa nem interpreta imagens. `ia_nucleo.rodar_agente` e `GeminiAdaptador.conteudo_usuario` agora aceitam apenas texto; não existe envio de `Part.from_bytes` pelo caminho conversacional.
+- Anexos de imagem são identificados apenas por MIME/nome do arquivo, sem chamar `read`, `save` ou acessar URL. Os formulários especializados de comprovante continuam independentes e não enviam as imagens à Nara.
+- Adicionados testes de conversas simuladas, pesquisa intencional, conversa no canal livre, print vazio, texto acompanhado de print e fallback sem chamada externa. A política de economia também é testada: pesquisa conversacional não passa ao Gemini sem opt-in explícito.
+- As chaves dos provedores deixaram de ser necessárias para a Nara responder perguntas básicas. Para failover completo nas pesquisas do Caçador, configure `DEEPSEEK_API_KEY` e `GEMINI_API_KEY`; com apenas uma chave, o sistema usa somente esse fornecedor.
+
+Limitação mantida: os testes de roteamento/funções puras não substituem homologação com `discord.py`, `aiosqlite`, token Discord e chaves Gemini e DeepSeek reais.
+
+
+## Revisão adicional: economia máxima e pesquisa segura (rodada atual)
+
+- Expandida a FAQ local para cumprimentos, identidade, ajuda/comandos, privacidade, XP, recompensas, Denários, patentes, loja, Coliseu, Santuário, YouTube, ofertas, registros, comprovantes e consultas SQLite.
+- Consultas pessoais usam somente o ID de quem falou; saldo/inventário não são incluídos em respostas de outros membros. Rankings são públicos.
+- Pesquisa conversacional Gemini desativada por padrão (`NARA_CHAT_IA_ENABLED=false`); só pode ser habilitada manualmente. Se ativada, o limite é três pesquisas por usuário/dia (`IA_LIMITE_DIARIO=3`). O comando `/jogo_buscar` mantém o limitador persistente próprio (3 identificações por 10 minutos por usuário).
+- Perguntas sobre troféus/platinas/DLCs/colecionáveis de qualquer jogo são roteadas para `/jogo_buscar`; o chat não chama uma fonte de Elden Ring para tentar responder outro jogo. Se o catálogo já existir, a consulta fica local e não chama o Gemini.
+- Pesquisa conversacional por chat passou a ser desligada por padrão, inclusive para Elden Ring. Assim, com `OFFERS_SHOW_DESCRIPTION=false`, a rota conversacional multi-provedor não é inicializada e as quotas ficam reservadas ao `/jogo_buscar` quando necessário, com DeepSeek principal e Gemini como reserva.
+- Prompt específico de pesquisa fica em `prompts/nara_pesquisa.md`; recebe apenas o texto digitado e não recebe histórico, perfil, saldo, inventário, menções a terceiros, imagens ou anexos.
+- `ia_nucleo.py` e `ia_gemini.py` mantêm interface somente textual. A ferramenta de leitura de páginas valida `Content-Type` e rejeita imagens, PDFs, vídeo e binários antes de ler o corpo da resposta.
+- Prints em conversa são detectados por metadados do anexo (MIME/extensão) sem download, leitura ou OCR. Formulários de comprovante continuam separados e servem à revisão humana, não à IA.
+- Removidos do roteamento da Nara os prompts/contextos grandes e funções antigas que não eram usados; reduzido o prompt de pesquisa para baixar tokens nas poucas chamadas externas.
+
+
+## Failover DeepSeek/Gemini — testes de integração simulada
+
+- DeepSeek é o principal do pipeline de pesquisa de catálogos; Gemini é a reserva via Google Search grounding. A conversa avançada da Nara, se habilitada, usa o mesmo roteador e pode inverter a ordem com `AI_PRIMARY_PROVIDER`.
+- Os circuit breakers são independentes e persistidos. DeepSeek classifica saldo insuficiente (HTTP 402), rate limit (429), erros de autenticação/configuração e indisponibilidade. Gemini classifica os erros de quota/rate limit/serviço com o adaptador já existente.
+- Quando o provedor principal falha no meio de uma sequência de tool calls, o histórico neutro preserva a chamada e a resposta da ferramenta para que a reserva continue a tarefa sem repetir a ação.
+- Última execução: `compileall` sem erros; `pytest -q`: **128 aprovados**; `unittest`: **21 aprovados**. Estes são testes automatizados/simulados, não chamadas reais às APIs.
+- Para failover efetivo entre serviços, configure ambas as chaves. Com ambas indisponíveis, respostas locais/SQLite permanecem ativas e pesquisas externas falham de forma segura.
