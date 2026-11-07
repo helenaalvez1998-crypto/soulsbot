@@ -88,9 +88,9 @@ async def traduzir_descricao_oferta(texto: str) -> str:
     original = (texto or "").strip()
     if not original:
         return original
-    if not (GEMINI_API_KEY or os.getenv("DEEPSEEK_API_KEY", "").strip()):
+    if not (GEMINI_API_KEY or os.getenv("GEMINI_BACKUP_API_KEY", "").strip()):
         if not _translation_warned:
-            log.warning("Tradução de descrições desativada: configure DEEPSEEK_API_KEY e/ou GEMINI_API_KEY.")
+            log.warning("Tradução de descrições desativada: configure GEMINI_API_KEY e/ou GEMINI_BACKUP_API_KEY.")
             _translation_warned = True
         return original
 

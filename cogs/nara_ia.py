@@ -21,16 +21,16 @@ from ia_ferramentas import criar_registro
 from ia_multi import RoteadorIA, TodosProvedoresIndisponiveis
 from ia_nucleo import Ctx, Registro, Risco, rodar_agente
 from levels import nivel_por_xp, patente_por_nivel
-from gemini_resilience import GeminiUnavailableError, gemini_status
-from deepseek_resilience import DeepSeekUnavailableError, deepseek_status
+from gemini_resilience import GeminiUnavailableError, all_gemini_status
+from ia_provedores import pesquisa_status
 from nara_local import aplicar_politica_de_quota, decidir_rota, resposta_local_fallback, tem_anexo_visual
 
 log = logging.getLogger("nara.ia")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip() or "gemini-3.8-flash"
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
-DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-flash").strip() or "deepseek-flash"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip() or "gemini-3.5-flash-lite"
+GEMINI_BACKUP_API_KEY = os.getenv("GEMINI_BACKUP_API_KEY", "").strip()
+GEMINI_BACKUP_MODEL = os.getenv("GEMINI_BACKUP_MODEL", GEMINI_MODEL).strip() or GEMINI_MODEL
 
 
 def _env_nonnegative_int(name: str, default: int = 0) -> int:
@@ -58,14 +58,14 @@ class NaraIA(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         # A Nara local está sempre ativa. Se pesquisa conversacional for habilitada,
-        # DeepSeek é o principal e Gemini é a reserva automática (ou vice-versa por env).
+        # o projeto Gemini principal usa o projeto Gemini reserva em caso de quota/erro.
         self.ia = None
         self.ia_config_error = ""
-        if NARA_CHAT_IA_ENABLED and (DEEPSEEK_API_KEY or GEMINI_API_KEY):
+        if NARA_CHAT_IA_ENABLED and (GEMINI_API_KEY or GEMINI_BACKUP_API_KEY):
             try:
                 self.ia = RoteadorIA(
-                    deepseek_key=DEEPSEEK_API_KEY, deepseek_model=DEEPSEEK_MODEL,
                     gemini_key=GEMINI_API_KEY, gemini_model=GEMINI_MODEL,
+                    gemini_backup_key=GEMINI_BACKUP_API_KEY, gemini_backup_model=GEMINI_BACKUP_MODEL,
                 )
             except Exception as exc:
                 self.ia_config_error = f"{type(exc).__name__}: {exc}"[:300]
@@ -81,13 +81,13 @@ class NaraIA(commands.Cog):
             )
             log.warning("prompts/nara_pesquisa.md ausente; usando prompt mínimo de pesquisa.")
         if not NARA_CHAT_IA_ENABLED:
-            log.info("Nara local-first ativa; chat com IA desligado para economia. DeepSeek/Gemini ficam reservados às pesquisas do Caçador.")
+            log.info("Nara local-first ativa; chat com IA desligado para economia. Os dois projetos Gemini ficam reservados às pesquisas do Caçador.")
         elif self.ia is None:
             log.warning("Nara local ativa; nenhum provedor conversacional foi configurado. Perguntas básicas continuam sem API.")
         else:
-            log.info("Nara local ativa; chat IA habilitado com failover. Principal=%s; DeepSeek=%s; Gemini=%s; limite=%s por usuário/dia.",
-                     os.getenv("AI_PRIMARY_PROVIDER", "deepseek"), DEEPSEEK_MODEL if DEEPSEEK_API_KEY else "desativado",
+            log.info("Nara local ativa; chat IA habilitado com failover Gemini. Principal=%s; reserva=%s; limite=%s por usuário/dia.",
                      GEMINI_MODEL if GEMINI_API_KEY else "desativado",
+                     GEMINI_BACKUP_MODEL if GEMINI_BACKUP_API_KEY else "desativado",
                      IA_LIMITE_DIARIO if IA_LIMITE_DIARIO else "sem limite local")
 
     async def cog_unload(self):
@@ -409,7 +409,7 @@ class NaraIA(commands.Cog):
             try:
                 texto, ctx = await self._responder_ia(message)
                 await self._registrar_uso(message.author.id)
-            except (GeminiUnavailableError, DeepSeekUnavailableError) as exc:
+            except GeminiUnavailableError as exc:
                 log.warning("Pesquisa da Nara falhou no provedor: %s", getattr(exc, "admin_message", str(exc)))
                 texto = getattr(exc, "user_message", str(exc))
             except TodosProvedoresIndisponiveis as exc:
@@ -429,27 +429,37 @@ class NaraIA(commands.Cog):
     async def gemini_status_command(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message("Você precisa de Gerenciar servidor.", ephemeral=True)
-        states = {"deepseek": deepseek_status(), "gemini": gemini_status()}
+        states = all_gemini_status()
         labels = []
         for name, state in states.items():
+            label = "Gemini principal" if name == "primary" else "Gemini reserva"
             if state["blocked"]:
                 mins = max(1, (state["remaining_seconds"] + 59) // 60)
                 labels.append(
-                    f"**{name.title()}: PAUSADO** — {state['kind']}, cerca de {mins} min. "
+                    f"**{label}: PAUSADO** — {state['kind']}, cerca de {mins} min. "
                     f"Motivo: `{(state['reason'] or 'não informado')[:220]}`"
                 )
             else:
-                labels.append(f"**{name.title()}: disponível no circuito local** (isso não garante quota/saldo no provedor).")
+                labels.append(f"**{label}: circuito liberado** (isso não confirma a quota real no Google).")
         configured = []
-        if DEEPSEEK_API_KEY:
-            configured.append(f"DeepSeek (`{DEEPSEEK_MODEL}`)")
         if GEMINI_API_KEY:
-            configured.append(f"Gemini (`{GEMINI_MODEL}`)")
+            configured.append(f"Principal (`{GEMINI_MODEL}`)")
+        if GEMINI_BACKUP_API_KEY:
+            configured.append(f"Reserva (`{GEMINI_BACKUP_MODEL}`)")
+        search = pesquisa_status()
+        if search["blocked"]:
+            minutes = max(1, (search["remaining_seconds"] + 59) // 60)
+            search_line = f"**Pesquisa web (Tavily Free): PAUSADA** — {search['kind']}, cerca de {minutes} min."
+        elif search["configured"]:
+            search_line = "**Pesquisa web (Tavily Free): circuito liberado** (não confirma saldo mensal restante)."
+        else:
+            search_line = "**Pesquisa web (Tavily Free): não configurada** — falta TAVILY_API_KEY."
         body = (
-            f"**Provedor principal:** `{os.getenv('AI_PRIMARY_PROVIDER', 'deepseek')}`\n"
-            f"**Chaves configuradas:** {', '.join(configured) if configured else 'nenhuma'}\n\n"
+            f"**Configuração Gemini:** `{', '.join(configured) if configured else 'nenhuma chave configurada'}`\n\n"
             + "\n".join(labels)
-            + "\n\nO roteador tenta o principal primeiro e usa o outro como reserva quando detecta quota, rate limit ou indisponibilidade."
+            + "\n" + search_line
+            + "\n\nA pesquisa usa Tavily Free; Gemini principal e outro projeto Gemini analisam as fontes. "
+              "Duas chaves do mesmo projeto Google compartilham quota. Não vincule billing se não quiser pagar."
         )
         await interaction.response.send_message(body[:1900], ephemeral=True)
 

@@ -10,7 +10,6 @@ import config
 import trofeus_service as svc
 import catalogo_ia
 from gemini_resilience import GeminiUnavailableError
-from deepseek_resilience import DeepSeekUnavailableError
 from ia_provedores import TodosProvedoresPesquisaIndisponiveis
 
 log = logging.getLogger("nara.trofeus")
@@ -176,7 +175,7 @@ class SolicitarJogoModal(discord.ui.Modal, title="Solicitar cadastro de jogo"):
                 await interaction.followup.send(
                     f"**A identificação automática falhou.** Solicitação: **{discord.utils.escape_markdown(nome)}**\n"
                     f"Motivo: {discord.utils.escape_markdown(reason[:700])}\n"
-                    "Nenhum nome canônico foi criado. O administrador pode consultar `/catalogo_fila` e `/gemini_status` (estado dos dois provedores).",
+                    "Nenhum nome canônico foi criado. O administrador pode consultar `/catalogo_fila` e `/gemini_status` (estado dos dois projetos Gemini).",
                     ephemeral=True,
                 )
             except discord.HTTPException:
