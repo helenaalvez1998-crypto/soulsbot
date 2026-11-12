@@ -1,0 +1,11 @@
+# Dependências de produção — versões travadas para builds reproduzíveis.
+# Python 3.11+ (Python 3.13 recomendado na FadeHost).
+discord.py==2.7.1
+aiosqlite==0.22.1
+python-dotenv==1.2.4
+aiohttp==3.14.5
+tzdata==2026.6
+google-genai==2.34.0
+requests==2.34.2
+beautifulsoup4==4.15.0
+Pillow==13.0.0

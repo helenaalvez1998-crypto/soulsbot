@@ -1,0 +1,17 @@
+LAYOUT DOS CARTÕES DE JOGOS GRÁTIS E PROMOÇÕES
+
+Cada oferta é um único cartão (Components V2), de cima para baixo:
+
+  1. Imagem do jogo em largura total (a maior arte que a loja oferece).
+  2. Linha pequena: tipo (JOGO GRÁTIS / PROMOÇÃO) · loja.
+  3. Nome do jogo em título grande.
+  4. Preço:  ~~preço original~~  ➜  **preço de agora**  ·  **-X%**
+             (jogo grátis: ~~preço original~~ ➜ **GRÁTIS**)
+  5. Linha pequena: plataforma · prazo (horário de Brasília).
+  6. Botão: "Resgatar grátis" ou "Ver oferta".
+
+Barra lateral verde = jogo grátis; laranja = promoção.
+Sem descrição por padrão (OFFERS_SHOW_DESCRIPTION=true para exibir um resumo).
+Se o discord.py for anterior à 2.6, o bot usa um embed equivalente.
+
+Para ver o resultado sem esperar uma oferta nova: /previa_oferta (moderadores).
