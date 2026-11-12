@@ -61,7 +61,7 @@ class PedidoTests(unittest.TestCase):
     def test_pedido_curto_sem_dados_privados(self):
         p = conv.montar_pedido("Quase Pro", "x" * 5000, "y" * 5000)
         self.assertLessEqual(len(p), conv.MAX_ENTRADA + conv.MAX_CONTEXTO + 120)
-        self.assertIn("[Quase Pro diz]", p)
+        self.assertIn("[Mensagem de Quase Pro]", p)
 
     def test_resposta_sem_mencao_em_massa_e_com_corte(self):
         self.assertNotIn("@everyone", conv.limpar_resposta("oi @everyone"))
@@ -74,7 +74,9 @@ class PedidoTests(unittest.TestCase):
         txt = conv.carregar_prompt()
         self.assertIn("Nara", txt)
         self.assertNotIn("/jogo_buscar", txt)  # comando removido
-        self.assertLess(len(txt), 6000)  # personalidade completa em versão compacta para conter custo por chamada
+        self.assertLess(len(txt), 6000)  # personalidade compacta para conter custo por chamada
+        self.assertIn("apenas por texto no Discord", txt)
+        self.assertIn("não fala nem envia áudio", txt)
 
 
 class CacheCooldownTests(unittest.TestCase):
@@ -279,19 +281,19 @@ class CogConversaTests(unittest.TestCase):
         self.cog.ia = FakeAdaptador("ok")
         self.bot.db.uso[(0, "chat:2026-11-10")] = conv.LIMITE_GLOBAL_DIA
         out = run(self.cog._conversar(self.msg(), "oi gente"))
-        self.assertIn(out, conv.FALAS_SEM_IA)
+        self.assertIn(out, conv.RESPOSTAS_SEM_IA)
         self.assertEqual(self.cog.ia.chamadas, [])
 
-    def test_quota_do_gemini_cai_para_fala_local_sem_registrar_uso(self):
+    def test_quota_do_gemini_cai_para_resposta_local_sem_registrar_uso(self):
         e = GeminiUnavailableError("quota", 3600, "429", provider="primary")
         self.cog.ia = roteador(FakeAdaptador(erro=e), FakeAdaptador(erro=e))
         out = run(self.cog._conversar(self.msg(), "como funciona a loja do NARA?"))
-        self.assertIn(out, conv.FALAS_SEM_IA)
+        self.assertIn(out, conv.RESPOSTAS_SEM_IA)
         self.assertEqual(self.bot.db.uso, {})
 
     def test_sem_provedor_configurado(self):
         self.cog.ia = None
-        self.assertIn(run(self.cog._conversar(self.msg(), "oi?")), conv.FALAS_SEM_IA)
+        self.assertIn(run(self.cog._conversar(self.msg(), "oi?")), conv.RESPOSTAS_SEM_IA)
 
     def test_so_marcou_sem_texto_nao_gasta(self):
         self.cog.ia = FakeAdaptador("não deveria chamar")
