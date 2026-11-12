@@ -1,0 +1,14 @@
+DADOS INICIAIS DO CATÁLOGO NARA
+
+Este pacote contém um banco SQLite inicial e vazio (jogos.db), as pastas
+capas/ e capas_mods/ e a fonte DejaVuSans.ttf usada na montagem das grades.
+
+O banco é criado com as tabelas do catálogo de jogos, mods e radar RSS.
+O feed Gematsu é cadastrado como fonte inicial. Nenhum jogo, mod ou imagem
+foi inventado ou importado: os catálogos começam vazios e podem ser populados
+pelo painel administrativo da NARA.
+
+Em execução local, a NARA usa NARA/data por padrão. Se DATA_DIR apontar para
+um volume persistente (por exemplo /data), copie jogos.db e as pastas de capas
+para esse volume ou configure CATALOGO_DATA_DIR para o diretório correto.
+Faça backup do banco e das imagens antes de atualizações.
