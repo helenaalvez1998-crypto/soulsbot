@@ -534,6 +534,10 @@ class SantuarioPublicoView(discord.ui.View):
     def __init__(self, cog):
         super().__init__(timeout=None)
         self.cog = cog
+        from cogs.comunidade import adicionar_botao_contribuicao_contextual
+        adicionar_botao_contribuicao_contextual(
+            self, "idea", "santuario", "Sugerir melhoria", "💡", row=1,
+        )
 
     @discord.ui.button(label="Meu santuário", style=discord.ButtonStyle.success, emoji="✨", custom_id="sant:meu")
     async def meu(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -567,6 +571,10 @@ class CartaoView(discord.ui.View):
     def __init__(self, cog):
         super().__init__(timeout=None)
         self.cog = cog
+        from cogs.comunidade import adicionar_botao_contribuicao_contextual
+        adicionar_botao_contribuicao_contextual(
+            self, "idea", "santuario", "Sugerir melhoria no Santuário", "💡", row=3,
+        )
 
     @discord.ui.button(label="Personalizar", style=discord.ButtonStyle.primary, emoji="✏️", custom_id="sant:perfil")
     async def personalizar(self, interaction: discord.Interaction, button: discord.ui.Button):

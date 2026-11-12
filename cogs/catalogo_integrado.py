@@ -458,6 +458,23 @@ class CatalogView(discord.ui.View):
         self.add_item(PlataformaSelect(self.plataforma))
         if self.rows:
             self.add_item(JogoSelect(self.rows, self.mode))
+        if self.mode == "ver":
+            # A ação permanece disponível mesmo quando há resultados parciais:
+            # o membro pode estar procurando um título específico que não apareceu.
+            enviar = discord.ui.Button(
+                label="Não encontrou? Enviar jogo", emoji="📤",
+                style=discord.ButtonStyle.success, row=2, custom_id="catalogo:enviar_ausente",
+            )
+            async def _enviar_ausente(interaction: discord.Interaction):
+                texto = (
+                    "## 📤 Cadastrar jogo ausente\n\n"
+                    "Escolha a plataforma e envie as informações do jogo. A equipe revisará o cadastro."
+                )
+                await interaction.response.send_message(
+                    content=texto, view=PlataformaPickView(publico=True), ephemeral=True
+                )
+            enviar.callback = _enviar_ausente
+            self.add_item(enviar)
         self.add_item(PageButton(-1, self.page <= 0))
         self.add_item(PageButton(+1, self.page >= pages - 1))
         if self.mode != "ver":
@@ -1180,6 +1197,16 @@ class ModsCatalogView(discord.ui.View):
         pages = max(1, math.ceil(self.total / PAGE_SIZE))
         if self.rows:
             self.add_item(ModSelect(self.rows))
+        # Não depende de zero resultados: a busca pode retornar itens parecidos,
+        # mas não o mod específico que a pessoa procura.
+        enviar = discord.ui.Button(
+            label="Não encontrou? Enviar mod", emoji="📤",
+            style=discord.ButtonStyle.success, row=1, custom_id="catalogo:mod:enviar_ausente",
+        )
+        async def _enviar_mod_ausente(interaction: discord.Interaction):
+            await interaction.response.send_modal(AdicionarModModal(publico=True))
+        enviar.callback = _enviar_mod_ausente
+        self.add_item(enviar)
         self.add_item(ModsPageButton(-1, self.page <= 0))
         self.add_item(ModsPageButton(1, self.page >= pages - 1))
 

@@ -271,7 +271,9 @@ class ModeracaoPainelView(discord.ui.View):
                     f"**Título:** {discord.utils.escape_markdown(row['title'])}\n"
                     f"**Autor:** <@{row['user_id']}>\n"
                     f"**Jogo/universo:** {discord.utils.escape_markdown(row['game_name'] or 'Não informado')}\n"
-                    f"**Status:** {STATUS_PT.get(row['status'], row['status'])}"
+                    f"**Setor de origem:** {discord.utils.escape_markdown(row['origin_sector'] or 'Central de Contribuições')}\n"
+                    + (f"**Canal de origem:** <#{row['origin_channel_id']}>\n" if row['origin_channel_id'] else "")
+                    + f"**Status:** {STATUS_PT.get(row['status'], row['status'])}"
                 ),
                 color=COR_PAINEL,
             )
@@ -948,6 +950,7 @@ ADMIN_CATEGORIAS = {
         "acoes": [
             ("community_config", "Configurar canais e XP", "⚙️"),
             ("community_publish", "Publicar painel do Arquivo de Mundos", "📚"),
+            ("community_guides_publish", "Publicar painel de Guias e Tutoriais", "📘"),
             ("moderacao", "Revisar contribuições pendentes", "🛡️"),
         ],
     },
@@ -1074,6 +1077,11 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
         if cog is None:
             return await interaction.response.send_message("O módulo de contribuições não está carregado.", ephemeral=True)
         return await cog.publicar_painel(interaction)
+    if action == "community_guides_publish":
+        cog = bot.get_cog("Comunidade")
+        if cog is None:
+            return await interaction.response.send_message("O módulo de contribuições não está carregado.", ephemeral=True)
+        return await cog.publicar_painel_guias(interaction)
     if action == "personalizacao":
         return await _abrir_personalizacao(interaction, bot)
     if action == "dashboard":

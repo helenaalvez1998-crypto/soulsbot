@@ -113,6 +113,11 @@ class LojaCatalogoView(discord.ui.View):
         )
         self.seletor.callback = self._selecionar
         self.add_item(self.seletor)
+        from cogs.comunidade import adicionar_botao_contribuicao_contextual
+        adicionar_botao_contribuicao_contextual(
+            self, "item_suggestion", "loja", "Sugerir item para a loja", "💡", row=1,
+            style=discord.ButtonStyle.success,
+        )
 
     async def _selecionar(self, interaction: discord.Interaction):
         view = LojaView(self.cog, interaction.user)

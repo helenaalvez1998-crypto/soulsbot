@@ -263,6 +263,10 @@ class ColiseuView(discord.ui.View):
         self.platinas_cog = platinas_cog
         self.user_id = user.id if user is not None else None
         self.back_callback = back_callback
+        from cogs.comunidade import adicionar_botao_contribuicao_contextual
+        adicionar_botao_contribuicao_contextual(
+            self, "idea", "coliseu", "Sugerir competição", "💡", row=1,
+        )
 
     async def _voltar_coliseu(self, interaction: discord.Interaction):
         if self.back_callback is not None:
@@ -536,6 +540,10 @@ class PainelView(discord.ui.View):
         self.sel_membro = discord.ui.UserSelect(placeholder="🔎 Consultar outro membro (opcional)", row=0)
         self.sel_membro.callback = self.trocar_membro
         self.add_item(self.sel_membro)
+        from cogs.comunidade import adicionar_botao_contribuicao_contextual
+        adicionar_botao_contribuicao_contextual(
+            self, "correction", "platinas", "Sugerir melhoria em Platinas", "💡", row=3,
+        )
 
     def _membro(self):
         return self.alvo or self.user

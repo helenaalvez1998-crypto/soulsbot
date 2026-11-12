@@ -133,24 +133,38 @@ def _parse_challenge_mode(raw: str) -> tuple[str, int]:
 
 
 class ContributionModal(discord.ui.Modal):
-    def __init__(self, cog: "Comunidade", kind: str):
+    def __init__(self, cog: "Comunidade", kind: str, *, origin_sector: str = "community",
+                 default_game: str = ""):
         label = TIPOS.get(kind, ("Contribuição", "", 0))[0]
         super().__init__(title=f"Enviar: {label}"[:45], timeout=300)
         self.cog, self.kind = cog, kind
-        self.game = discord.ui.TextInput(
-            label="Jogo (obrigatório para desafios)" if kind == "challenge" else "Jogo / universo (opcional)",
-            placeholder="Ex.: Elden Ring", required=(kind == "challenge"), max_length=80
+        self.origin_sector = str(origin_sector or "community")[:40]
+        self.default_game = str(default_game or "")[:80]
+        game_label = (
+            "Jogo (obrigatório para desafios)" if kind == "challenge" else
+            "Plataforma ou contexto (opcional)" if kind == "game_suggestion" else
+            "Jogo / universo (opcional)"
         )
-        title_label = "Nome do jogo" if kind == "game_suggestion" else "Nome do desafio" if kind == "challenge" else "Título"
+        self.game = discord.ui.TextInput(
+            label=game_label,
+            placeholder="Ex.: Elden Ring", required=(kind == "challenge"), max_length=80,
+            default=self.default_game or None,
+        )
+        title_label = ("Nome do jogo" if kind == "game_suggestion" else
+                       "Nome do desafio" if kind == "challenge" else
+                       "Pergunta" if kind == "faq" else "Título")
         self.title_input = discord.ui.TextInput(
             label=title_label, placeholder="Use um nome claro e identificável", required=True, max_length=90
         )
-        summary_label = "Por que incluir este jogo?" if kind == "game_suggestion" else "Objetivo do desafio" if kind == "challenge" else "Resumo"
+        summary_label = ("Por que incluir este jogo?" if kind == "game_suggestion" else
+                         "Objetivo do desafio" if kind == "challenge" else
+                         "Resposta curta" if kind == "faq" else "Resumo")
         self.summary = discord.ui.TextInput(
             label=summary_label, placeholder="Explique em poucas linhas o que está propondo", required=True,
             style=discord.TextStyle.paragraph, max_length=350
         )
-        content_label = "Regras do desafio" if kind == "challenge" else "Conteúdo / explicação"
+        content_label = ("Regras do desafio" if kind == "challenge" else
+                         "Resposta detalhada" if kind == "faq" else "Conteúdo / explicação")
         self.content = discord.ui.TextInput(
             label=content_label, placeholder="Desenvolva a ideia, passos, regras ou argumentos...",
             required=True, style=discord.TextStyle.paragraph, min_length=40, max_length=1500
@@ -212,6 +226,7 @@ class ContributionModal(discord.ui.Modal):
             game_name=game, title=title, summary=summary, content=content,
             sources=sources_raw, spoiler_level=spoiler,
             challenge_mode=challenge_mode, challenge_goal=challenge_goal,
+            origin_sector=self.origin_sector, origin_channel_id=interaction.channel_id,
         )
         try:
             await self.cog.bot.db.log(interaction.user.id, "community_contribution_created", f"id={contribution_id} kind={self.kind}")
@@ -219,8 +234,60 @@ class ContributionModal(discord.ui.Modal):
             log.exception("Contribuição #%s salva, mas o log de auditoria falhou", contribution_id)
         await interaction.followup.send(
             f"📨 Sua contribuição **#{contribution_id} — {discord.utils.escape_markdown(title)}** foi enviada para análise.\n"
-            "Ela só será publicada e recompensada depois da aprovação da equipe. Você pode acompanhar o andamento em **Minhas contribuições**.",
+            "Ela só será publicada e recompensada depois da aprovação da equipe. Você pode acompanhar o andamento abaixo, sem sair do assunto em que estava.",
+            view=CommunitySubmissionReceiptView(
+                self.cog, self.kind, self.origin_sector, self.default_game, interaction.user.id
+            ),
             ephemeral=True,
+        )
+
+
+class CommunitySubmissionReceiptView(discord.ui.View):
+    """Pós-envio contextual: permite acompanhar o status ou enviar outra proposta semelhante."""
+
+    def __init__(self, cog: "Comunidade", kind: str, origin_sector: str,
+                 default_game: str, owner_id: int):
+        super().__init__(timeout=300)
+        self.cog = cog
+        self.kind = str(kind)
+        self.origin_sector = str(origin_sector)
+        self.default_game = str(default_game or "")
+        self.owner_id = int(owner_id)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message("Este acompanhamento pertence a quem enviou a contribuição.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Acompanhar minha contribuição", emoji="🗂️", style=discord.ButtonStyle.primary, row=0)
+    async def acompanhar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        rows = await self.cog.bot.db.listar_contribuicoes(
+            guild_id=interaction.guild_id, user_id=interaction.user.id, limit=10
+        )
+        embed = discord.Embed(title="🗂️ Minhas contribuições", color=config.COR_OURO)
+        if rows:
+            lines = []
+            for row in rows:
+                label = TIPOS.get(row["kind"], ("Contribuição", "", 0))[0]
+                lines.append(
+                    f"`#{row['id']}` **{discord.utils.escape_markdown(row['title'])}**\n"
+                    f"{label} · {STATUS_PT.get(row['status'], row['status'])} · {str(row['created_at'])[:16]}"
+                )
+                if row["status"] == "changes_requested" and row["review_note"]:
+                    lines.append(f"> Orientação: {discord.utils.escape_markdown(row['review_note'][:250])}")
+            embed.description = "\n\n".join(lines)[:4000]
+        else:
+            embed.description = "Você ainda não enviou contribuições."
+        embed.set_footer(text="O XP é creditado somente após aprovação. Use o seletor para responder a pedidos de ajuste.")
+        await interaction.response.edit_message(embed=embed, content=None, view=CommunityMyContributionsView(self.cog, rows))
+
+    @discord.ui.button(label="Enviar outra neste setor", emoji="➕", style=discord.ButtonStyle.success, row=0)
+    async def enviar_outra(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(
+            ContributionModal(
+                self.cog, self.kind, origin_sector=self.origin_sector, default_game=self.default_game
+            )
         )
 
 
@@ -282,6 +349,41 @@ class ContributionEditModal(discord.ui.Modal):
         )
 
 
+class CommunityContextContributionButton(discord.ui.Button):
+    """Botão contextual: abre o formulário correto sem tirar o membro do setor atual."""
+
+    def __init__(self, kind: str, origin_sector: str, label: str, emoji: str, *, row: int = 0,
+                 default_game: str = "", style: discord.ButtonStyle = discord.ButtonStyle.secondary):
+        custom_id = f"community:ctx:{origin_sector}:{kind}"[:100]
+        super().__init__(label=label[:80], emoji=emoji, style=style, row=row, custom_id=custom_id)
+        self.kind = str(kind)
+        self.origin_sector = str(origin_sector)
+        self.default_game = str(default_game or "")[:80]
+
+    async def callback(self, interaction: discord.Interaction):
+        cog = interaction.client.get_cog("Comunidade")
+        if cog is None:
+            return await interaction.response.send_message(
+                "O envio de contribuições está temporariamente indisponível. Tente novamente ou avise a equipe.",
+                ephemeral=True,
+            )
+        await interaction.response.send_modal(
+            ContributionModal(cog, self.kind, origin_sector=self.origin_sector, default_game=self.default_game)
+        )
+
+
+def adicionar_botao_contribuicao_contextual(
+    view: discord.ui.View, kind: str, origin_sector: str, label: str, emoji: str, *,
+    row: int = 0, default_game: str = "", style: discord.ButtonStyle = discord.ButtonStyle.secondary,
+) -> CommunityContextContributionButton:
+    """Anexa uma ação contextual a qualquer painel sem replicar lógica de submissão."""
+    button = CommunityContextContributionButton(
+        kind, origin_sector, label, emoji, row=row, default_game=default_game, style=style
+    )
+    view.add_item(button)
+    return button
+
+
 class ContributionCategoryView(discord.ui.View):
     def __init__(self, cog: "Comunidade", category: str):
         super().__init__(timeout=180)
@@ -325,11 +427,52 @@ class ContributionTypeSelect(discord.ui.Select):
         )
 
 
+class CommunityGuidesView(discord.ui.View):
+    """Painel persistente da Biblioteca de Guias e Tutoriais."""
+
+    def __init__(self, cog: "Comunidade", *, persistent: bool = False):
+        super().__init__(timeout=None if persistent else 300)
+        self.cog = cog
+        adicionar_botao_contribuicao_contextual(
+            self, "guide", "guias", "Enviar guia", "📘", row=0, style=discord.ButtonStyle.primary
+        )
+        adicionar_botao_contribuicao_contextual(
+            self, "tutorial", "guias", "Enviar tutorial", "🛠️", row=0, style=discord.ButtonStyle.primary
+        )
+        adicionar_botao_contribuicao_contextual(
+            self, "faq", "guias", "Sugerir pergunta", "❔", row=0, style=discord.ButtonStyle.success
+        )
+        arquivo = discord.ui.Button(
+            label="Consultar biblioteca", emoji="📚", style=discord.ButtonStyle.secondary,
+            row=1, custom_id="community:guides:archive",
+        )
+        async def _arquivo(interaction: discord.Interaction):
+            await self.cog.mostrar_arquivo(interaction, origin_sector="guias")
+        arquivo.callback = _arquivo
+        self.add_item(arquivo)
+        minhas = discord.ui.Button(
+            label="Minhas contribuições", emoji="🗂️", style=discord.ButtonStyle.secondary,
+            row=1, custom_id="community:guides:mine",
+        )
+        async def _minhas(interaction: discord.Interaction):
+            await self.cog.mostrar_minhas(interaction)
+        minhas.callback = _minhas
+        self.add_item(minhas)
+
+
 class CommunityHomeView(discord.ui.View):
     def __init__(self, cog: "Comunidade", *, persistent: bool = False):
         super().__init__(timeout=None if persistent else 300)
         self.cog = cog
         self.persistent = persistent
+        # Como este painel fica no canal de Lore, as ações mais usadas são diretas.
+        for kind, label, emoji in (
+            ("lore", "Publicar lore", "📜"), ("theory", "Publicar teoria", "🔍"),
+            ("discovery", "Registrar descoberta", "🧩"),
+            ("timeline", "Criar cronologia", "🕰️"), ("debate", "Abrir debate", "💬"),
+        ):
+            adicionar_botao_contribuicao_contextual(self, kind, "lore", label, emoji, row=2,
+                                                     style=discord.ButtonStyle.primary)
 
     @discord.ui.button(label="Contribuir", emoji="✍️", style=discord.ButtonStyle.primary, custom_id="community:home:contribute", row=0)
     async def contribute(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -423,17 +566,42 @@ class CommunityArchiveSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         if self.values[0] == "0":
-            return await interaction.response.send_message("Ainda não há publicações aprovadas no arquivo.", ephemeral=True)
+            return await interaction.response.edit_message(
+                content="Ainda não há publicações aprovadas. Use as ações desta tela para enviar a primeira contribuição.",
+                embed=None, view=self.view,
+            )
         row = await self.cog.bot.db.get_contribuicao(int(self.values[0]))
         if not row or row["status"] != "approved":
-            return await interaction.response.send_message("Esta publicação não está disponível. Atualize o arquivo.", ephemeral=True)
+            return await interaction.response.edit_message(
+                content="Esta publicação não está mais disponível. Atualize o arquivo ou envie uma nova contribuição pelos botões abaixo.",
+                embed=None, view=self.view,
+            )
         await self.cog.mostrar_publicacao(interaction, row)
 
 
 class CommunityArchiveView(discord.ui.View):
-    def __init__(self, cog: "Comunidade", rows):
+    """Arquivo com ações de criação alinhadas ao assunto de origem."""
+    def __init__(self, cog: "Comunidade", rows, origin_sector: str = "lore"):
         super().__init__(timeout=300)
         self.add_item(CommunityArchiveSelect(cog, rows))
+        if origin_sector == "guias":
+            for kind, label, emoji in (
+                ("guide", "Enviar guia", "📘"), ("tutorial", "Enviar tutorial", "🛠️"),
+                ("faq", "Sugerir pergunta", "❔"),
+            ):
+                adicionar_botao_contribuicao_contextual(
+                    self, kind, "guias", label, emoji, row=1,
+                    style=discord.ButtonStyle.success if kind == "faq" else discord.ButtonStyle.primary,
+                )
+        else:
+            for kind, label, emoji in (
+                ("lore", "Publicar lore", "📜"), ("theory", "Publicar teoria", "🔍"),
+                ("discovery", "Registrar descoberta", "🧩"), ("timeline", "Criar cronologia", "🕰️"),
+                ("debate", "Abrir debate", "💬"),
+            ):
+                adicionar_botao_contribuicao_contextual(
+                    self, kind, "lore", label, emoji, row=1, style=discord.ButtonStyle.primary,
+                )
 
 
 class CommunityReviewView(discord.ui.View):
@@ -955,6 +1123,7 @@ class Comunidade(commands.Cog):
 
     async def cog_load(self):
         self.bot.add_view(CommunityHomeView(self, persistent=True))
+        self.bot.add_view(CommunityGuidesView(self, persistent=True))
         # Recupera os botões persistentes das publicações após reinicialização.
         try:
             posts = await self.bot.db.listar_posts_comunitarios(1500)
@@ -975,8 +1144,19 @@ class Comunidade(commands.Cog):
         channel_id = await GuildConfig.get(self.bot.db, guild_id, key)
         return await get_text_channel(self.bot, channel_id) if channel_id else None
 
-    async def destino_contribuicao(self, guild_id: int, kind: str):
-        key = CANAL_POR_TIPO.get(kind, "community_channel")
+    async def destino_contribuicao(self, guild_id: int, kind: str, origin_sector: str = ""):
+        # O setor de origem orienta a fila/publicação quando o tipo é transversal (ex.: correção).
+        sector_channels = {
+            "runs": "soulslike_channel", "platinas": "platinas_channel",
+            "zerados": "zerados_channel", "coliseu": "colizeu_channel",
+            "lore": "lore_channel", "guias": "guides_channel",
+            "ajuda": "guides_channel", "loja": "community_channel",
+            "catalogo": "community_channel", "santuario": "community_channel",
+        }
+        key = sector_channels.get(str(origin_sector), CANAL_POR_TIPO.get(kind, "community_channel"))
+        # Tipos com destino fixo (jogo/desafio Soulslike, lore, guia) preservam o canal correto.
+        if kind not in {"correction", "idea", "item_suggestion"}:
+            key = CANAL_POR_TIPO.get(kind, key)
         channel = await self._channel(guild_id, key)
         if channel is None and key != "community_channel":
             channel = await self._channel(guild_id, "community_channel")
@@ -1095,7 +1275,9 @@ class Comunidade(commands.Cog):
                 duplicate = await self.bot.db._one("SELECT id FROM sl_challenges WHERE name=? COLLATE NOCASE", (str(row["title"]).strip(),))
                 if duplicate:
                     return await interaction.response.send_message("Já existe um desafio com esse nome no Livro dos Desafios. Solicite outro nome ou rejeite como duplicado.", ephemeral=True)
-            target_channel = await self.destino_contribuicao(int(row["guild_id"]), str(row["kind"]))
+            target_channel = await self.destino_contribuicao(
+                int(row["guild_id"]), str(row["kind"]), str(row["origin_sector"] or "")
+            )
             if target_channel is None:
                 return await interaction.response.send_message(
                     "Não aprovei a publicação porque o canal de destino não está configurado ou está inacessível. Configure `/adm` → Comunidade e tente novamente.", ephemeral=True
@@ -1201,7 +1383,9 @@ class Comunidade(commands.Cog):
         row = await self.bot.db.get_contribuicao(contribution_id)
         if not row or row["status"] != "approved":
             return await interaction.response.send_message("Somente contribuições aprovadas podem ser republicadas.", ephemeral=True)
-        channel = await self.destino_contribuicao(int(row["guild_id"]), str(row["kind"]))
+        channel = await self.destino_contribuicao(
+            int(row["guild_id"]), str(row["kind"]), str(row["origin_sector"] or "")
+        )
         if channel is None:
             return await interaction.response.send_message("O canal de destino continua indisponível. Revise as configurações em `/adm` → Comunidade.", ephemeral=True)
         await interaction.response.defer(ephemeral=True, thinking=True)
@@ -1287,6 +1471,8 @@ class Comunidade(commands.Cog):
         embed.set_footer(text=f"Arquivo da Comunidade · #{row['id']} · Autor: {row['user_id']} · Revisado pela equipe")
         owner = int(row["user_id"])
         embed.add_field(name="Contribuição de", value=f"<@{owner}>", inline=True)
+        if row["origin_sector"]:
+            embed.add_field(name="Setor de origem", value=_safe(str(row["origin_sector"]), 80), inline=True)
         if catalog_effect:
             embed.add_field(
                 name="Cadastro Soulslike",
@@ -1369,7 +1555,7 @@ class Comunidade(commands.Cog):
             embed.description = "\n".join(lines)[:4000]
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    async def mostrar_arquivo(self, interaction: discord.Interaction):
+    async def mostrar_arquivo(self, interaction: discord.Interaction, origin_sector: str = "lore"):
         rows = await self.bot.db.listar_contribuicoes(guild_id=interaction.guild_id, status="approved", limit=25)
         embed = discord.Embed(
             title="📚 Arquivo de Mundos e Biblioteca da Comunidade",
@@ -1384,7 +1570,7 @@ class Comunidade(commands.Cog):
                 label = TIPOS.get(row["kind"], ("Contribuição", "", 0))[0]
                 lines.append(f"`#{row['id']}` **{discord.utils.escape_markdown(row['title'])}** · {label} · {row['game_name'] or 'Geral'}")
             embed.add_field(name="Publicações recentes", value="\n".join(lines)[:1024], inline=False)
-        view = CommunityArchiveView(self, rows)
+        view = CommunityArchiveView(self, rows, origin_sector=origin_sector)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     async def mostrar_publicacao(self, interaction: discord.Interaction, row):
@@ -1430,6 +1616,40 @@ class Comunidade(commands.Cog):
         await interaction.response.send_message(
             "🔔 **Notificações de quem você acompanha**\nAtive ou desative cada tipo. O Mural de Atividades continua disponível mesmo quando as mensagens diretas estão desligadas.",
             view=view, ephemeral=True,
+        )
+
+    async def publicar_painel_guias(self, interaction: discord.Interaction):
+        from cogs.platinas import eh_moderador
+        if not await eh_moderador(interaction.user, self.bot.db):
+            return await interaction.response.send_message("Apenas a equipe pode publicar este painel.", ephemeral=True)
+        channel = await self._channel(interaction.guild_id, "guides_channel")
+        if channel is None:
+            return await interaction.response.send_message(
+                "Configure primeiro o canal de Guias e Tutoriais em `/adm` → Comunidade.", ephemeral=True
+            )
+        embed = discord.Embed(
+            title="📘 BIBLIOTECA DA COMUNIDADE — NARA",
+            description=(
+                "**Guias · Tutoriais · Soluções · Perguntas frequentes**\n\n"
+                "Encontre orientações preparadas por jogadores, compartilhe um passo a passo e ajude a manter os conteúdos atualizados.\n\n"
+                "Todas as contribuições passam pela revisão da equipe. Informe jogo, plataforma e versão quando isso fizer diferença."
+            ), color=config.COR_OURO,
+        )
+        embed.set_footer(text="NARA • Biblioteca da Comunidade • Conteúdo revisado pela equipe")
+        msg_id = await self.bot.db.get_kv(f"community_guides_panel:{interaction.guild_id}")
+        msg = None
+        if msg_id:
+            try:
+                msg = await channel.fetch_message(int(msg_id))
+            except (discord.NotFound, ValueError, TypeError):
+                msg = None
+        if msg:
+            await msg.edit(embed=embed, view=CommunityGuidesView(self, persistent=True))
+        else:
+            msg = await channel.send(embed=embed, view=CommunityGuidesView(self, persistent=True))
+        await self.bot.db.set_kv(f"community_guides_panel:{interaction.guild_id}", str(msg.id))
+        await interaction.response.send_message(
+            f"✅ Painel da Biblioteca de Guias publicado/atualizado em {channel.mention}.", ephemeral=True
         )
 
     async def publicar_painel(self, interaction: discord.Interaction):

@@ -358,8 +358,10 @@ class Soulslike(commands.Cog):
             "SELECT c.*,g.name AS game_name FROM sl_challenges c LEFT JOIN sl_games g ON g.id=c.game_id ORDER BY g.name,c.name"
         )
         if not jogos or not desafios:
+            motivo = "Ainda não existem jogos cadastrados." if not jogos else "Ainda não existem desafios cadastrados."
             return await substituir_ou_responder(
-                interaction, content="## 📜 Livro dos Desafios\n\nAinda não existem jogos ou desafios cadastrados.",
+                interaction,
+                content=f"## 📜 Livro dos Desafios\n\n{motivo} Use os botões abaixo para sugerir o que está faltando, sem sair desta tela.",
                 view=VoltarCentralView(self),
             )
         lines = ["## 📜 Livro dos Desafios", ""]
@@ -610,11 +612,21 @@ class Soulslike(commands.Cog):
 
 # ------------------------------------------------------------------ views
 class VoltarCentralView(discord.ui.View):
+    """Estado vazio do Soulslike: mantém o caminho de volta e oferece ações contextuais."""
     def __init__(self, cog):
         super().__init__(timeout=600)
         self.cog = cog
+        from cogs.comunidade import adicionar_botao_contribuicao_contextual
+        adicionar_botao_contribuicao_contextual(
+            self, "game_suggestion", "runs", "Sugerir jogo ausente", "🎮", row=1,
+            style=discord.ButtonStyle.success,
+        )
+        adicionar_botao_contribuicao_contextual(
+            self, "challenge", "runs", "Propor desafio", "⚔️", row=1,
+            style=discord.ButtonStyle.primary,
+        )
 
-    @discord.ui.button(label="Voltar à central", emoji="↩️", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Voltar à central", emoji="↩️", style=discord.ButtonStyle.secondary, row=0)
     async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(content=self.cog.texto_central(), embeds=[], view=CentralView(self.cog))
 
@@ -633,20 +645,36 @@ class CentralView(discord.ui.View):
     def __init__(self, cog):
         super().__init__(timeout=None)
         self.cog = cog
+        from cogs.comunidade import adicionar_botao_contribuicao_contextual
+        adicionar_botao_contribuicao_contextual(
+            self, "game_suggestion", "runs", "Sugerir jogo ausente", "🎮", row=2,
+            style=discord.ButtonStyle.success,
+        )
+        adicionar_botao_contribuicao_contextual(
+            self, "challenge", "runs", "Propor desafio", "⚔️", row=2,
+            style=discord.ButtonStyle.primary,
+        )
 
     @discord.ui.button(label="Registrar run", style=discord.ButtonStyle.danger, emoji="⚔️", custom_id="central:register", row=0)
     async def registrar(self, interaction: discord.Interaction, button: discord.ui.Button):
         jogos = await self.cog.bot.db._all("SELECT * FROM sl_games ORDER BY name")
         desafios = await self.cog.bot.db._all("SELECT * FROM sl_challenges ORDER BY name")
-        if not jogos or not desafios:
+        if not jogos:
             return await substituir_ou_responder(
-                interaction, content="## ⚔️ Ritual de entrada\n\nAinda não há jogos e desafios cadastrados.",
+                interaction,
+                content="## ⚔️ Ritual de entrada\n\nAinda não há jogos cadastrados. Você pode sugerir um jogo diretamente nesta tela; a equipe revisará a inclusão.",
                 view=VoltarCentralView(self.cog),
             )
         view = RegistrarView(self.cog, jogos, desafios, parent_interaction=interaction)
+        orientacao = (
+            "Ainda não há desafios cadastrados. Use **Sugerir desafio** nesta mesma tela para propor o primeiro."
+            if not desafios else
+            "Escolha o jogo e o desafio. Se não encontrar um desafio compatível, use **Sugerir desafio** aqui mesmo."
+        )
         await substituir_ou_responder(
             interaction,
-            content="## ⚔️ Ritual de entrada\n\nEscolha o jogo e o desafio. Depois, informe o tempo e a build; o comprovante será enviado por mensagem direta.",
+            content=("## ⚔️ Ritual de entrada\n\n" + orientacao +
+                     " Depois, informe o tempo e a build; o comprovante será enviado por mensagem direta."),
             view=view,
         )
 
@@ -656,8 +684,9 @@ class CentralView(discord.ui.View):
         jogos = await db._all("SELECT * FROM sl_games ORDER BY name")
         desafios = await db._all("SELECT * FROM sl_challenges ORDER BY name")
         if not jogos or not desafios:
+            motivo = "Ainda não há jogos cadastrados." if not jogos else "Ainda não há desafios cadastrados."
             return await substituir_ou_responder(
-                interaction, content="## 🏆 Hall da Fama\n\nAinda não há jogos ou desafios cadastrados.",
+                interaction, content=f"## 🏆 Hall da Fama\n\n{motivo} Você pode sugerir o conteúdo que está faltando nesta mesma tela.",
                 view=VoltarCentralView(self.cog),
             )
         g = jogos[0]
@@ -726,8 +755,9 @@ class RegistrarView(discord.ui.View):
         else:
             self.challenge_select.options.append(discord.SelectOption(label="Nenhum desafio disponível para este jogo", value="0"))
             self.challenge_select.disabled = True
+        from cogs.comunidade import CommunityContextContributionButton, adicionar_botao_contribuicao_contextual
         for item in list(self.children):
-            if isinstance(item, PageButton) or isinstance(item, VoltarCentralButton):
+            if isinstance(item, (PageButton, VoltarCentralButton, CommunityContextContributionButton)):
                 self.remove_item(item)
         linhas_usadas = set()
         if len(self.jogos) > 25:
@@ -738,6 +768,12 @@ class RegistrarView(discord.ui.View):
             self.add_item(PageButton(self, 'challenge', -1, row=3))
             self.add_item(PageButton(self, 'challenge', 1, row=3))
             linhas_usadas.add(3)
+        game_row = next((r for r in self.jogos if int(r["id"]) == self.game_id), None)
+        game_name = str(game_row["name"]) if game_row else ""
+        adicionar_botao_contribuicao_contextual(
+            self, "challenge", "runs", "Sugerir desafio", "⚔️", row=4,
+            default_game=game_name, style=discord.ButtonStyle.primary,
+        )
         linha_voltar = next(linha for linha in (2, 3, 4) if linha not in linhas_usadas)
         self.add_item(VoltarCentralButton(self.cog, row=linha_voltar))
 
@@ -746,14 +782,22 @@ class RegistrarView(discord.ui.View):
         self.challenge_page = 0
         self._filtrar_desafios()
         self._refresh_options()
+        game_row = next((r for r in self.jogos if int(r["id"]) == self.game_id), None)
+        game_name = str(game_row["name"]) if game_row else "este jogo"
         content = None if self.desafios else (
-            "Este jogo ainda não possui desafios globais ou específicos. Use `/nara` → Comunidade → Contribuir para sugerir um desafio."
+            f"Este jogo ainda não possui desafios compatíveis. Use **Sugerir desafio** nesta mesma tela para propor um novo para {game_name}."
         )
         await interaction.response.edit_message(content=content, view=self)
 
     async def _choose_challenge(self, interaction: discord.Interaction):
         if self.challenge_select.values[0] == "0":
-            return await interaction.response.send_message("Ainda não há desafios compatíveis com este jogo.", ephemeral=True)
+            game_row = next((r for r in self.jogos if int(r["id"]) == self.game_id), None)
+            game_name = str(game_row["name"]) if game_row else "este jogo"
+            return await interaction.response.edit_message(
+                content=(f"Este jogo ainda não possui desafios compatíveis. Use **Sugerir desafio** "
+                         f"nesta mesma tela para propor um para {game_name}."),
+                view=self,
+            )
         self.challenge_id = int(self.challenge_select.values[0])
         g = await self.cog.bot.db._one("SELECT * FROM sl_games WHERE id=?", (self.game_id,))
         c = await self.cog.bot.db._one("SELECT * FROM sl_challenges WHERE id=?", (self.challenge_id,))

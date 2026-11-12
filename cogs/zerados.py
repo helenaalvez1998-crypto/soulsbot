@@ -493,6 +493,10 @@ class ZeradosPainelView(discord.ui.View):
         self.sel_membro = discord.ui.UserSelect(placeholder="🔎 Consultar outro membro (opcional)", row=0)
         self.sel_membro.callback = self.trocar_membro
         self.add_item(self.sel_membro)
+        from cogs.comunidade import adicionar_botao_contribuicao_contextual
+        adicionar_botao_contribuicao_contextual(
+            self, "correction", "zerados", "Sugerir melhoria em Zerados", "💡", row=3,
+        )
 
     def _membro(self):
         return self.alvo or self.user
