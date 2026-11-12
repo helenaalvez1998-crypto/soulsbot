@@ -46,10 +46,149 @@ class BotaoPerfilGladiador(discord.ui.DynamicItem[discord.ui.Button], template=r
         await santuario.visitar(interaction, self.user_id)
 
 
+class BotaoAcaoColizeu(discord.ui.DynamicItem[discord.ui.Button], template=r"colizeu:acao:(?P<acao>comparar|atividade|arquivo|ranking)"):
+    """Ações sociais do painel público; o custom_id permite restaurar após reinício."""
+
+    ROTULOS = {
+        "comparar": ("Comparar gladiadores", "📊"),
+        "atividade": ("Mural de atividades", "📡"),
+        "arquivo": ("Arquivo de Mundos", "📚"),
+        "ranking": ("Explorar rankings", "🏆"),
+    }
+
+    def __init__(self, acao: str, label: str | None = None):
+        titulo, emoji = self.ROTULOS.get(acao, ("Abrir", "✨"))
+        super().__init__(discord.ui.Button(
+            label=(label or titulo)[:80], emoji=emoji,
+            style=discord.ButtonStyle.primary if acao == "comparar" else discord.ButtonStyle.secondary,
+            custom_id=f"colizeu:acao:{acao}", row=3,
+        ))
+        self.acao = acao
+
+    @classmethod
+    async def from_custom_id(cls, interaction: discord.Interaction, item: discord.ui.Button, match: re.Match[str]):
+        return cls(match["acao"], item.label)
+
+    async def callback(self, interaction: discord.Interaction):
+        if self.acao == "ranking":
+            platinas = interaction.client.get_cog("Platinas")
+            ranking = interaction.client.get_cog("Ranking")
+            if platinas is None or ranking is None:
+                return await interaction.response.send_message("Os rankings estão indisponíveis no momento.", ephemeral=True)
+            from cogs.platinas import RankingView
+            view = RankingView(platinas, "platinas", interaction.user, interaction.user)
+            texto = await ranking.texto_ranking("platinas")
+            return await interaction.response.send_message(content=texto, view=view, ephemeral=True)
+        if self.acao == "comparar":
+            view = CompararGladiadorView(interaction.client)
+            embed = discord.Embed(
+                title="📊 Comparar gladiadores",
+                description="Escolha um jogador do ranking para comparar estatísticas oficiais. A comparação usa somente registros aprovados.",
+                color=config.COR_OURO,
+            )
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            return
+        comunidade = interaction.client.get_cog("Comunidade")
+        if comunidade is None:
+            return await interaction.response.send_message("O módulo de comunidade está indisponível.", ephemeral=True)
+        if self.acao == "atividade":
+            return await comunidade.mostrar_atividades(interaction)
+        return await comunidade.mostrar_arquivo(interaction)
+
+
+class CompararGladiadorSelect(discord.ui.Select):
+    def __init__(self, bot, rows):
+        self.bot = bot
+        options = []
+        for row in rows[:25]:
+            member = None
+            # Cache local é suficiente para rótulos; IDs continuam sendo a chave real.
+            for guild in bot.guilds:
+                member = guild.get_member(int(row["user_id"]))
+                if member:
+                    break
+            name = member.display_name if member else f"Jogador {row['user_id']}"
+            options.append(discord.SelectOption(
+                label=name[:100], value=str(row["user_id"]),
+                description=f"{int(row['platinas'])} platinas · {int(row['xp'])} XP"[:100],
+            ))
+        if not options:
+            options = [discord.SelectOption(label="Ainda não há gladiadores no ranking", value="0")]
+        super().__init__(placeholder="Escolha um gladiador para comparar", min_values=1, max_values=1,
+                         options=options, disabled=not rows)
+
+    async def callback(self, interaction: discord.Interaction):
+        if self.values[0] == "0":
+            return await interaction.response.send_message("O ranking ainda não tem jogadores suficientes.", ephemeral=True)
+        alvo = int(self.values[0])
+        if alvo == interaction.user.id:
+            return await interaction.response.send_message("Escolha outro jogador para comparar com você.", ephemeral=True)
+        db = self.bot.db
+        try:
+            atual_user = await db.get_user(interaction.user.id)
+            alvo_user = await db.get_user(alvo)
+            atual = {
+                "platinas": await db.contar_platinas(interaction.user.id),
+                "zerados": await db.contar_zerados(interaction.user.id),
+                **(await db.stats_runs(interaction.user.id)),
+                "xp": int(atual_user["xp"] or 0),
+            }
+            outro = {
+                "platinas": await db.contar_platinas(alvo),
+                "zerados": await db.contar_zerados(alvo),
+                **(await db.stats_runs(alvo)),
+                "xp": int(alvo_user["xp"] or 0),
+            }
+        except Exception:
+            logging.exception("Falha ao comparar jogadores no Coliseu")
+            return await interaction.response.send_message("Não consegui calcular a comparação agora.", ephemeral=True)
+        linhas = [
+            f"**Platinas:** {atual['platinas']} × {outro['platinas']}",
+            f"**Jogos zerados:** {atual['zerados']} × {outro['zerados']}",
+            f"**Runs aprovadas:** {atual['runs']} × {outro['runs']}",
+            f"**Recordes de categoria:** {atual['recordes']} × {outro['recordes']}",
+            f"**XP:** {atual['xp']:,} × {outro['xp']:,}",
+        ]
+        embed = discord.Embed(
+            title="⚔️ Comparação de gladiadores",
+            description=f"**Você** × <@{alvo}>\n\n" + "\n".join(linhas),
+            color=config.COR_OURO,
+        )
+        embed.set_footer(text="Estatísticas de registros aprovados. Não há pontuação social nem vencedor absoluto.")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+class CompararGladiadorView(discord.ui.View):
+    def __init__(self, bot):
+        super().__init__(timeout=180)
+        self.bot = bot
+        rows = []
+        # A query é carregada em callback por um botão para manter o construtor síncrono.
+        button = discord.ui.Button(label="Carregar jogadores", emoji="🔎", style=discord.ButtonStyle.primary)
+        async def carregar(interaction: discord.Interaction):
+            ranking = await bot.db.listar_gladiadores_comparacao(25)
+            if not ranking:
+                return await interaction.response.send_message("Ainda não há jogadores no ranking de platinas.", ephemeral=True)
+            await interaction.response.edit_message(
+                embed=discord.Embed(title="📊 Escolha um gladiador", description="Selecione alguém para comparar com suas estatísticas.", color=config.COR_OURO),
+                view=CompararGladiadorSelectView(bot, ranking),
+            )
+        button.callback = carregar
+        self.add_item(button)
+
+
+class CompararGladiadorSelectView(discord.ui.View):
+    def __init__(self, bot, rows):
+        super().__init__(timeout=180)
+        self.add_item(CompararGladiadorSelect(bot, rows))
+
+
 def _view_podio(nomes: list[tuple[int, str]]) -> discord.ui.View:
     view = discord.ui.View(timeout=None)
     for linha, (uid, nome) in enumerate(nomes):  # um botão por linha, na ordem dos cards
         view.add_item(BotaoPerfilGladiador(uid, nome, row=linha))
+    for acao in ("comparar", "atividade", "arquivo", "ranking"):
+        view.add_item(BotaoAcaoColizeu(acao))
     return view
 
 
@@ -62,11 +201,11 @@ class Colizeu(commands.Cog):
         self._catalogos_cache: dict[int, tuple[tuple, bytes]] = {}
 
     async def cog_load(self):
-        self.bot.add_dynamic_items(BotaoPerfilGladiador)
+        self.bot.add_dynamic_items(BotaoPerfilGladiador, BotaoAcaoColizeu)
         self.loop_atualizar.start()
 
     async def cog_unload(self):
-        self.bot.remove_dynamic_items(BotaoPerfilGladiador)
+        self.bot.remove_dynamic_items(BotaoPerfilGladiador, BotaoAcaoColizeu)
         self.loop_atualizar.cancel()
 
     @tasks.loop(minutes=10)
@@ -211,7 +350,7 @@ class Colizeu(commands.Cog):
         if not top:
             return (
                 cabecalho + "\n\n**A arena ainda está vazia.** Nenhuma platina aprovada foi registrada. Use `/nara` e abra **Coliseu** para começar. Alguém precisa inaugurar esse placar.",
-                [], discord.ui.View(timeout=None), [],
+                [], _view_podio([]), [],
             )
 
         embeds: list[discord.Embed] = []

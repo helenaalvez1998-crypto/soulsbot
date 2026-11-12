@@ -151,7 +151,15 @@ class RevisaoView(discord.ui.View):
                     ]
                     if novo > antigo:
                         linhas.extend(["", f"⬆️ **Novo nível:** {novo} — {patente_por_nivel(novo)}"])
-                    await canal.send("\n".join(linhas))
+                    mensagem_publica = await canal.send("\n".join(linhas), allowed_mentions=discord.AllowedMentions.none())
+                    comunidade = self.bot.get_cog("Comunidade")
+                    if comunidade:
+                        try:
+                            await comunidade.registrar_publicacao_social(
+                                interaction.guild, canal, mensagem_publica, "platina", int(platina_id), int(user_id)
+                            )
+                        except Exception:
+                            log.exception("Platina #%s publicada, mas as interações sociais não foram anexadas", platina_id)
             except Exception:
                 logging.getLogger("colizeu").exception(
                     "Platina #%s aprovada, mas falhou a configuração/publicação do anúncio", platina_id
@@ -221,7 +229,7 @@ class RevisaoView(discord.ui.View):
                     logging.getLogger("colizeu").exception("Falha ao atualizar o santuário")
         elif membro:
             try:
-                await membro.send(f"Sua platina de **{p['game']}** foi rejeitada. Fale com a moderação se tiver dúvidas.")
+                await membro.send(f"Sua platina de **{p['game']}** foi rejeitada. Envie uma mensagem à moderação se tiver dúvidas.")
             except discord.Forbidden:
                 pass
 

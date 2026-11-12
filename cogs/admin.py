@@ -56,6 +56,8 @@ class ModeracaoCategoriaSelect(discord.ui.Select):
                 discord.SelectOption(label="Platinas", value="platinas", description="Conquistas enviadas para validação", emoji="🏆"),
                 discord.SelectOption(label="Runs e desafios", value="runs", description="Tempos e resultados Soulslike", emoji="⚔️"),
                 discord.SelectOption(label="Jogos zerados", value="zerados", description="Registros de jogos concluídos", emoji="🎮"),
+                discord.SelectOption(label="Contribuições", value="contribuicoes", description="Lore, teorias, guias, desafios e ideias", emoji="📚"),
+                discord.SelectOption(label="Sinalizações", value="denuncias", description="Publicações reportadas pela comunidade", emoji="🚩"),
             ],
         )
 
@@ -93,10 +95,11 @@ class ModeracaoSolicitacaoSelect(discord.ui.Select):
 
 class ModeracaoPainelView(discord.ui.View):
     """Fila unificada que navega até o cartão original no canal de aprovação."""
-    def __init__(self, bot, user_id: int, categoria: str = "all"):
+    def __init__(self, bot, user_id: int, categoria: str = "all", guild_id: int | None = None):
         super().__init__(timeout=600)
         self.bot = bot
         self.user_id = user_id
+        self.guild_id = int(guild_id) if guild_id else None
         self.categoria = categoria
         self.registros = []
         self.pagina = 0
@@ -135,9 +138,46 @@ class ModeracaoPainelView(discord.ui.View):
                 "FROM zerados WHERE status='pending' ORDER BY created_at ASC, id ASC LIMIT 100"
             )
             registros.extend({**dict(r), "tipo":"zerados", "tipo_label":"Jogo zerado", "emoji":"🎮"} for r in rows)
+        if self.categoria in ("all", "contribuicoes"):
+            rows = await db._all(
+                "SELECT id, user_id, title AS titulo, kind, game_name, status, published_message_id, created_at AS criado "
+                "FROM community_contributions WHERE guild_id=? AND (status IN ('pending','changes_requested') "
+                "OR (status='approved' AND published_message_id IS NULL)) "
+                "ORDER BY CASE WHEN status='approved' THEN 1 ELSE 0 END, created_at ASC, id ASC LIMIT 100",
+                (self.guild_id or 0,),
+            )
+            registros.extend({**dict(r), "tipo":"contribuicoes",
+                              "tipo_label":("Publicação pendente" if r["status"] == "approved" else f"Contribuição · {r['kind']}"),
+                              "emoji":"🔁" if r["status"] == "approved" else "📚"} for r in rows)
+        if self.categoria in ("all", "denuncias"):
+            rows = await db.listar_denuncias_comunitarias(self.guild_id or 0, "pending", 100)
+            for report in rows:
+                target = f"{report['target_type']} #{report['target_id']}"
+                if str(report["target_type"]).startswith("contrib_"):
+                    contribution = await db.get_contribuicao(int(report["target_id"]))
+                    if contribution:
+                        target = f"{contribution['title']} · {report['target_type'].removeprefix('contrib_')}"
+                elif report["target_type"] == "platina":
+                    item = await db._one("SELECT game FROM platinas WHERE id=?", (int(report["target_id"]),))
+                    target = f"Platina · {item['game']}" if item else target
+                elif report["target_type"] == "zerado":
+                    item = await db._one("SELECT game FROM zerados WHERE id=?", (int(report["target_id"]),))
+                    target = f"Jogo zerado · {item['game']}" if item else target
+                elif report["target_type"] == "run":
+                    item = await db._one(
+                        "SELECT g.name AS game,c.name AS challenge FROM sl_runs r JOIN sl_games g ON g.id=r.game_id JOIN sl_challenges c ON c.id=r.challenge_id WHERE r.id=?",
+                        (int(report["target_id"]),),
+                    )
+                    target = f"Run · {item['game']} · {item['challenge']}" if item else target
+                registros.append({
+                    **dict(report), "titulo": target, "criado": report["created_at"],
+                    "membro": f"ID {report['reporter_id']}", "tipo": "denuncias",
+                    "tipo_label": f"Sinalização · {report['reason']}", "emoji": "🚩",
+                })
         registros.sort(key=lambda r: (str(r.get("criado") or ""), int(r["id"])))
         for item in registros:
-            item["membro"] = f"ID {item['user_id']}"
+            autor_id = item.get("user_id", item.get("reporter_id", 0))
+            item["membro"] = f"ID {autor_id}"
             item["criado"] = str(item.get("criado") or "Data não informada")[:16]
         return registros
 
@@ -158,7 +198,7 @@ class ModeracaoPainelView(discord.ui.View):
             ), color=COR_PAINEL,
         )
         embed.add_field(name="Na lista atual", value=f"**{pendentes}** solicitação(ões) exibida(s)", inline=True)
-        embed.add_field(name="Categoria", value={"all":"Todas", "platinas":"Platinas", "runs":"Runs e desafios", "zerados":"Jogos zerados"}.get(self.categoria, "Todas"), inline=True)
+        embed.add_field(name="Categoria", value={"all":"Todas", "platinas":"Platinas", "runs":"Runs e desafios", "zerados":"Jogos zerados", "contribuicoes":"Contribuições", "denuncias":"Sinalizações"}.get(self.categoria, "Todas"), inline=True)
         embed.add_field(name="Página", value=f"{self.pagina + 1} · {max(1, (len(self.registros) + 24) // 25)}", inline=True)
         if pagina_registros:
             linhas = []
@@ -185,6 +225,75 @@ class ModeracaoPainelView(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=self)
 
     async def abrir_solicitacao(self, interaction: discord.Interaction, tipo: str, registro_id: int):
+        if tipo == "denuncias":
+            report = await self.bot.db.get_denuncia_comunitaria(registro_id)
+            if report is None or report["status"] != "pending" or int(report["guild_id"]) != int(self.guild_id or 0):
+                return await interaction.response.send_message("Esta sinalização já foi processada ou pertence a outro servidor. Atualize a fila.", ephemeral=True)
+            from cogs.comunidade import CommunityReportReviewView
+            target_type, target_id = str(report["target_type"]), int(report["target_id"])
+            post = await self.bot.db.get_post_comunitario(int(report["guild_id"]), target_type, target_id)
+            details = f"**Tipo:** `{target_type}` · **Registro:** `#{target_id}`\n**Canal:** <#{post['channel_id']}>" if post else f"**Tipo:** `{target_type}` · **Registro:** `#{target_id}`"
+            if target_type.startswith("contrib_"):
+                content = await self.bot.db.get_contribuicao(target_id)
+                if content:
+                    details += f"\n**Título:** {discord.utils.escape_markdown(content['title'])}\n**Conteúdo:**\n{str(content['content'])[:1800]}"
+            embed = discord.Embed(
+                title=f"🚩 Sinalização comunitária #{registro_id}",
+                description=(f"**Enviada por:** <@{report['reporter_id']}>\n**Motivo:** {discord.utils.escape_markdown(report['reason'])}\n"
+                             f"**Detalhes:**\n{report['details']}\n\n{details}"),
+                color=discord.Color.orange(),
+            )
+            embed.set_footer(text="Ocultar remove apenas a publicação; registros de runs/platinas e auditoria são preservados.")
+            comunidade = self.bot.get_cog("Comunidade")
+            if comunidade is None:
+                return await interaction.response.send_message("O módulo de comunidade não está carregado.", ephemeral=True)
+            return await interaction.response.send_message(embed=embed, view=CommunityReportReviewView(comunidade, registro_id), ephemeral=True)
+        if tipo == "contribuicoes":
+            row = await self.bot.db.get_contribuicao(registro_id)
+            if row is None or (self.guild_id and int(row["guild_id"]) != self.guild_id):
+                return await interaction.response.send_message("Esta contribuição foi removida ou pertence a outro servidor. Atualize a fila.", ephemeral=True)
+            from cogs.comunidade import CommunityReviewView, CommunityPublishRetryView, TIPOS, STATUS_PT
+            if row["status"] == "approved" and not row["published_message_id"]:
+                embed = discord.Embed(
+                    title=f"🔁 Republicação pendente · #{registro_id}",
+                    description=(f"**Título:** {discord.utils.escape_markdown(row['title'])}\n"
+                                 f"**Tipo:** {TIPOS.get(row['kind'], ('Contribuição','',''))[0]}\n"
+                                 "A proposta já foi aprovada e o XP foi contabilizado. A publicação no canal não foi concluída; tente novamente após conferir as permissões."),
+                    color=discord.Color.orange(),
+                )
+                return await interaction.response.send_message(embed=embed, view=CommunityPublishRetryView(self.bot.get_cog("Comunidade"), registro_id), ephemeral=True)
+            if row["status"] not in ("pending", "changes_requested"):
+                return await interaction.response.send_message("Esta contribuição já foi processada. Atualize a fila.", ephemeral=True)
+            label = TIPOS.get(row["kind"], ("Contribuição", "", 0))[0]
+            embed = discord.Embed(
+                title=f"📚 Revisão de contribuição #{registro_id} · {label}",
+                description=(
+                    f"**Título:** {discord.utils.escape_markdown(row['title'])}\n"
+                    f"**Autor:** <@{row['user_id']}>\n"
+                    f"**Jogo/universo:** {discord.utils.escape_markdown(row['game_name'] or 'Não informado')}\n"
+                    f"**Status:** {STATUS_PT.get(row['status'], row['status'])}"
+                ),
+                color=COR_PAINEL,
+            )
+            if row["summary"]:
+                embed.add_field(name="Resumo", value=str(row["summary"])[:1000], inline=False)
+            texto = str(row["content"] or "")
+            embed.description = (embed.description or "") + "\n\n**Conteúdo integral**\n" + texto[:2500]
+            if row["sources"]:
+                embed.add_field(name="Fontes e referências", value=str(row["sources"])[:1000], inline=False)
+            embed.add_field(name="Spoilers", value=str(row["spoiler_level"]), inline=True)
+            embed.add_field(name="XP previsto", value=str(TIPOS.get(row["kind"], ("", "", 10))[2]), inline=True)
+            if row["kind"] == "challenge":
+                modo = (f"Coletivo · meta de {int(row['challenge_goal'] or 0)} conclusões"
+                        if row["challenge_mode"] == "collective" else "Individual")
+                embed.add_field(name="Modalidade", value=modo, inline=True)
+            if row["review_note"]:
+                embed.add_field(name="Orientação anterior", value=str(row["review_note"])[:1000], inline=False)
+            embed.set_footer(text="Aprovação publica no canal configurado e concede XP dentro do limite semanal.")
+            comunidade = self.bot.get_cog("Comunidade")
+            if comunidade is None:
+                return await interaction.response.send_message("O módulo de contribuições não está carregado. Verifique os logs de inicialização.", ephemeral=True)
+            return await interaction.response.send_message(embed=embed, view=CommunityReviewView(comunidade, registro_id), ephemeral=True)
         tabela = {"platinas": ("platinas", "🏆 Platina"), "runs": ("sl_runs", "⚔️ Run/Desafio"), "zerados": ("zerados", "🎮 Jogo zerado")}
         if tipo not in tabela:
             return await interaction.response.send_message("Categoria inválida.", ephemeral=True)
@@ -833,6 +942,15 @@ ADMIN_CATEGORIAS = {
             ("sl_invalidar", "Invalidar run", "🚫"),
         ],
     },
+    "comunidade": {
+        "titulo": "📚 Contribuições e Arquivo de Mundos",
+        "descricao": "Controle os canais de Lore, Guias e publicações comunitárias, ajuste recompensas e publique/atualize o painel do Arquivo de Mundos.",
+        "acoes": [
+            ("community_config", "Configurar canais e XP", "⚙️"),
+            ("community_publish", "Publicar painel do Arquivo de Mundos", "📚"),
+            ("moderacao", "Revisar contribuições pendentes", "🛡️"),
+        ],
+    },
     "economia": {
         "titulo": "🪙 Economia e progressão",
         "descricao": "Consulte e configure os parâmetros de XP, Denários e recompensas.",
@@ -929,6 +1047,7 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
         if not await eh_moderador(interaction.user, bot.db):
             return await interaction.response.send_message("Seu cargo não tem permissão para moderar solicitações.", ephemeral=True)
         view = ModeracaoPainelView(bot, interaction.user.id)
+        view.guild_id = int(interaction.guild_id) if interaction.guild_id else None
         embed = await view.embed_painel()
         # ModeracaoPainelView.__init__ já adiciona o filtro de categorias na linha 0.
         # Não adicionar uma segunda instância: dois Select ocupam 10 posições na mesma linha.
@@ -946,6 +1065,15 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
         return await _abrir_jogos(interaction, bot)
     if action == "economy":
         return await _abrir_economia(interaction, bot)
+    if action == "community_config":
+        return await _abrir_secao(
+            interaction, bot, "community", "📚 Configurações de contribuições e Arquivo de Mundos"
+        )
+    if action == "community_publish":
+        cog = bot.get_cog("Comunidade")
+        if cog is None:
+            return await interaction.response.send_message("O módulo de contribuições não está carregado.", ephemeral=True)
+        return await cog.publicar_painel(interaction)
     if action == "personalizacao":
         return await _abrir_personalizacao(interaction, bot)
     if action == "dashboard":
@@ -1228,6 +1356,7 @@ class AdminMainView(discord.ui.View):
             ("diagnostico", "Diagnóstico", "📊"),
             ("paineis", "Painéis", "📌"),
             ("catalogos", "Catálogos", "📚"),
+            ("comunidade", "Comunidade", "🌑"),
             ("radar", "Radar e conteúdo", "📡"),
             ("cargos", "Cargos e acesso", "🎭"),
             ("inteligencia", "NARA IA", "🤖"),

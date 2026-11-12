@@ -292,7 +292,15 @@ class Zerados(commands.Cog):
             if novo_nivel:
                 embed.add_field(name="⬆️ Novo nível", value=f"{novo_nivel} — {patente_por_nivel(novo_nivel)}", inline=False)
             embed.set_footer(text=f"Registro #{registro['id']} · aprovado pela moderação")
-            await canal.send(embed=embed)
+            mensagem_publica = await canal.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+            comunidade = self.bot.get_cog("Comunidade")
+            if comunidade:
+                try:
+                    await comunidade.registrar_publicacao_social(
+                        interaction.guild, canal, mensagem_publica, "zerado", int(registro["id"]), int(registro["user_id"])
+                    )
+                except Exception:
+                    log.exception("Zerado #%s publicado, mas as interações sociais não foram anexadas", registro.get("id"))
             return True
         except Exception:
             log.exception("Falha ao anunciar zerado aprovado #%s", registro.get("id"))
@@ -450,7 +458,7 @@ class ZeradoRevisaoView(discord.ui.View):
             try:
                 await membro.send(
                     f"Seu registro de jogo zerado **{pendente['game']}** foi rejeitado pela moderação. "
-                    "Você pode conferir os dados e falar com a equipe se precisar de esclarecimentos."
+                    "Você pode conferir os dados e enviar uma mensagem à equipe se precisar de esclarecimentos."
                 )
             except discord.Forbidden:
                 pass

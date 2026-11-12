@@ -115,10 +115,13 @@ MEMBROS_CATEGORIAS = {
         ],
     },
     "comunidade": {
-        "titulo": "📡 Comunidade e novidades",
-        "descricao": "Acompanhe as novidades da comunidade, transmissões, vídeos, notícias de games e ofertas publicadas nos canais configurados do servidor.",
+        "titulo": "📡 Comunidade e contribuições",
+        "descricao": "Participe da comunidade, publique Lore e Teorias, envie guias e acompanhe suas contribuições. Tudo passa por revisão humana antes da publicação.",
         "acoes": [
-            ("ajuda", "Central de ajuda", "📖", discord.ButtonStyle.primary),
+            ("community_home", "Central de Contribuições", "💡", discord.ButtonStyle.primary),
+            ("community_archive", "Arquivo de Mundos", "📚", discord.ButtonStyle.secondary),
+            ("community_mine", "Minhas contribuições", "🗂️", discord.ButtonStyle.secondary),
+            ("ajuda", "Central de ajuda", "📖", discord.ButtonStyle.secondary),
             ("perfil", "Meu perfil e atividade", "👤", discord.ButtonStyle.secondary),
             ("santuario", "Meu Santuário", "🏛️", discord.ButtonStyle.success),
         ],
@@ -293,6 +296,22 @@ async def _executar_acao_membro(
             return await interaction.response.send_message("Os catálogos ainda não estão disponíveis.", ephemeral=True)
         return await cog.abrir_membros(interaction)
 
+    if action in ("community_home", "community_archive", "community_mine"):
+        cog = bot.get_cog("Comunidade")
+        if cog is None:
+            return await interaction.response.send_message("O sistema de contribuições está indisponível no momento.", ephemeral=True)
+        if action == "community_archive":
+            return await cog.mostrar_arquivo(interaction)
+        if action == "community_mine":
+            return await cog.mostrar_minhas(interaction)
+        from cogs.comunidade import CommunityHomeView
+        embed = discord.Embed(
+            title="💡 Contribuições da Comunidade",
+            description="Publique lore, teorias, descobertas, guias, tutoriais e propostas para o NARA. Todos os envios passam por aprovação humana antes de aparecerem nos canais oficiais.",
+            color=config.COR_OURO,
+        )
+        return await interaction.response.edit_message(content=None, embed=embed, view=CommunityHomeView(cog))
+
     return await interaction.response.send_message("Esta opção ainda não está disponível. Volte à central e escolha outra categoria.", ephemeral=True)
 
 
@@ -430,7 +449,7 @@ class PainelMembros(commands.Cog):
                 "👤 **Meu perfil:** veja suas estatísticas e posições nos rankings.\n"
                 "🏛️ **Meu Santuário:** personalize seu espaço e galeria de platinas.\n"
                 "🧠 **Preferências:** acesse suas opções pessoais da Nara.\n"
-                "📡 **Comunidade:** acompanhe vídeos, lives, notícias e ofertas nos canais do servidor.\n"
+                "📡 **Comunidade:** acompanhe novidades, contribua com Lore, Teorias e Guias no Arquivo de Mundos.\n"
                 "❔ **Ajuda e suporte:** encontre tutoriais e orientações.\n\n"
                 "**Como usar:** escolha uma categoria para abrir as ações relacionadas. "
                 "Cada submenu explica o que você pode fazer. Não precisa decorar tudo de uma vez.\n\n"

@@ -167,6 +167,8 @@ class Soulslike(commands.Cog):
         c = await db._one("SELECT * FROM sl_challenges WHERE id=?", (chal_id,))
         if not g or not c:
             return "## ⚔️ Hall da Fama\n\nJogo ou desafio não encontrado. Atualize a central."
+        if c["game_id"] is not None and int(c["game_id"]) != int(game_id):
+            return "## ⚔️ Hall da Fama\n\nEste desafio pertence a outro jogo. Escolha um desafio compatível."
         rows = await db._all(SQL_RANKING, (game_id, chal_id, 10))
         partes = [f"## ⚔️ {g['name']} — {c['name']}"]
         if c["rules"]:
@@ -352,7 +354,9 @@ class Soulslike(commands.Cog):
 
     async def mostrar_desafios(self, interaction: discord.Interaction):
         jogos = await self.bot.db._all("SELECT * FROM sl_games ORDER BY name")
-        desafios = await self.bot.db._all("SELECT * FROM sl_challenges ORDER BY name")
+        desafios = await self.bot.db._all(
+            "SELECT c.*,g.name AS game_name FROM sl_challenges c LEFT JOIN sl_games g ON g.id=c.game_id ORDER BY g.name,c.name"
+        )
         if not jogos or not desafios:
             return await substituir_ou_responder(
                 interaction, content="## 📜 Livro dos Desafios\n\nAinda não existem jogos ou desafios cadastrados.",
@@ -361,7 +365,8 @@ class Soulslike(commands.Cog):
         lines = ["## 📜 Livro dos Desafios", ""]
         for c in desafios[:15]:
             regras = c['rules'] or 'Sem regras adicionais cadastradas.'
-            lines.append(f"**{c['name']}**\n{regras[:250]}")
+            escopo = c["game_name"] or "Global"
+            lines.append(f"**{c['name']}** · _{escopo}_\n{regras[:220]}")
         lines.extend(["", "### 🎮 Jogos disponíveis"])
         lines.extend(f"• {g['name']}" for g in jogos[:25])
         if len(desafios) > 15 or len(jogos) > 25:
@@ -582,7 +587,15 @@ class Soulslike(commands.Cog):
                     linhas.append(f"[📸 Ver comprovante]({run['proof_url']})")
                 if vezes > 1:
                     linhas.append(f"**Runs concluídas:** 🔁 {vezes}x")
-                await canal.send("\n".join(linhas))
+                mensagem_publica = await canal.send("\n".join(linhas), allowed_mentions=discord.AllowedMentions.none())
+                comunidade = self.bot.get_cog("Comunidade")
+                if comunidade:
+                    try:
+                        await comunidade.registrar_publicacao_social(
+                            interaction.guild, canal, mensagem_publica, "run", int(run["id"]), int(run["user_id"])
+                        )
+                    except Exception:
+                        log.exception("Run #%s publicada, mas as interações sociais não foram anexadas", run["id"])
         except Exception:
             log.exception("Run #%s aprovada, mas falhou a publicação no canal Soulslike", run["id"])
 
@@ -647,7 +660,11 @@ class CentralView(discord.ui.View):
                 interaction, content="## 🏆 Hall da Fama\n\nAinda não há jogos ou desafios cadastrados.",
                 view=VoltarCentralView(self.cog),
             )
-        g, c = jogos[0], desafios[0]
+        g = jogos[0]
+        desafios_compativeis = [c for c in desafios if c["game_id"] is None or int(c["game_id"]) == int(g["id"])]
+        if not desafios_compativeis:
+            return await substituir_ou_responder(interaction, content="## 🏆 Hall da Fama\n\nEste jogo ainda não possui desafios compatíveis.", view=VoltarCentralView(self.cog))
+        c = desafios_compativeis[0]
         await substituir_ou_responder(
             interaction, content=await self.cog.texto_ranking(g['id'], c['id']),
             view=RankingView(self.cog, jogos, desafios, g['id'], c['id']),
@@ -668,31 +685,47 @@ class RegistrarView(discord.ui.View):
         self.cog = cog
         self.parent_interaction = parent_interaction
         self.jogos = jogos
-        self.desafios = desafios
-        self.game_id = jogos[0]['id']
-        self.challenge_id = desafios[0]['id']
+        self.todos_desafios = desafios
+        self.game_id = int(jogos[0]['id'])
+        self.challenge_id = None
         self.game_page = 0
         self.challenge_page = 0
+        self.desafios = []
         self.game_select = discord.ui.Select(placeholder="1. Escolha o jogo", min_values=1, max_values=1, row=0)
-        self.challenge_select = discord.ui.Select(placeholder="2. Escolha o desafio", min_values=1, max_values=1, row=1)
+        self.challenge_select = discord.ui.Select(placeholder="2. Escolha o desafio compatível", min_values=1, max_values=1, row=1)
         self.game_select.callback = self._choose_game
         self.challenge_select.callback = self._choose_challenge
         self.add_item(self.game_select)
         self.add_item(self.challenge_select)
+        self._filtrar_desafios()
         self._refresh_options()
+
+    def _filtrar_desafios(self):
+        self.desafios = [
+            row for row in self.todos_desafios
+            if row["game_id"] is None or int(row["game_id"]) == self.game_id
+        ]
+        ids = {int(row["id"]) for row in self.desafios}
+        if self.challenge_id not in ids:
+            self.challenge_id = int(self.desafios[0]["id"]) if self.desafios else None
+        self.challenge_page = min(self.challenge_page, max(0, (len(self.desafios) - 1) // 25))
 
     def _refresh_options(self):
         self.game_select.options.clear()
         self.game_select.options.extend(
-            discord.SelectOption(label=str(r['name'])[:100], value=str(r['id']), default=r['id'] == self.game_id)
+            discord.SelectOption(label=str(r['name'])[:100], value=str(r['id']), default=int(r['id']) == self.game_id)
             for r in self.jogos[self.game_page * 25:(self.game_page + 1) * 25]
         )
         self.challenge_select.options.clear()
-        self.challenge_select.options.extend(
-            discord.SelectOption(label=str(r['name'])[:100], value=str(r['id']), default=r['id'] == self.challenge_id)
-            for r in self.desafios[self.challenge_page * 25:(self.challenge_page + 1) * 25]
-        )
-        # Paginação dos menus, respeitando o limite de 25 opções por select.
+        if self.desafios:
+            self.challenge_select.options.extend(
+                discord.SelectOption(label=str(r['name'])[:100], value=str(r['id']), default=int(r['id']) == self.challenge_id)
+                for r in self.desafios[self.challenge_page * 25:(self.challenge_page + 1) * 25]
+            )
+            self.challenge_select.disabled = False
+        else:
+            self.challenge_select.options.append(discord.SelectOption(label="Nenhum desafio disponível para este jogo", value="0"))
+            self.challenge_select.disabled = True
         for item in list(self.children):
             if isinstance(item, PageButton) or isinstance(item, VoltarCentralButton):
                 self.remove_item(item)
@@ -710,16 +743,23 @@ class RegistrarView(discord.ui.View):
 
     async def _choose_game(self, interaction: discord.Interaction):
         self.game_id = int(self.game_select.values[0])
+        self.challenge_page = 0
+        self._filtrar_desafios()
         self._refresh_options()
-        await interaction.response.edit_message(view=self)
+        content = None if self.desafios else (
+            "Este jogo ainda não possui desafios globais ou específicos. Use `/nara` → Comunidade → Contribuir para sugerir um desafio."
+        )
+        await interaction.response.edit_message(content=content, view=self)
 
     async def _choose_challenge(self, interaction: discord.Interaction):
+        if self.challenge_select.values[0] == "0":
+            return await interaction.response.send_message("Ainda não há desafios compatíveis com este jogo.", ephemeral=True)
         self.challenge_id = int(self.challenge_select.values[0])
         g = await self.cog.bot.db._one("SELECT * FROM sl_games WHERE id=?", (self.game_id,))
         c = await self.cog.bot.db._one("SELECT * FROM sl_challenges WHERE id=?", (self.challenge_id,))
-        if not g or not c:
+        if not g or not c or (c["game_id"] is not None and int(c["game_id"]) != self.game_id):
             return await interaction.response.edit_message(
-                content="⚠️ Jogo ou desafio não encontrado. Volte à central e tente novamente.",
+                content="⚠️ Jogo ou desafio incompatível. Volte à central e tente novamente.",
                 embeds=[], view=VoltarCentralView(self.cog),
             )
         await interaction.response.send_modal(RunDadosModal(self.cog, g['id'], c['id'], parent_interaction=self.parent_interaction or interaction))
@@ -973,30 +1013,52 @@ class MotivoModal(discord.ui.Modal, title="Rejeitar run"):
 class RankingView(discord.ui.View):
     def __init__(self, cog, jogos, desafios, game_id, chal_id):
         super().__init__(timeout=600)
-        self.cog, self.game_id, self.chal_id = cog, game_id, chal_id
+        self.cog, self.game_id, self.chal_id = cog, int(game_id), int(chal_id)
+        self.jogos, self.todos_desafios = jogos, desafios
+        self.desafios = []
+        self._filtrar_desafios()
         self.sel_jogo = discord.ui.Select(
             placeholder="Jogo",
-            options=[discord.SelectOption(label=j["name"], value=str(j["id"]), default=j["id"] == game_id) for j in jogos[:25]],
+            options=[discord.SelectOption(label=j["name"][:100], value=str(j["id"]), default=int(j["id"]) == self.game_id) for j in jogos[:25]],
         )
-        self.sel_desafio = discord.ui.Select(
-            placeholder="Desafio",
-            options=[discord.SelectOption(label=c["name"], value=str(c["id"]), default=c["id"] == chal_id) for c in desafios[:25]],
-        )
+        self.sel_desafio = discord.ui.Select(placeholder="Desafio", min_values=1, max_values=1)
         self.sel_jogo.callback = self.trocar_jogo
         self.sel_desafio.callback = self.trocar_desafio
         self.add_item(self.sel_jogo)
         self.add_item(self.sel_desafio)
         self.add_item(VoltarCentralButton(cog, row=2))
+        self._atualizar_opcoes_desafio()
+
+    def _filtrar_desafios(self):
+        self.desafios = [row for row in self.todos_desafios if row["game_id"] is None or int(row["game_id"]) == self.game_id]
+        ids = {int(row["id"]) for row in self.desafios}
+        if self.chal_id not in ids:
+            self.chal_id = int(self.desafios[0]["id"]) if self.desafios else 0
+
+    def _atualizar_opcoes_desafio(self):
+        if self.desafios:
+            self.sel_desafio.options = [
+                discord.SelectOption(label=row["name"][:100], value=str(row["id"]), default=int(row["id"]) == self.chal_id)
+                for row in self.desafios[:25]
+            ]
+            self.sel_desafio.disabled = False
+        else:
+            self.sel_desafio.options = [discord.SelectOption(label="Nenhum desafio disponível", value="0")]
+            self.sel_desafio.disabled = True
 
     async def _atualizar(self, interaction: discord.Interaction):
-        for o in self.sel_jogo.options:
-            o.default = o.value == str(self.game_id)
-        for o in self.sel_desafio.options:
-            o.default = o.value == str(self.chal_id)
-        await interaction.response.edit_message(content=await self.cog.texto_ranking(self.game_id, self.chal_id), embeds=[], view=self)
+        for option in self.sel_jogo.options:
+            option.default = option.value == str(self.game_id)
+        self._atualizar_opcoes_desafio()
+        texto = (
+            await self.cog.texto_ranking(self.game_id, self.chal_id) if self.chal_id
+            else "## ⚔️ Hall da Fama\n\nEste jogo ainda não possui desafios compatíveis."
+        )
+        await interaction.response.edit_message(content=texto, embeds=[], view=self)
 
     async def trocar_jogo(self, interaction: discord.Interaction):
         self.game_id = int(self.sel_jogo.values[0])
+        self._filtrar_desafios()
         await self._atualizar(interaction)
 
     async def trocar_desafio(self, interaction: discord.Interaction):
