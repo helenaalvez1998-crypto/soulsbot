@@ -133,12 +133,12 @@ def formatar_ajuda(bot: Any, member: Any = None, *, limite: int = 18) -> str:
     comandos = comandos_visiveis(bot, member)
     if not comandos:
         return (
-            "Não encontrei comandos slash registrados e visíveis neste momento. "
-            "Use `/nara` para abrir o índice completo quando a sincronização estiver concluída."
+            "Não encontrei comandos slash registrados e visíveis para sua conta neste momento. "
+            "Abra `/nara` para consultar os painéis disponíveis; não vou inventar atalhos que o Discord não registrou."
         )
 
     ordenados = sorted(comandos, key=lambda c: (_grupo_ajuda(c.caminho)[0], c.caminho.casefold()))
-    linhas = ["**Comandos registrados e visíveis para você, agrupados por função:**"]
+    linhas = ["**Certo. Estes são os comandos registrados e visíveis para você:**"]
     atual = None
     exibidos = 0
     for comando in ordenados:
@@ -157,7 +157,7 @@ def formatar_ajuda(bot: Any, member: Any = None, *, limite: int = 18) -> str:
     if len(comandos) > exibidos:
         linhas.append(f"\nMais {len(comandos) - exibidos} comando(s) estão disponíveis. Use `/nara` para consultar o índice completo por área.")
     else:
-        linhas.append("\nUse `/nara` para abrir o guia por área ou **Central de ajuda** no `/nara` para consultar as respostas da Nara.")
+        linhas.append("\nUse `/nara` para abrir o guia por área ou a **Central de ajuda** para consultar as respostas. Sem caça ao tesouro por comando.")
     return "\n".join(linhas)
 
 
@@ -180,5 +180,5 @@ def canais_visiveis(guild: Any, member: Any) -> list[str]:
 def formatar_sistemas(bot: Any) -> str:
     nomes = cogs_carregados(bot)
     if not nomes:
-        return "Não consegui identificar cogs carregados no runtime."
-    return "**Módulos atualmente carregados:**\n" + "\n".join(f"• {nome}" for nome in nomes)
+        return "Não consegui identificar os módulos ativos neste momento. Prefiro admitir a limitação a listar sistemas fantasmas."
+    return "**Estes são os módulos ativos agora:**\n" + "\n".join(f"• {nome}" for nome in nomes)

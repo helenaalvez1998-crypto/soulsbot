@@ -383,13 +383,12 @@ def resposta_local_fallback(mensagem: str) -> str:
     t = normalizar(mensagem)
     if any(x in t for x in ("jogo", "elden", "souls", "boss", "chefe", "trofeu", "platina", "conquista", "dlc")):
         return (
-            "Consigo conversar sobre jogos e ajudar com informações gerais, mas a pesquisa automática de guias e checklists está temporariamente indisponível. "
-            "Prefiro não inventar requisitos de troféus ou conquistas."
+            "Consigo conversar sobre jogos e orientar com o que está verificado. A pesquisa automática de guias e checklists, porém, está indisponível no momento. "
+            "Não vou inventar requisito de troféu só para bancar a especialista — até eu tenho padrões."
         )
     return (
-        "Essa pergunta não parece ser do nosso universo. Eu sou a NARA desta comunidade, não uma central de respostas para qualquer assunto. "
-        "Posso ajudar com o servidor, Soulslikes, platinas, runs, jogos zerados, rankings, XP, Denários e nossos painéis. "
-        "Se era sobre alguma dessas coisas, reformule a pergunta — prometo pegar mais leve com o deboche."
+        "Hm... isso parece fora do território da NARA. Meu domínio é esta comunidade: servidor, membros, Soulslikes, platinas, runs, jogos zerados, rankings, XP, Denários e painéis. "
+        "Reformule a pergunta trazendo-a para esse universo. Aí sim posso fazer alguma coisa útil — e talvez um comentário atravessado."
     )
 
 

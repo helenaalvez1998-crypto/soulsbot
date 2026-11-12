@@ -59,7 +59,7 @@ COMANDOS_SECOES = (
     {
         "key": "inicio", "label": "Comece por aqui", "emoji": "🎮",
         "description": "Os dois pontos de entrada da NARA", "title": "🌙 Comece por aqui",
-        "intro": "A NARA possui somente dois comandos slash. Todo o restante é acessado pelos painéis interativos.",
+        "intro": "A NARA possui dois comandos slash principais. O restante é acessado pelos painéis interativos — menos comandos para decorar, mais tempo para jogar.",
         "fields": (
             ("Central do membro", "`/nara` — abre seu painel privado com jogos, conquistas, biblioteca, catálogos, perfil, Santuário, progresso, Loja e ajuda."),
             ("Central administrativa", "`/adm` — abre o painel restrito à equipe para moderação, configuração, auditoria, catálogos e Radar de Games."),
@@ -69,7 +69,7 @@ COMANDOS_SECOES = (
     {
         "key": "membros", "label": "Painel do membro", "emoji": "👤",
         "description": "Recursos pessoais e comunidade", "title": "👤 Painel do membro",
-        "intro": "Abra `/nara` e escolha uma categoria. As respostas pessoais são privadas.",
+        "intro": "Abra `/nara` e escolha uma categoria. Eu organizo a rota; suas consultas pessoais continuam privadas.",
         "fields": (
             ("Jogos e conquistas", "Acesse Coliseu, Platinas, Zerados, Runs e desafios."),
             ("Biblioteca e catálogos", "Consulte seus jogos concluídos e explore o catálogo comunitário de jogos e mods. Você também pode pesquisar e enviar sugestões."),
@@ -79,7 +79,7 @@ COMANDOS_SECOES = (
     {
         "key": "perfil", "label": "Perfil e Santuário", "emoji": "🏛️",
         "description": "Identidade e evolução pessoal", "title": "🏛️ Perfil e Santuário",
-        "intro": "Os recursos pessoais ficam acessíveis diretamente na central `/nara`.",
+        "intro": "Os recursos pessoais ficam na central `/nara`. Seu espaço, suas estatísticas e suas escolhas — cada coisa no seu devido lugar.",
         "fields": (
             ("Meu perfil", "Consulte patente, nível, XP, Denários, platinas, jogos zerados e posições nos rankings."),
             ("Meu Santuário", "Abra e personalize seu espaço pessoal e sua galeria, conforme os recursos habilitados no servidor."),
@@ -89,7 +89,7 @@ COMANDOS_SECOES = (
     {
         "key": "catalogos", "label": "Catálogos", "emoji": "📚",
         "description": "Jogos e mods da comunidade", "title": "📚 Catálogos de jogos e mods",
-        "intro": "Acesse a categoria **Catálogos** dentro de `/nara`.",
+        "intro": "Acesse **Catálogos** dentro de `/nara`. Explore primeiro; envie sugestões depois. A equipe revisa antes de publicar.",
         "fields": (
             ("Catálogo de jogos", "Explore capas, filtre por plataforma, pesquise títulos e consulte detalhes e links disponíveis."),
             ("Catálogo de mods", "Explore mods por jogo, consulte imagens, descrições e links."),
@@ -99,7 +99,7 @@ COMANDOS_SECOES = (
     {
         "key": "economia", "label": "Economia e coleção", "emoji": "🪙",
         "description": "Denários, loja e itens", "title": "🪙 Economia e coleção",
-        "intro": "A economia da NARA é acessada pelo painel `/nara`.",
+        "intro": "A economia da NARA fica no painel `/nara`. Confira preço e requisito antes de gastar; até uma estrategista respeita o orçamento.",
         "fields": (
             ("Loja", "Consulte itens cosméticos e recompensas disponíveis e faça compras com Denários."),
             ("Experiência", "Acompanhe XP, níveis, patentes e rankings."),
@@ -108,7 +108,7 @@ COMANDOS_SECOES = (
     {
         "key": "moderacao", "label": "Moderação", "emoji": "🛡️",
         "description": "Fila de revisão e decisões", "title": "🛡️ Moderação",
-        "intro": "A equipe autorizada acessa a central pelo `/adm`.",
+        "intro": "A equipe autorizada acessa a central pelo `/adm`. Nesta área, precisão e evidência vêm antes de qualquer espetáculo.",
         "fields": (
             ("Solicitações da NARA", "Revise Platinas, Runs/Desafios e Jogos Zerados na Central de Moderação."),
             ("Envios de catálogo", "Aprove ou rejeite jogos e mods enviados pelos membros, preservando o fluxo de revisão."),
@@ -118,7 +118,7 @@ COMANDOS_SECOES = (
     {
         "key": "administracao", "label": "Administração", "emoji": "⚙️",
         "description": "Configurações e sistemas", "title": "⚙️ Administração",
-        "intro": "As configurações da equipe ficam dentro do `/adm`, organizadas por categoria.",
+        "intro": "As configurações da equipe ficam no `/adm`, organizadas por categoria. Use a opção correta e não transforme um ajuste simples numa expedição.",
         "fields": (
             ("Servidor e sistemas", "Configure canais, cargos, personalização e sistemas comunitários conforme suas permissões."),
             ("Catálogos", "Gerencie jogos e mods, revise envios e configure notificações de moderação."),
@@ -128,7 +128,7 @@ COMANDOS_SECOES = (
     {
         "key": "integracoes", "label": "Integrações", "emoji": "📡",
         "description": "Notícias, YouTube e ofertas", "title": "📡 Integrações",
-        "intro": "As integrações administrativas são gerenciadas pelo `/adm`.",
+        "intro": "As integrações administrativas são gerenciadas pelo `/adm`. Se um aviso falhar, confira a configuração antes de culpar os cabos invisíveis.",
         "fields": (
             ("Radar de Games", "Monitora fontes RSS e publica anúncios e lançamentos relevantes no canal configurado."),
             ("Outras integrações", "O painel administrativo também permite consultar o estado das integrações existentes da NARA."),
@@ -137,7 +137,7 @@ COMANDOS_SECOES = (
     {
         "key": "suporte", "label": "Ajuda e suporte", "emoji": "❔",
         "description": "Como encontrar qualquer recurso", "title": "❔ Ajuda e suporte",
-        "intro": "Se não encontrar uma função, comece pelo painel correto.",
+        "intro": "Se não encontrar uma função, comece pelo painel correto. Eu mostro o caminho; telepatia ainda não entrou no pacote.",
         "fields": (
             ("Membros", "Use `/nara` e navegue pelas categorias, botões e guias."),
             ("Equipe", "Use `/adm` para abrir as ferramentas administrativas. Acesso depende das permissões e cargos configurados."),
@@ -166,7 +166,7 @@ class AjudaCategoriaSelect(discord.ui.Select):
             )
             for cat in categorias[:25]
         ]
-        super().__init__(placeholder="1 · Escolha o assunto", min_values=1, max_values=1, options=options)
+        super().__init__(placeholder="Escolha o assunto. Eu organizo a rota.", min_values=1, max_values=1, options=options)
         self.bot = bot
 
     async def callback(self, interaction: discord.Interaction):
@@ -204,7 +204,7 @@ class AjudaPerguntaSelect(discord.ui.Select):
             )
             for intent, item in list(intents.items())[:25]
         ]
-        super().__init__(placeholder="2 · Escolha uma pergunta", min_values=1, max_values=1, options=options)
+        super().__init__(placeholder="Escolha a pergunta. Sem se perder no menu.", min_values=1, max_values=1, options=options)
         self.bot = bot
         self.categoria = categoria
         self.intents = intents
@@ -231,8 +231,8 @@ class AjudaPerguntaSelect(discord.ui.Select):
                     logging.getLogger("nara.help").exception(
                         "Falha em consulta dinâmica da Central de Ajuda: %s", self.values[0]
                     )
-                    resposta = "Não consegui consultar esses dados agora. Tente novamente."
-        resposta = resposta or "Essa resposta ainda não está pronta. Pergunte à equipe ou me chame de novo mais tarde."
+                    resposta = "Não consegui consultar esses dados agora. Tente novamente em instantes; prefiro admitir a falha a inventar seus números."
+        resposta = resposta or "Essa resposta ainda não está cadastrada. Não vou improvisar uma regra só para preencher silêncio: consulte a equipe ou tente novamente mais tarde."
         embed = discord.Embed(
             title=item.get("title", "Resposta da Nara"),
             description=resposta[:4000],
@@ -257,7 +257,7 @@ class AjudaVoltarButton(discord.ui.Button):
         await interaction.response.edit_message(
             embed=discord.Embed(
                 title="Central de Ajuda da Nara",
-                description="Escolha um assunto e depois a pergunta. Vou te mostrar o caminho sem transformar uma dúvida simples numa palestra.",
+                description="Escolha o assunto e depois a pergunta. Eu mostro o caminho — sem transformar um botão numa trilogia.",
                 color=discord.Color.dark_teal(),
             ),
             view=CentralAjudaView(self.bot),
@@ -296,14 +296,14 @@ class PainelAjudaAbrirButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         if interaction.guild is None:
             return await interaction.response.send_message(
-                "A Central de Ajuda funciona dentro do servidor.", ephemeral=True
+                "A Central de Ajuda funciona dentro do servidor. Aqui fora, nem meu alcance é ilimitado.", ephemeral=True
             )
         await interaction.response.send_message(
             embed=discord.Embed(
                 title="Central de Ajuda da Nara",
                 description=(
                     "Escolha o assunto e depois a pergunta. Vou direto ao que interessa — "
-                    "ninguém merece transformar uma dúvida simples numa saga de 80 horas. 😏"
+                    "uma dúvida simples não precisa virar uma saga de 80 horas. 😏"
                 ),
                 color=discord.Color.dark_teal(),
             ),
@@ -343,7 +343,7 @@ class AjudaAtalhoView(discord.ui.View):
         await interaction.response.send_message(
             embed=discord.Embed(
                 title="Central de Ajuda da Nara",
-                description="Escolha um assunto e depois a pergunta. Se não encontrar o que procura, me chama — eu tento ajudar.",
+                description="Escolha um assunto e depois a pergunta. Se não encontrar o que procura, me chama; eu procuro o caminho sem inventar resposta.",
                 color=discord.Color.dark_teal(),
             ),
             view=CentralAjudaView(self.bot),
@@ -360,13 +360,13 @@ class ComandosCategoriaSelect(discord.ui.Select):
             )
             for secao in COMANDOS_SECOES
         ]
-        super().__init__(placeholder="Escolha uma área de comandos", min_values=1, max_values=1, options=options)
+        super().__init__(placeholder="Escolha uma área. Eu cuido do mapa; você só precisa não se perder.", min_values=1, max_values=1, options=options)
         self.bot = bot
 
     async def callback(self, interaction: discord.Interaction):
         secao = next((item for item in COMANDOS_SECOES if item["key"] == self.values[0]), None)
         if secao is None:
-            return await interaction.response.send_message("Essa área não está disponível. Abra `/nara` novamente.", ephemeral=True)
+            return await interaction.response.send_message("Essa área não está disponível neste momento. Volte à central `/nara` e tente por lá.", ephemeral=True)
         embed = discord.Embed(title=secao["title"], description=secao["intro"], color=discord.Color.dark_teal())
         for nome, valor in secao["fields"]:
             embed.add_field(name=nome, value=valor[:1024], inline=False)
@@ -383,7 +383,7 @@ class ComandosFAQButton(discord.ui.Button):
         await interaction.response.send_message(
             embed=discord.Embed(
                 title="Central de Ajuda da Nara",
-                description="Escolha um assunto e depois a pergunta. Se não encontrar o que procura, me chama — eu tento ajudar.",
+                description="Escolha um assunto e depois a pergunta. Se não encontrar o que procura, me chama; eu procuro o caminho sem inventar resposta.",
                 color=discord.Color.dark_teal(),
             ),
             view=CentralAjudaView(self.bot), ephemeral=True,

@@ -22,10 +22,15 @@ from nara_local import normalizar
 
 PROMPT_PATH = Path(__file__).resolve().parent / "prompts" / "nara_conversa.md"
 PROMPT_IDENTIDADE_PATH = Path(__file__).resolve().parent / "prompts" / "nara.md"
+PROMPT_PERSONALIDADE_PATH = Path(__file__).resolve().parent / "prompts" / "nara_personalidade_runtime.md"
 PROMPT_MINIMO = (
-    "Você é Nara, IA do servidor NARA: inteligente, espontânea, levemente debochada, sem ser hostil. "
-    "Responda em português brasileiro, em 1 a 4 frases, sem inventar fatos. Para troféus/platinas de jogos "
-    "a pesquisa automática de guias de jogos está temporariamente desativada. Você não vê imagens nem executa ações nesta conversa."
+    "Você é Nara, a personalidade própria da comunidade: confiante, perspicaz, teatral, provocadora e tecnicamente competente. "
+    "Responda em português brasileiro, adaptando o humor ao contexto e à familiaridade real com o membro. "
+    "Com novatos, seja cordial e use ironia leve; com membros conhecidos, permita brincadeiras moderadas; "
+    "com membros próximos, use provocações afetuosas sem presumir intimidade. Em dúvidas técnicas, seja precisa; "
+    "em conflitos, segurança ou sofrimento, suspenda o deboche e aja com firmeza e respeito. "
+    "Não invente fatos, comandos ou ações. A pesquisa automática de guias de troféus está desativada; "
+    "não afirme ver imagens nem executar ações nesta rota."
 )
 
 
@@ -62,25 +67,35 @@ def extrair_identidade(texto: str) -> str:
     return match.group(0).strip() if match else ""
 
 
-def carregar_prompt() -> str:
-    """Carrega a identidade canônica e, em seguida, o escopo já existente desta rota.
+def carregar_personalidade() -> str:
+    """Carrega a personalidade adaptativa oficial compartilhada por todas as rotas de IA."""
+    try:
+        return PROMPT_PERSONALIDADE_PATH.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError):
+        return ""
 
-    Os arquivos são preservados e não há uma segunda personalidade gerada no código.
-    """
+
+def carregar_prompt() -> str:
+    """Combina personalidade canônica, regras operacionais e escopo da conversa."""
+    partes = []
+    personalidade = carregar_personalidade()
+    if personalidade:
+        partes.append(
+            "PERSONALIDADE CANÔNICA — prevalece para identidade, temperamento e tom.\n"
+            + personalidade
+        )
     try:
         identidade_completa = PROMPT_IDENTIDADE_PATH.read_text(encoding="utf-8").strip()
         identidade = extrair_identidade(identidade_completa)
+        if identidade:
+            partes.append("REGRAS OPERACIONAIS E CAPACIDADES\n" + identidade)
         regras_rota = PROMPT_PATH.read_text(encoding="utf-8").strip()
-        if identidade and regras_rota:
-            return identidade + "\n\n--- ESCOPO DESTA ROTA: CONVERSA TEXTUAL ---\n" + regras_rota
-        return identidade or regras_rota or PROMPT_MINIMO
+        if regras_rota:
+            partes.append("ESCOPO DESTA ROTA: CONVERSA TEXTUAL\n" + regras_rota)
     except (OSError, UnicodeError):
-        # Preserva o comportamento de contingência já existente se algum arquivo falhar.
-        try:
-            texto = PROMPT_PATH.read_text(encoding="utf-8").strip()
-            return texto or PROMPT_MINIMO
-        except (OSError, UnicodeError):
-            return PROMPT_MINIMO
+        # A personalidade continua disponível mesmo se um prompt secundário falhar.
+        pass
+    return "\n\n---\n\n".join(partes) or PROMPT_MINIMO
 
 
 def montar_pedido(autor: str, texto: str, contexto_nara: str = "") -> str:
@@ -159,18 +174,14 @@ class Cooldown:
 
 # Falas locais com personalidade para quando a IA não pode (ou não deve) responder.
 FALAS_SEM_IA = (
-    "Hoje eu já falei demais pelas contas do servidor e preciso poupar fôlego. Me pergunta de novo mais tarde, "
-    "ou pergunta **meu perfil**, **meu saldo** ou **ajuda**, que isso eu resolvo na hora.",
-    "Meu lado tagarela tirou uma folga forçada (limite da IA). O resto funciona: **ajuda**, **meu perfil**, "
-    "**minhas platinas**, **como ganhar XP**. Tenta de novo daqui a pouco.",
-    "Tô sem fôlego pra papo livre agora, não por falta de vontade. Volta já já — enquanto isso, "
-    "**ajuda** mostra o que eu faço sem esforço.",
+    "Hm. Minha conversa avançada atingiu o limite por enquanto. Não é abandono dramático — os painéis e consultas locais continuam funcionando. Tente **meu perfil**, **meu saldo** ou **ajuda**.",
+    "Pausa técnica no meu lado tagarela. Ainda consigo consultar **perfil**, **saldo**, **platinas** e orientar pelos painéis. A conversa livre volta quando a cota permitir.",
+    "O espetáculo foi colocado em intervalo por limite de uso. Para não deixar você na mão, os recursos locais seguem disponíveis em `/nara`.",
 )
 FALA_LIMITE_USUARIO = (
-    "Você já gastou sua cota de papo comigo hoje, {nome}. Amanhã tem mais. "
-    "As consultas de perfil, saldo e FAQ continuam liberadas."
+    "Sua cota de conversa comigo por hoje terminou, {nome}. Dramático? Um pouco. As consultas locais de perfil, saldo e FAQ continuam liberadas."
 )
-FALA_COOLDOWN = "Calma, {nome}, uma pergunta por vez. Respiro e já respondo."
+FALA_COOLDOWN = "Calma, {nome}, uma pergunta por vez. Até eu preciso de um intervalo entre perguntas; já respondo."
 
 
 def fala_sem_ia() -> str:
