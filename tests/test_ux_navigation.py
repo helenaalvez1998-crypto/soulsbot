@@ -109,3 +109,27 @@ def test_coliseu_explica_modulos_existentes_sem_criar_novos():
     source = (ROOT / "cogs" / "painel_membros.py").read_text(encoding="utf-8")
     for name in ("Platinas", "Zerados", "Runs e desafios"):
         assert name in source
+
+
+def test_acoes_de_categoria_preservam_a_categoria_de_origem():
+    source = (ROOT / "cogs" / "painel_membros.py").read_text(encoding="utf-8")
+    assert 'categoria=self.painel.categoria' in source
+    assert 'user_id=self.painel.user_id' in source
+    assert 'categoria="__inicio__"' in source
+
+
+def test_paineis_de_membros_usam_botao_de_retorno_na_mesma_mensagem():
+    source = (ROOT / "cogs" / "painel_membros.py").read_text(encoding="utf-8")
+    for marker in (
+        "view_so_com_voltar(voltar)",
+        "com_voltar(view)",
+        "_retorno_categoria_membro",
+    ):
+        assert marker in source
+
+
+def test_acoes_administrativas_preservam_categoria_de_origem():
+    source = (ROOT / "cogs" / "admin.py").read_text(encoding="utf-8")
+    assert 'categoria=self.categoria' in source
+    assert 'user_id=self.user_id' in source
+    assert 'com_voltar(view)' in source

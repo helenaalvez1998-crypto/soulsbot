@@ -74,7 +74,7 @@ class PedidoTests(unittest.TestCase):
         txt = conv.carregar_prompt()
         self.assertIn("Nara", txt)
         self.assertNotIn("/jogo_buscar", txt)  # comando removido
-        self.assertLess(len(txt), 2500)  # prompt pequeno = poucos tokens por chamada
+        self.assertLess(len(txt), 6000)  # personalidade completa em versão compacta para conter custo por chamada
 
 
 class CacheCooldownTests(unittest.TestCase):
@@ -303,16 +303,15 @@ if __name__ == "__main__":
     unittest.main()
 
 
-def test_prompts_especializados_reutilizam_identidade_canonica_sem_carregar_manual_inteiro():
+def test_prompt_carrega_personalidade_canonica_completa_e_regras_da_conversa():
     txt = conv.carregar_prompt()
-    base = (os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/prompts/nara.md")
-    with open(base, encoding="utf-8") as arquivo:
-        original = arquivo.read()
-    identidade = conv.extrair_identidade(original)
-    assert identidade in txt
-    assert "Seu nome é Nara" in identidade
-    assert "## 12. Economia de chamadas" not in txt
-    assert len(txt) < 2500
+    personalidade = conv.carregar_personalidade()
+    assert personalidade in txt
+    assert "Administradora implacável" in personalidade
+    assert "Especialista técnica" in personalidade
+    assert "Júnior" in personalidade and "criador" in personalidade
+    assert "ESCOPO DESTA ROTA: CONVERSA TEXTUAL" in txt
+    assert "Não invente fatos" in txt
 
 
 def test_pedido_de_acao_e_separado_de_pergunta_explicativa():
