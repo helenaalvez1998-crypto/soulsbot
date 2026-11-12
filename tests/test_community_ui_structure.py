@@ -6,14 +6,15 @@ discord = pytest.importorskip("discord")
 from cogs.comunidade import CommunityHomeView, CommunitySocialView
 
 
-def test_community_home_panel_is_persistent_and_uses_two_clean_rows():
+def test_community_home_panel_is_persistent_and_uses_contextual_lore_actions():
     view = CommunityHomeView(None, persistent=True)
     assert view.timeout is None
-    assert len(view.children) == 6
+    assert len(view.children) == 11
     assert all(item.custom_id for item in view.children)
     per_row = {}
     for item in view.children:
         per_row[item.row] = per_row.get(item.row, 0) + 1
+    assert per_row == {0: 3, 1: 3, 2: 5}
     assert max(per_row.values()) <= 5
 
 
