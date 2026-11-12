@@ -7,12 +7,14 @@ from discord.ext import commands
 
 import config
 from levels import nivel_por_xp, patente_por_nivel, barra_progresso
+from painel_navegacao import adicionar_botao_voltar, view_so_com_voltar
 
 
 class RemoverZeradoModal(discord.ui.Modal, title="Remover registro de jogo zerado"):
-    def __init__(self, cog):
+    def __init__(self, cog, callback_voltar=None):
         super().__init__(timeout=180)
         self.cog = cog
+        self.callback_voltar = callback_voltar
         self.registro = discord.ui.TextInput(
             label="Número do registro",
             placeholder="Somente o número do registro (ex.: 12)",
@@ -124,15 +126,65 @@ MEMBROS_CATEGORIAS = {
 }
 
 
-async def _executar_acao_membro(interaction: discord.Interaction, bot: commands.Bot, action: str):
+def _embed_categoria_membro(categoria: str) -> discord.Embed:
+    dados = MEMBROS_CATEGORIAS[categoria]
+    embed = discord.Embed(
+        title=dados["titulo"],
+        description=dados["descricao"] + "\n\nEscolha uma ação. O resultado será privado; eu cuido da navegação para você não precisar caçar botão.",
+        color=config.COR_OURO,
+    )
+    embed.set_footer(text="NARA • Use 'Voltar à central' para escolher outra categoria")
+    return embed
+
+
+def _retorno_categoria_membro(bot: commands.Bot, user_id: int, categoria: str):
+    async def voltar(interaction: discord.Interaction):
+        if categoria == "__inicio__":
+            embed = discord.Embed(
+                title="🌙 NARA — CENTRAL DO MEMBRO",
+                description=(
+                    "**Bem-vindo à sua central de jogos e conquistas.**\n\n"
+                    "Escolha uma categoria. Eu organizo os caminhos; você fica com a parte interessante.\n"
+                    "🎮 **Jogos e conquistas** · 📚 **Minha biblioteca** · 🏆 **Meu progresso**\n"
+                    "🧠 **Preferências** · 📡 **Comunidade** · ❔ **Ajuda e suporte**\n\n"
+                    "🔒 Esta central é privada e só pode ser utilizada por você."
+                ),
+                color=config.COR_OURO,
+            )
+            embed.set_footer(text="NARA • Central de acesso dos membros")
+            await interaction.response.edit_message(embed=embed, view=PainelMembrosView(bot, user_id))
+            return
+        await interaction.response.edit_message(
+            embed=_embed_categoria_membro(categoria),
+            view=MembrosCategoriaView(bot, user_id, categoria),
+        )
+    return voltar
+
+
+async def _executar_acao_membro(
+    interaction: discord.Interaction,
+    bot: commands.Bot,
+    action: str,
+    *,
+    categoria: str | None = None,
+    user_id: int | None = None,
+):
     """Encaminha a ação do painel para o módulo original, sem duplicar regras de negócio."""
+    voltar = (
+        _retorno_categoria_membro(bot, user_id or interaction.user.id, categoria)
+        if categoria in MEMBROS_CATEGORIAS else None
+    )
+
+    def com_voltar(view):
+        return adicionar_botao_voltar(view, voltar)
+
     if action == "coliseu":
         cog = bot.get_cog("Platinas")
         if cog is None:
             return await interaction.response.send_message("O Coliseu está indisponível no momento. Tente novamente mais tarde.", ephemeral=True)
         from cogs.platinas import ColiseuView
-        view = ColiseuView(cog, interaction.user)
-        return await interaction.response.send_message(content=view.texto(), view=view, ephemeral=True)
+        view = ColiseuView(cog, interaction.user, back_callback=voltar)
+        return await interaction.response.edit_message(content=view.texto(), embed=None, view=view)
 
     if action == "biblioteca_platinas":
         cog = bot.get_cog("Platinas")
@@ -140,32 +192,37 @@ async def _executar_acao_membro(interaction: discord.Interaction, bot: commands.
             return await interaction.response.send_message("O painel de platinas está indisponível no momento.", ephemeral=True)
         from cogs.platinas import PainelView
         view = PainelView(cog, interaction.user)
-        return await interaction.response.send_message(embed=await view.embed(), view=view, ephemeral=True)
+        return await interaction.response.edit_message(content=None, embed=await view.embed(), view=com_voltar(view))
 
     if action == "biblioteca_runs":
         cog = bot.get_cog("Soulslike")
         if cog is None:
             return await interaction.response.send_message("O painel de runs e desafios está indisponível no momento.", ephemeral=True)
         from cogs.soulslike import CentralView
-        return await interaction.response.send_message(content=cog.texto_central(), view=CentralView(cog), ephemeral=True)
+        view = CentralView(cog)
+        return await interaction.response.edit_message(content=cog.texto_central(), embeds=[], view=com_voltar(view))
 
     if action == "zerados":
         cog = bot.get_cog("Zerados")
         if cog is None:
             return await interaction.response.send_message("O painel de jogos zerados está indisponível no momento.", ephemeral=True)
-        return await cog.abrir_painel(interaction)
+        view = cog.painel_view(interaction.user)
+        return await interaction.response.edit_message(content=None, embed=await view.embed(), view=com_voltar(view))
 
     if action == "remover_zerado":
         cog = bot.get_cog("Zerados")
         if cog is None:
             return await interaction.response.send_message("O gerenciamento de jogos zerados está indisponível no momento.", ephemeral=True)
-        return await interaction.response.send_modal(RemoverZeradoModal(cog))
+        return await interaction.response.send_modal(RemoverZeradoModal(cog, callback_voltar=voltar))
 
     if action == "loja":
         cog = bot.get_cog("Loja")
         if cog is None:
             return await interaction.response.send_message("A loja está indisponível no momento.", ephemeral=True)
-        return await cog.abrir_loja(interaction)
+        from cogs.loja import LojaView
+        view = LojaView(cog, interaction.user)
+        await view.carregar()
+        return await interaction.response.edit_message(content=None, embed=view.embed(), view=view)
 
     if action == "nivel":
         cog = bot.get_cog("ProgressaoXP")
@@ -180,7 +237,7 @@ async def _executar_acao_membro(interaction: discord.Interaction, bot: commands.
         embed.add_field(name="Nível", value=str(nivel_atual), inline=True)
         embed.add_field(name="XP total", value=f"{xp:,}", inline=True)
         embed.add_field(name="Progresso", value=barra_progresso(xp), inline=False)
-        return await interaction.response.send_message(embed=embed, ephemeral=True)
+        return await interaction.response.edit_message(embed=embed, content=None, view=view_so_com_voltar(voltar))
 
     if action == "ranking_xp":
         cog = bot.get_cog("ProgressaoXP")
@@ -188,7 +245,7 @@ async def _executar_acao_membro(interaction: discord.Interaction, bot: commands.
             return await interaction.response.send_message("O ranking de XP está indisponível no momento.", ephemeral=True)
         rows = await bot.db.ranking_xp(10)
         if not rows:
-            return await interaction.response.send_message("Ainda não há XP registrado para montar o ranking.", ephemeral=True)
+            return await interaction.response.edit_message(content="Ainda não há XP registrado para montar o ranking.", embed=None, view=view_so_com_voltar(voltar))
         linhas = []
         for i, row in enumerate(rows, 1):
             nivel_atual = nivel_por_xp(int(row["valor"]))
@@ -196,9 +253,10 @@ async def _executar_acao_membro(interaction: discord.Interaction, bot: commands.
                 f"`{i:>2}.` <@{row['user_id']}> — **Nível {nivel_atual}** · "
                 f"{patente_por_nivel(nivel_atual)} · {row['valor']} XP"
             )
-        return await interaction.response.send_message(
+        return await interaction.response.edit_message(
             "## 🏆 Ranking de XP da NARA\n\n" + "\n".join(linhas),
-            ephemeral=True,
+            embed=None,
+            view=view_so_com_voltar(voltar),
         )
 
     if action == "memoria":
@@ -221,7 +279,7 @@ async def _executar_acao_membro(interaction: discord.Interaction, bot: commands.
             return await interaction.response.send_message("Não consegui identificar seu perfil neste servidor.", ephemeral=True)
         embed = await cog.embed_perfil(interaction.user)
         embed.set_footer(text="NARA • Seu perfil pessoal")
-        return await interaction.response.send_message(embed=embed, ephemeral=True)
+        return await interaction.response.edit_message(embed=embed, content=None, view=view_so_com_voltar(voltar))
 
     if action == "santuario":
         cog = bot.get_cog("Santuario")
@@ -245,7 +303,7 @@ class MembrosAcaoButton(discord.ui.Button):
         self.action = action
 
     async def callback(self, interaction: discord.Interaction):
-        await _executar_acao_membro(interaction, self.painel.bot, self.action)
+        await _executar_acao_membro(interaction, self.painel.bot, self.action, categoria=self.painel.categoria, user_id=self.painel.user_id)
 
 
 class MembrosVoltarButton(discord.ui.Button):
@@ -300,7 +358,7 @@ class MembrosAcessoDiretoButton(discord.ui.Button):
         self.action = action
 
     async def callback(self, interaction: discord.Interaction):
-        await _executar_acao_membro(interaction, self.painel.bot, self.action)
+        await _executar_acao_membro(interaction, self.painel.bot, self.action, categoria="__inicio__", user_id=self.painel.user_id)
 
 
 class MembrosCategoriaButton(discord.ui.Button):
@@ -313,7 +371,7 @@ class MembrosCategoriaButton(discord.ui.Button):
         dados = MEMBROS_CATEGORIAS[self.categoria]
         embed = discord.Embed(
             title=dados["titulo"],
-            description=dados["descricao"] + "\n\nSelecione uma ação. Você receberá uma resposta privada com o resultado.",
+            description=dados["descricao"] + "\n\nEscolha uma ação. O resultado será privado; eu cuido da navegação para você não precisar caçar botão.",
             color=config.COR_OURO,
         )
         embed.set_footer(text="NARA • Use 'Voltar à central' para escolher outra categoria")
@@ -375,7 +433,7 @@ class PainelMembros(commands.Cog):
                 "📡 **Comunidade:** acompanhe vídeos, lives, notícias e ofertas nos canais do servidor.\n"
                 "❔ **Ajuda e suporte:** encontre tutoriais e orientações.\n\n"
                 "**Como usar:** escolha uma categoria para abrir as ações relacionadas. "
-                "Cada submenu explica o que você pode fazer.\n\n"
+                "Cada submenu explica o que você pode fazer. Não precisa decorar tudo de uma vez.\n\n"
                 "🔒 Este painel é privado: somente você pode utilizá-lo."
             ),
             color=config.COR_OURO,

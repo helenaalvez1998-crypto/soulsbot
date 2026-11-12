@@ -12,6 +12,7 @@ from discord import app_commands
 from discord.ext import commands
 
 import config
+from painel_navegacao import adicionar_botao_voltar, restaurar_botao_voltar
 from admin_config import GuildConfig, KEYS, LABELS, SECTIONS
 
 log = logging.getLogger("admin")
@@ -152,8 +153,8 @@ class ModeracaoPainelView(discord.ui.View):
         embed = discord.Embed(
             title="🛡️ Central de Moderação — NARA",
             description=(
-                "Consulte a fila por categoria ou veja todas as solicitações pendentes por ordem de chegada.\n\n"
-                "**Como revisar:** selecione uma solicitação para abrir uma ficha privada com os comprovantes e os botões de decisão. A decisão é registrada pelos mesmos fluxos transacionais dos cartões originais."
+                "A fila reúne as solicitações pendentes por categoria e ordem de chegada.\n\n"
+                "**Como revisar:** abra a ficha privada, confira os comprovantes e só então use os botões de decisão. O sistema registra a decisão no fluxo original; evidência primeiro, espetáculo depois."
             ), color=COR_PAINEL,
         )
         embed.add_field(name="Na lista atual", value=f"**{pendentes}** solicitação(ões) exibida(s)", inline=True)
@@ -180,6 +181,7 @@ class ModeracaoPainelView(discord.ui.View):
         if (self.pagina + 1) * 25 < len(self.registros):
             self.add_item(ModeracaoPaginaButton(self, 1))
         self.add_item(ModeracaoAtualizarButton(self))
+        restaurar_botao_voltar(self)
         await interaction.response.edit_message(embed=embed, view=self)
 
     async def abrir_solicitacao(self, interaction: discord.Interaction, tipo: str, registro_id: int):
@@ -487,6 +489,7 @@ class HistoricoAuditoriaView(discord.ui.View):
             self.add_item(HistoricoPaginaButton(self, -1))
         if (self.pagina + 1) * 10 < len(self.registros):
             self.add_item(HistoricoPaginaButton(self, 1))
+        restaurar_botao_voltar(self)
         if responder:
             await interaction.response.send_message(embed=embed, view=self, ephemeral=True)
         else:
@@ -897,8 +900,24 @@ ADMIN_CATEGORIAS = {
 }
 
 
-async def _executar_acao_admin(interaction: discord.Interaction, bot, action: str):
+def _retorno_categoria_admin(bot, categoria: str, user_id: int):
+    async def voltar(interaction: discord.Interaction):
+        dados = ADMIN_CATEGORIAS[categoria]
+        embed = discord.Embed(
+            title=dados["titulo"],
+            description=dados["descricao"] + "\n\nEscolha uma das opções abaixo para continuar.",
+            color=COR_PAINEL,
+        )
+        embed.set_footer(text="NARA • Painel administrativo • Volte ao início para trocar de categoria")
+        await interaction.response.edit_message(embed=embed, view=AdminCategoriaView(bot, categoria, user_id))
+    return voltar
+
+
+async def _executar_acao_admin(interaction: discord.Interaction, bot, action: str, *, categoria: str | None = None, user_id: int | None = None):
     """Encaminha ações da navegação administrativa aos handlers já existentes."""
+    voltar = _retorno_categoria_admin(bot, categoria, user_id or interaction.user.id) if categoria in ADMIN_CATEGORIAS else None
+    def com_voltar(view):
+        return adicionar_botao_voltar(view, voltar)
     if action == "channels":
         return await _abrir_secao(interaction, bot, "channels", "📺 Canais configurados")
     if action == "roles":
@@ -917,6 +936,7 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
         if len(view.registros) > 25:
             view.add_item(ModeracaoPaginaButton(view, 1))
         view.add_item(ModeracaoAtualizarButton(view))
+        com_voltar(view)
         return await interaction.response.edit_message(embed=embed, view=view)
     if action == "galeria":
         return await _abrir_galeria(interaction, bot)
@@ -933,12 +953,14 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
         if not await eh_moderador(interaction.user, bot.db):
             return await interaction.response.send_message("Acesso restrito à moderação.", ephemeral=True)
         view = DashboardOperacionalView(bot, interaction.user.id)
+        com_voltar(view)
         return await interaction.response.edit_message(embed=await _embed_dashboard(bot, interaction.guild_id), view=view)
     if action == "history":
         from cogs.platinas import eh_moderador
         if not await eh_moderador(interaction.user, bot.db):
             return await interaction.response.send_message("Acesso restrito à moderação.", ephemeral=True)
         view = HistoricoAuditoriaView(bot, interaction.user.id)
+        com_voltar(view)
         return await interaction.response.edit_message(embed=await view.embed(), view=view)
     if action == "status":
         return await _abrir_status(interaction, bot)
@@ -947,6 +969,7 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
         if not await eh_moderador(interaction.user, bot.db):
             return await interaction.response.send_message("Acesso restrito à moderação.", ephemeral=True)
         view = PublicarPaineisView(bot, interaction.user.id)
+        com_voltar(view)
         return await interaction.response.edit_message(
             content="## 📌 Publicar e fixar painéis\nEscolha o painel, selecione o canal e confirme. Se já existir, a mensagem será atualizada.",
             embed=None, attachments=[], view=view,
@@ -961,11 +984,11 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
         if action == "catalogo_mods":
             return await interaction.response.edit_message(
                 content="## 🧩 Administração do catálogo de mods\\nEscolha uma ação abaixo.",
-                embed=None, attachments=[], view=ModAdminView(),
+                embed=None, attachments=[], view=com_voltar(ModAdminView()),
             )
         return await interaction.response.edit_message(
             content="## 🎮 Administração do catálogo de jogos\\nEscolha uma ação no menu abaixo.",
-            embed=None, attachments=[], view=AdminView(),
+            embed=None, attachments=[], view=com_voltar(AdminView()),
         )
     if action == "radar_games":
         cog = bot.get_cog("GameNewsCog")
@@ -981,7 +1004,7 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
             f"**Verificação automática:** a cada 5 minutos\\n\\n"
             "Use o seletor para definir o canal, adicione fontes RSS, consulte os feeds ou envie uma mensagem de teste."
         )
-        return await interaction.response.edit_message(content=texto, embed=None, attachments=[], view=NewsAdminView(cog))
+        return await interaction.response.edit_message(content=texto, embed=None, attachments=[], view=com_voltar(NewsAdminView(cog)))
     # Ações administrativas existentes nos Cogs originais: o painel central
     # chama os mesmos callbacks para evitar duplicar regras de negócio.
     # Como a chamada interna não passa pelos checks do app command, repetimos
@@ -1085,7 +1108,7 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
         if action == "cargos_opcoes":
             return await interaction.response.edit_message(
                 content="## 🎭 Opções do painel de cargos\nEscolha a ação e o cargo e clique em **Continuar**. Depois, publique ou atualize o painel pelo botão **Publicar painel de cargos**.",
-                embed=None, attachments=[], view=CargoOpcoesView(bot, interaction.user.id),
+                embed=None, attachments=[], view=com_voltar(CargoOpcoesView(bot, interaction.user.id)),
             )
         atual = await cog._get_config(interaction.guild)
 
@@ -1130,12 +1153,14 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
 
 
 class AdminAcaoButton(discord.ui.Button):
-    def __init__(self, action: str, label: str, emoji: str, row: int):
+    def __init__(self, action: str, label: str, emoji: str, row: int, categoria: str, user_id: int):
         super().__init__(label=label, emoji=emoji, style=discord.ButtonStyle.secondary, row=row)
         self.action = action
+        self.categoria = categoria
+        self.user_id = user_id
 
     async def callback(self, interaction: discord.Interaction):
-        await _executar_acao_admin(interaction, self.view.bot, self.action)
+        await _executar_acao_admin(interaction, self.view.bot, self.action, categoria=self.categoria, user_id=self.user_id)
 
 
 class AdminVoltarButton(discord.ui.Button):
@@ -1155,7 +1180,7 @@ class AdminCategoriaView(discord.ui.View):
         self.user_id = user_id
         dados = ADMIN_CATEGORIAS[categoria]
         for index, (action, label, emoji) in enumerate(dados["acoes"]):
-            self.add_item(AdminAcaoButton(action, label, emoji, row=index // 2))
+            self.add_item(AdminAcaoButton(action, label, emoji, row=index // 2, categoria=categoria, user_id=user_id))
         self.add_item(AdminVoltarButton(bot))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -1478,7 +1503,7 @@ async def _mostrar_painel_principal(interaction: discord.Interaction, bot):
         title="⚙️ Painel Administrativo — Nara",
         description=(
             "Central de controle da NARA. Escolha uma categoria para configurar o servidor, "
-            "moderar solicitações, gerenciar sistemas ou consultar o diagnóstico.\n\n"
+            "revisar solicitações, gerenciar sistemas ou consultar o diagnóstico. Aqui o caos fica do lado de fora; precisão primeiro.\n\n"
             f"**Status:** {configurados}/{total} configurações personalizadas\n"
             + (f"⚠️ **{pendentes} item(ns)** ainda usam valores padrão." if pendentes else "✅ Tudo configurado!")
         ),

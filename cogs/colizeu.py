@@ -205,12 +205,12 @@ class Colizeu(commands.Cog):
         agora = int(discord.utils.utcnow().timestamp())
         cabecalho = (
             "# 🏛️ COLIZEU — Hall dos Gladiadores\n\n"
-            "Os maiores caçadores de platinas da arena.\n"
+            "Os maiores caçadores de platinas da arena. Provas revisadas, posições conquistadas — sem atalhos.\n"
             f"_Atualizado <t:{agora}:R>._"
         )
         if not top:
             return (
-                cabecalho + "\n\n**A arena ainda está vazia.** Nenhuma platina aprovada foi registrada. Use `/nara` e abra **Coliseu** para começar.",
+                cabecalho + "\n\n**A arena ainda está vazia.** Nenhuma platina aprovada foi registrada. Use `/nara` e abra **Coliseu** para começar. Alguém precisa inaugurar esse placar.",
                 [], discord.ui.View(timeout=None), [],
             )
 
@@ -337,7 +337,7 @@ class Colizeu(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         ok = await self.atualizar(interaction.guild_id)
         await interaction.followup.send(
-            "✅ Painel atualizado!" if ok else "Não achei o canal. Configure o destino em /adm > Canais e confira as permissões do bot.",
+            "✅ Painel atualizado. A arena está em dia." if ok else "Não encontrei o canal. Configure o destino em /adm > Canais e confira as permissões do bot.",
             ephemeral=True,
         )
 

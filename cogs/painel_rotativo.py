@@ -14,12 +14,12 @@ TEXTOS = {
     "platinas": (
         "🏆 **NARA — PLATINAS**\n"
         "Registre suas conquistas e consulte suas platinas.\n\n"
-        "Clique no botão abaixo para abrir seu painel pessoal."
+        "Abra seu painel pessoal no botão abaixo. Eu cuido do caminho; a conquista é sua."
     ),
     "zerados": (
         "# ✅ Jogos Zerados\n\n"
         "Não curte platinar, mas zerou o jogo? Use o botão abaixo para **registrar**, ver sua lista "
-        "e acompanhar o ranking de quem mais finalizou jogos.\n\n"
+        "e acompanhar o ranking de quem mais finalizou jogos. A lista não se preenche por drama — registre seu progresso.\n\n"
         "_Print é opcional. Se enviar, ele aparece no anúncio do canal._"
     ),
 }

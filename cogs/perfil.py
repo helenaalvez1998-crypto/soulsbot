@@ -69,6 +69,7 @@ class Perfil(commands.Cog):
     def texto_ajuda(self) -> str:
         return (
             "## ⚔️ Colizeu — Guia rápido\n\n"
+            "Vamos ao que interessa: o caminho de cada recurso, sem caça ao tesouro no menu.\n\n"
             "**`/nara`** abre o painel de conquistas e jornadas.\n\n"
             "🏆 **Registrar platina** — informe o jogo, a plataforma, a data e os comprovantes; "
             "a moderação revisará o registro.\n"
@@ -83,7 +84,7 @@ class Perfil(commands.Cog):
     def embed_ajuda(self) -> discord.Embed:
         embed = discord.Embed(title="⚔️ Nara — Como usar", color=config.COR_OURO)
         embed.description = (
-            "Use **`/nara`** para abrir o painel. Nele você pode:\n\n"
+            "Use **`/nara`** para abrir o painel. Eu organizo a rota; você escolhe sua próxima conquista.\n\n"
             "📤 **Registrar platina** — informe jogo, plataforma, data e anexe o print. "
             "A moderação aprova ou rejeita.\n"
             "👤 **Perfil** — patente, nível, XP e ranking.\n"

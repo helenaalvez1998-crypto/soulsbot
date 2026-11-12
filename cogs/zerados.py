@@ -66,9 +66,9 @@ class Zerados(commands.Cog):
             return await interaction.response.send_message("Apenas moderadores.", ephemeral=True)
         texto = (
             "# ✅ Jogos Zerados\n\n"
-            "Não curte platinar, mas zerou o jogo? Use o botão abaixo para **enviar seu registro**, "
+            "Não curte platinar, mas terminou o jogo? A jornada também conta. Use o botão abaixo para **enviar seu registro**, "
             "ver sua lista aprovada e acompanhar o ranking de quem mais finalizou jogos.\n\n"
-            "_Os registros passam pela Central de Aprovação. XP/Denários e publicação são liberados após a aprovação. Print é opcional._"
+            "_Os registros passam pela Central de Aprovação. XP/Denários e publicação só são liberados após a aprovação. Print é opcional; não precisa transformar cada final em um dossiê._"
         )
         key = f"panel:zerados:{interaction.guild_id}:{interaction.channel_id}"
         await upsert_panel(
@@ -303,7 +303,7 @@ class Zerados(commands.Cog):
         rows = await self.bot.db.zerados_do_usuario(membro.id)
         cabecalho = f"## ✅ Zerados de {membro.display_name}\n\n"
         if not rows:
-            return cabecalho + "Ainda não há jogos zerados registrados."
+            return cabecalho + "Ainda não há jogos zerados registrados. Sua lista está limpa — por enquanto."
         linhas = []
         for r in rows[:30]:
             linha = f"✅ **{r['game']}** · `{r['platform']}` · {data_legivel(r['finished_at'])} · `#{r['id']}`"
@@ -323,7 +323,7 @@ class Zerados(commands.Cog):
         else:
             rows, titulo = await db.ranking_zerados(), "Ranking de Zerados"
         if not rows:
-            return f"## ✅ {titulo}\n\nAinda não há dados nesse ranking."
+            return f"## ✅ {titulo}\n\nAinda não há dados suficientes nesse ranking. A disputa continua aberta."
         linhas = []
         for i, r in enumerate(rows):
             pos = MEDALHAS[i] if i < 3 else f"`{i + 1:>2}.`"

@@ -148,7 +148,7 @@ class Cargos(commands.Cog):
                 roles.append({"role_id": role.id, "label": name, "emoji": emoji})
         data = {
             "title": "🎭 Escolha seus cargos",
-            "description": "Clique em um cargo para adicioná-lo ou removê-lo. Clique novamente para tirar.",
+            "description": "Clique em um cargo para adicioná-lo ou removê-lo. Clique novamente para tirar. Escolha só os avisos que realmente quer receber; seu Discord já tem barulho suficiente.",
             "roles": roles,
         }
         await self._save_config(guild.id, data)
@@ -172,7 +172,7 @@ class Cargos(commands.Cog):
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.checks.has_permissions(manage_guild=True)
     async def painel_verificacao(self, interaction: discord.Interaction):
-        texto = "# ✅ Verificação do servidor\n\nPara liberar o acesso aos canais, clique em **Verificar-me** abaixo.\n\n_Se o botão não funcionar, avise a moderação._"
+        texto = "# ✅ Verificação do servidor\n\nPara liberar o acesso aos canais, clique em **Verificar-me** abaixo. O portão é automático; não precisa bater nele dez vezes.\n\n_Se o botão não funcionar, avise a moderação._"
         await upsert_panel(self.bot, interaction.channel,
             f"panel:verification:{interaction.guild_id}:{interaction.channel_id}",
             marker="verificar_membro", content=texto, embeds=[], view=Verificacao())

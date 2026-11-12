@@ -258,7 +258,7 @@ class YouTube(commands.Cog):
         embed = discord.Embed(
             title=latest["title"][:250],
             url=latest["url"],
-            description=f"Um vídeo novo foi publicado no canal **oQuasepro**.\n\n[Assistir agora]({latest['url']})",
+            description=f"O canal **oQuasepro** publicou um vídeo novo. Se você estava esperando um motivo para pausar a run, está aqui.\n\n[Assistir agora]({latest['url']})",
             color=discord.Color.red(),
             timestamp=datetime.now(timezone.utc),
         )
@@ -330,7 +330,7 @@ class YouTube(commands.Cog):
         embed = discord.Embed(
             title="oQuasepro está AO VIVO no YouTube!",
             url=live["url"],
-            description=f"**{live['title']}**\n\n[Assistir à live agora]({live['url']})",
+            description=f"**{live['title']}**\n\nA transmissão começou. A arena pode esperar alguns minutos.\n\n[Assistir à live agora]({live['url']})",
             color=discord.Color.red(),
             timestamp=datetime.now(timezone.utc),
         )

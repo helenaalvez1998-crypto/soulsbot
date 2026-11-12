@@ -248,21 +248,28 @@ class RevisaoView(discord.ui.View):
 
 class ColiseuView(discord.ui.View):
     """Painel principal do Coliseu. Pode ser público e persistente ou privado por usuário."""
-    def __init__(self, platinas_cog, user=None):
+    def __init__(self, platinas_cog, user=None, back_callback=None):
         # Sem usuário definido, é o painel público postado pela moderação e precisa
         # continuar funcionando após reinicializações. Com usuário, é a versão privada.
         super().__init__(timeout=None if user is None else 300)
         self.platinas_cog = platinas_cog
         self.user_id = user.id if user is not None else None
+        self.back_callback = back_callback
+
+    async def _voltar_coliseu(self, interaction: discord.Interaction):
+        if self.back_callback is not None:
+            await self.back_callback(interaction)
+            return
+        await interaction.response.edit_message(content=self.texto(), embed=None, view=ColiseuView(self.platinas_cog, interaction.user))
 
     def texto(self):
         return (
             "# 🏛️ NARA — COLISEU\n"
-            "Sua central de conquistas e jornadas.\n\n"
+            "Sua central de conquistas e jornadas. Aqui, cada registro tem seu lugar — e cada prova passa pela revisão correta.\n\n"
             "**🏆 Platinas** — registrar conquistas, consultar perfil e ranking.\n"
             "**✅ Zerados** — registrar jogos finalizados, sem precisar de platina.\n"
             "**⚔️ Runs e desafios** — registrar tempos, conferir regras e recordes.\n"
-            "_Escolha uma área abaixo. A navegação acontece nesta mesma mensagem._"
+            "_Escolha uma área abaixo. Eu cuido da navegação; você cuida das conquistas. Tudo acontece nesta mesma mensagem._"
         )
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -274,6 +281,9 @@ class ColiseuView(discord.ui.View):
     @discord.ui.button(label="Platinas", emoji="🏆", style=discord.ButtonStyle.primary, custom_id="nara:coliseu:platinas", row=0)
     async def abrir_platinas(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = PainelView(self.platinas_cog, interaction.user)
+        if self.user_id is not None and self.back_callback is not None:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(view, self._voltar_coliseu)
         if self.user_id is None:
             # No painel público, cada pessoa recebe a navegação em uma resposta privada.
             await interaction.response.send_message(embed=await view.embed(), view=view, ephemeral=True)
@@ -284,8 +294,11 @@ class ColiseuView(discord.ui.View):
     async def abrir_zerados(self, interaction: discord.Interaction, button: discord.ui.Button):
         cog = self.platinas_cog.bot.get_cog("Zerados")
         if cog is None:
-            return await interaction.response.send_message("O painel de zerados não está disponível. Avise a moderação.", ephemeral=True)
+            return await interaction.response.send_message("O painel de zerados não está disponível agora. Avise a moderação; não vou abrir uma porta que não existe.", ephemeral=True)
         view = cog.painel_view(interaction.user)
+        if self.user_id is not None and self.back_callback is not None:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(view, self._voltar_coliseu)
         if self.user_id is None:
             await interaction.response.send_message(embed=await view.embed(), view=view, ephemeral=True)
         else:
@@ -295,12 +308,16 @@ class ColiseuView(discord.ui.View):
     async def abrir_runs(self, interaction: discord.Interaction, button: discord.ui.Button):
         cog = self.platinas_cog.bot.get_cog("Soulslike")
         if cog is None:
-            return await interaction.response.send_message("O painel de runs não está disponível. Avise a moderação.", ephemeral=True)
+            return await interaction.response.send_message("O painel de runs não está disponível agora. Avise a moderação para verificar o módulo.", ephemeral=True)
         from cogs.soulslike import CentralView
         if self.user_id is None:
             await interaction.response.send_message(content=cog.texto_central(), view=CentralView(cog), ephemeral=True)
         else:
-            await interaction.response.edit_message(content=cog.texto_central(), embeds=[], view=CentralView(cog))
+            view = CentralView(cog)
+            if self.back_callback is not None:
+                from painel_navegacao import adicionar_botao_voltar
+                adicionar_botao_voltar(view, self._voltar_coliseu)
+            await interaction.response.edit_message(content=cog.texto_central(), embeds=[], view=view)
 
 
 PLATAFORMAS = ["PS5", "PS4", "PS3", "PC", "Xbox Series", "Xbox One", "Switch", "Outra"]

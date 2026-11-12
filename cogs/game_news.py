@@ -194,7 +194,7 @@ class GameNewsCog(commands.Cog):
         embed = discord.Embed(
             title=item["title"][:256],
             url=item["link"],
-            description=(item["description"][:MAX_DESCRIPTION] if item["description"] else "Abra a fonte original para ler a notícia completa."),
+            description=(item["description"][:MAX_DESCRIPTION] if item["description"] else "A fonte publicou uma notícia nova. Abra o link original para conferir os detalhes."),
             color=discord.Color.blurple(),
             timestamp=datetime.now(timezone.utc),
         )

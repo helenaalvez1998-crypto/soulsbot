@@ -42,7 +42,7 @@ class Ranking(commands.Cog):
             rows, titulo, unidade = await db.ranking_mensal(mes), f"Platinas de {mes}", "🏆"
 
         if not rows:
-            return discord.Embed(title=f"🏛️ {titulo}", description="Ainda não há dados nesse ranking.", color=config.COR_OURO)
+            return discord.Embed(title=f"🏛️ {titulo}", description="Ainda não há registros suficientes para montar este ranking. A arena aguarda os primeiros resultados.", color=config.COR_OURO)
 
         linhas = []
         for i, r in enumerate(rows):

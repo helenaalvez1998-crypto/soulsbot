@@ -273,7 +273,7 @@ def main_content():
     """Conteúdo Markdown do painel principal; os botões ficam na mesma mensagem."""
     return (
         "# 🎮 Catálogo de Jogos\n"
-        "Encontre jogos por plataforma, consulte detalhes e acesse os links disponíveis.\n\n"
+        "Encontre jogos por plataforma, consulte detalhes e acesse os links disponíveis. Explore com calma; sugestões da comunidade passam pela revisão da equipe.\n\n"
         "📚 **Ver catálogo** — explore as capas e filtre por plataforma\n"
         "🔎 **Buscar jogo** — encontre um título pelo nome\n"
         "📤 **Enviar jogo** — sugira um jogo para análise da moderação\n"
@@ -284,7 +284,7 @@ def main_content():
 
 def admin_content():
     """Conteúdo Markdown do painel administrativo."""
-    return "## 🛠️ Painel de administração\nEscolha uma ação no menu abaixo."
+    return "## 🛠️ Painel de administração\nEscolha uma ação no menu abaixo. A biblioteca precisa de ordem, não de improviso."
 
 
 def send_kwargs(emb, file, view):

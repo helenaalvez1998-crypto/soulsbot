@@ -299,7 +299,7 @@ class Soulslike(commands.Cog):
     def texto_central(self) -> str:
         return (
             "# ⛧ SOULSLIKE · THE HALL OF THE FALLEN\n\n"
-            "**A chama está acesa.** Registre suas runs, consulte recordes e acompanhe sua jornada.\n\n"
+            "**A chama está acesa.** Registre suas runs, consulte recordes e acompanhe sua jornada. A arena não perdoa descuido, então confira as regras antes de enviar.\n\n"
             "⚔️ **Registrar run** — jogo, desafio, tempo, build e comprovante.\n"
             "🏆 **Hall da Fama** — melhores tempos por jogo e desafio.\n"
             "📜 **Livro dos Desafios** — categorias e regras.\n"
@@ -312,7 +312,7 @@ class Soulslike(commands.Cog):
             title="⛧ SOULSLIKE | THE HALL OF THE FALLEN",
             description=(
                 "**A chama está acesa.**\n"
-                "Registre suas runs, consulte os recordes e acompanhe sua jornada.\n\n"
+                "Registre suas runs, consulte os recordes e acompanhe sua jornada. Confira as regras antes de entrar na arena.\n\n"
                 "Escolha uma opção nos botões abaixo. Suas submissões são encaminhadas à moderação."
             ),
             color=config.COR_OURO,
@@ -321,7 +321,7 @@ class Soulslike(commands.Cog):
         e.add_field(name="🏆 Hall da Fama", value="Melhores tempos por jogo e desafio.", inline=True)
         e.add_field(name="📜 Livro dos Desafios", value="Consulte regras e categorias disponíveis.", inline=True)
         e.add_field(name="🗡️ Meu perfil", value="Histórico, status e runs pendentes.", inline=True)
-        e.set_footer(text="Cada run deixa uma marca. Apenas runs aprovadas entram no ranking.")
+        e.set_footer(text="Cada run deixa uma marca. Só as aprovadas entram no ranking.")
         return e
 
     async def mostrar_perfil(self, interaction: discord.Interaction):

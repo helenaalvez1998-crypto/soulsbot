@@ -499,11 +499,11 @@ class Santuario(commands.Cog):
             return await interaction.response.send_message("Apenas moderadores.", ephemeral=True)
         texto = (
             "# 🏛️ Santuários do Coliseu\n\n"
-            "Cada gladiador tem um espaço próprio para sua história, suas conquistas e suas jornadas. "
-            "Entre com respeito: aqui, o protagonista é quem ergueu este Santuário.\n\n"
+            "Cada membro tem um espaço próprio para sua história, suas conquistas e suas jornadas. "
+            "Entre com respeito: aqui, o protagonista é quem ergueu este Santuário — visitante não vira dono.\n\n"
             "✨ **Meu Santuário** — crie ou abra seu espaço pessoal.\n"
             "🚪 **Visitar um Santuário** — escolha um membro para conhecer suas conquistas. "
-            "Visitantes podem contemplar o espaço, mas somente o proprietário pode personalizá-lo."
+            "Visitantes podem conhecer o espaço, mas somente o proprietário pode personalizá-lo. Admire a decoração; não tente reformar a casa alheia."
         )
         await upsert_panel(
             self.bot, interaction.channel,
@@ -528,7 +528,7 @@ class SantuarioPublicoView(discord.ui.View):
     @discord.ui.button(label="Visitar um santuário", style=discord.ButtonStyle.primary, emoji="🚪", custom_id="sant:visitar")
     async def visitar(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(
-            "De quem você quer visitar o santuário?", view=EscolherVisitaView(self.cog), ephemeral=True
+            "Qual Santuário você quer visitar? Escolha o membro; as portas continuam sob controle do proprietário.", view=EscolherVisitaView(self.cog), ephemeral=True
         )
 
 

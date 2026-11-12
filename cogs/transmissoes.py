@@ -65,7 +65,7 @@ class Transmissoes(commands.Cog):
         )
         await self.bot.db.conn.commit()
         await interaction.response.send_message(
-            "Vídeo tutorial salvo. Quando alguém perguntar como voltar a transmitir, vou apresentar o tutorial e o botão para assistir ao vídeo.",
+            "Vídeo tutorial salvo. Quando alguém perguntar como voltar a transmitir, vou apresentar as instruções e o botão para assistir. Uma dúvida a menos para resolver no grito.",
             ephemeral=True,
         )
 

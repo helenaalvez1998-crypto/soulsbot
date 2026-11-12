@@ -74,8 +74,8 @@ class ProgressaoXP(commands.Cog):
             await sincronizar_patente(guild, membro, novo_nivel)
             try:
                 await membro.send(
-                    f"⚔️ Você alcançou o nível **{novo_nivel} — {patente_por_nivel(novo_nivel)}** "
-                    f"no sistema da Nara! (+{quantidade} XP por {motivo})"
+                    f"⚔️ Novo nível desbloqueado: **{novo_nivel} — {patente_por_nivel(novo_nivel)}**. "
+                    f"Você recebeu +{quantidade} XP por {motivo}. A progressão não se conquista sozinha — embora alguns tentem negociar com o sistema."
                 )
             except (discord.Forbidden, discord.HTTPException):
                 pass
@@ -140,12 +140,12 @@ class ProgressaoXP(commands.Cog):
     async def ranking_xp(self, interaction: discord.Interaction):
         rows = await self.bot.db.ranking_xp(10)
         if not rows:
-            return await interaction.response.send_message("Ainda não há XP registrado.", ephemeral=True)
+            return await interaction.response.send_message("A arena de XP ainda está vazia. Quando houver progresso registrado, o ranking aparece aqui.", ephemeral=True)
         linhas = []
         for i, row in enumerate(rows, 1):
             nivel = nivel_por_xp(int(row['valor']))
             linhas.append(f"`{i:>2}.` <@{row['user_id']}> — **Nível {nivel}** · {patente_por_nivel(nivel)} · {row['valor']} XP")
-        texto = "## 🏆 Ranking de XP da Nara\n\n" + "\n".join(linhas)
+        texto = "## 🏆 Ranking de XP da Nara\n\nA classificação é dos números; eu só organizo o espetáculo.\n\n" + "\n".join(linhas)
         await interaction.response.send_message(content=texto)
 
 

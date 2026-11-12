@@ -78,7 +78,7 @@ class Loja(commands.Cog):
 def catalogo_publico() -> str:
     linhas = [
         "# 🪙 Loja da Nara — Catálogo",
-        "Compre cores de perfil e títulos usando Denários. Os itens são cosméticos e não alteram XP ou rankings.",
+        "Escolha cores de perfil e títulos usando Denários. São itens cosméticos: estilo, não vantagem em XP ou rankings. Gaste com alguma estratégia — arrependimento não devolve moeda.",
         "",
     ]
     for tipo, rotulo in loja.ROTULO_TIPO.items():
@@ -90,7 +90,7 @@ def catalogo_publico() -> str:
             linhas.append(f"{item.emoji} **{item.nome}** — 🪙 {item.preco}{requisito}")
         linhas.append("")
     linhas.extend([
-        "Selecione um item no menu abaixo para abrir sua loja pessoal, ver seu saldo e comprar/equipar.",
+        "Selecione um item para abrir sua loja pessoal, consultar o saldo e comprar ou equipar. A transação só acontece depois da confirmação.",
         "_Seu saldo e inventário são privados; a seleção não publica informações pessoais._",
     ])
     return "\n".join(linhas)[:2000]
@@ -195,6 +195,8 @@ class LojaView(discord.ui.View):
             botao.disabled = self.nivel < item.nivel_min or self.saldo < item.preco
         botao.callback = self._acao
         self.add_item(botao)
+        from painel_navegacao import restaurar_botao_voltar
+        restaurar_botao_voltar(self)
 
     async def _escolher(self, interaction: discord.Interaction):
         self.sel = interaction.data["values"][0]

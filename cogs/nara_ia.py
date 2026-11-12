@@ -28,6 +28,7 @@ from nara_local import aplicar_politica_de_quota, decidir_rota, resposta_local_f
 import nara_conhecimento
 import nara_conversa as conv
 import nara_social
+import nara_voz
 
 log = logging.getLogger("nara.ia")
 
@@ -91,6 +92,7 @@ class NaraIA(commands.Cog):
         # A personalidade principal existente é carregada antes do escopo específico da rota.
         self.prompt_conversa = conv.carregar_prompt()
         self.prompt_identidade = ""
+        self.prompt_personalidade = conv.carregar_personalidade()
         try:
             self.prompt_identidade = (Path(__file__).resolve().parent.parent / "prompts" / "nara.md").read_text(encoding="utf-8").strip()
         except (OSError, UnicodeError):
@@ -100,11 +102,14 @@ class NaraIA(commands.Cog):
         try:
             prompt_especializado = PROMPT_PESQUISA_PATH.read_text(encoding="utf-8").strip()
             identidade_curta = conv.extrair_identidade(self.prompt_identidade)
-            self.prompt_pesquisa = ((identidade_curta or self.prompt_identidade) + "\n\n" + prompt_especializado).strip()
+            blocos = [self.prompt_personalidade, identidade_curta or self.prompt_identidade, prompt_especializado]
+            self.prompt_pesquisa = "\n\n---\n\n".join(bloco for bloco in blocos if bloco).strip()
             if not self.prompt_identidade:
                 log.warning("Prompt principal indisponível; a rota de pesquisa usa somente o prompt específico existente.")
         except (OSError, UnicodeError):
-            self.prompt_pesquisa = self.prompt_identidade or conv.PROMPT_MINIMO
+            self.prompt_pesquisa = "\n\n---\n\n".join(
+                bloco for bloco in (self.prompt_personalidade, self.prompt_identidade, conv.PROMPT_MINIMO) if bloco
+            )
             log.warning("prompts/nara_pesquisa.md ausente; pesquisa não recebeu um novo prompt substituto.")
         if conv.CONVERSA_ATIVA and self.ia is not None:
             log.info("Conversa econômica da Nara ativa: %s/usuário/dia, %s/servidor/dia, cooldown %ss, %s tokens por resposta.",
@@ -593,9 +598,9 @@ class NaraIA(commands.Cog):
             return "**Seus cargos:**\n" + "\n".join(f"• {nome}" for nome in cargos) if cargos else "Você não possui outros cargos além do @everyone."
 
         respostas = {
-            "identidade": "Sou a Nara, assistente do NARA. Cuido das informações do servidor, dos painéis e das consultas que o bot consegue fazer.",
-            "capacidades": "Consigo consultar seu perfil, XP, patente, Denários, platinas, jogos zerados, runs, rankings e loja; também explico os sistemas do NARA. Também converso, tiro dúvidas gerais e uso minha IA quando a pergunta foge do FAQ; pesquisa automática de guias está temporariamente desativada.",
-            "ajuda": "**Atalhos do NARA**\n• `/nara` — platinas, runs, rankings e santuários.\n• **Jogos zerados** no `/nara` — registrar e consultar jogos finalizados.\n• **Remover zerado** no `/nara` — remover um registro seu de zerado.\n• **Meu nível** no `/nara` — seu nível, XP e progresso.\n• **Ranking XP** no `/nara` — ranking de XP.\n• **Loja** no `/nara` — loja de itens cosméticos.\nUse os painéis para abrir formulários e consultar detalhes.",
+            "identidade": "Sou a Nara, a inteligência desta comunidade. Cuido dos sistemas do servidor, dos painéis, das consultas e da organização. Tenho personalidade própria; não confunda minha educação com submissão.",
+            "capacidades": "Consigo consultar seus dados da comunidade, explicar os sistemas, orientar pelos painéis e conversar sobre assuntos do nosso universo. Algumas ações dependem de ferramentas e permissões específicas; quando houver confirmação, espero seu clique. Pesquisa automática de guias está limitada às fontes habilitadas — não vou fingir onisciência.",
+            "ajuda": "**Vamos ao mapa do NARA.**\n• `/nara` — sua central de jogos, biblioteca, conquistas, perfil e suporte.\n• **Jogos zerados** — registre e consulte jogos concluídos.\n• **Remover zerado** — corrija um registro seu.\n• **Meu nível** — consulte XP, patente e progresso.\n• **Ranking de XP** — veja a classificação.\n• **Loja** — confira itens cosméticos e preços.\nUse os painéis para abrir formulários e detalhes. Não precisa decorar tudo; eu também não espero esse tipo de milagre.",
             "como_registrar_platina": "Para registrar uma platina: abra `/nara`, entre em **Platinas** e escolha registrar. Preencha jogo, plataforma, data e envie o comprovante no formulário. A platina só entra no perfil e gera recompensa depois da aprovação da moderação.",
             "como_registrar_zerado": "Se você terminou um jogo sem platinar, abra **Jogos zerados** no `/nara` ou `/nara` e escolha **Zerados**. Informe jogo, plataforma e data; o comprovante é opcional. O pedido segue para a Central de Aprovação. Se a platina desse mesmo jogo e plataforma já foi aprovada, não precisa cadastrar de novo: ele já aparece automaticamente nos seus zerados.",
             "como_remover_zerado": "Use **Remover zerado** no `/nara` para cancelar um pedido seu que ainda está pendente ou remover um registro aprovado. Ao remover um registro aprovado, o XP/Denários concedido por ele é devolvido e suas estatísticas são atualizadas.",
@@ -618,14 +623,14 @@ class NaraIA(commands.Cog):
             "ofertas": "O módulo de ofertas verifica promoções e jogos gratuitos de lojas configuradas, como Steam, Epic e GOG. Os avisos aparecem no canal de ofertas do servidor.",
             "regras": "Respeite as regras do servidor, não tente fraudar comprovantes ou rankings e use os formulários oficiais para registros. A moderação decide aprovações e pode rejeitar registros inválidos.",
             "recompensas": "As recompensas dependem das configurações atuais do servidor. Platinas, runs e jogos zerados só concedem XP/Denários depois da aprovação da moderação. Consulte `/nara` para acompanhar os registros e **Loja** no `/nara` para gastar Denários.",
-            "agradecimento": random.choice(["Disponha. Guarde o agradecimento; Denários seriam mais úteis. 😏", "Por nada. Trabalho bem feito não precisa de cerimônia — mas aceito elogios.", "Tamo junto. Só não transforme isso em uma quest secundária."]),
-            "despedida": "Até mais. Que sua próxima tentativa tenha menos mortes desnecessárias.",
-            "como_esta": "Operacional e com a língua afiada de sempre. E você, sobreviveu ao último chefe?",
-            "provocacao": "Anotado. Quando terminar de testar minha paciência, posso ajudar com seu perfil ou com os sistemas do servidor.",
-            "status": "Estou online se esta mensagem chegou até mim. FAQ e consultas funcionam sempre; o papo livre depende da IA e dos limites diários.",
+            "agradecimento": random.choice(["Disponha. Guarde a gratidão; Denários seriam uma contribuição mais concreta. 😏", "Por nada. Trabalho bem feito não precisa de cerimônia — embora elogios sejam aceitos.", "Tamo junto. Só não transforme isso numa quest secundária de agradecimento." ]),
+            "despedida": random.choice(["Até mais. Que sua próxima tentativa tenha menos mortes desnecessárias.", "Vai lá. E tenta não virar decoração de arena antes da próxima conversa.", "Até depois. A comunidade continua de pé; faça sua parte para não testar essa afirmação."]),
+            "como_esta": random.choice(["Operacional, atenta e com a língua afiada. E você, sobreviveu ao último chefe?", "Tudo sob controle. O caos está agendado, não iniciado. E por aí?", "Funcionando como deveria. Uma raridade que merece ser apreciada."]),
+            "provocacao": random.choice(["Anotado. Quando terminar de testar minha paciência, posso ajudar com seu perfil ou com os sistemas do servidor.", "Essa foi sua melhor tentativa? Tudo bem, ainda posso ser útil: quer consultar algum sistema do servidor?", "Provocação recebida. Minha dignidade sobreviveu; agora diga o que precisa."]),
+            "status": "Estou online se esta mensagem chegou até mim. Consultas locais e painéis continuam disponíveis; o papo livre depende do serviço de IA e dos limites configurados. Sim, eu também prefiro quando tudo coopera.",
             "piada": random.choice(["Um jogador Soulslike entrou numa reunião. Morreu três vezes antes de encontrar o botão de sair.", "Qual é o chefe mais pontual? O que sempre chega na segunda fase.", "Minha build favorita? Defesa alta contra perguntas sem contexto." ]),
             "motivacao": random.choice(["Você não precisa vencer o chefe inteiro hoje. Só precisa aprender o padrão do próximo golpe.", "Progresso não é ausência de mortes; é voltar sabendo mais do que antes.", "Uma tentativa ruim ainda é informação. Use-a na próxima." ]),
-            "criador": "Fui configurada como assistente do NARA. Minha identidade, regras e personalidade vêm das instruções e dos sistemas definidos para este servidor.",
+            "criador": "O Júnior é o criador e responsável pelo servidor. Minha identidade, regras e personalidade foram definidas para este projeto; não vou atribuir a ele opiniões ou decisões que não declarou.",
             "sem_visao": "Não. A Nara não recebe nem analisa prints nesta conversa. Para comprovantes, use os formulários próprios em `/nara`.",
             "faq_geral": "Consigo responder dúvidas sobre XP, Denários, patentes, platinas, zerados, runs, loja e painéis sem chamar o Gemini. Diga qual sistema quer consultar.",
         }
@@ -666,36 +671,39 @@ class NaraIA(commands.Cog):
             runs_row = await db._one("SELECT COUNT(*) AS total FROM sl_runs WHERE user_id=? AND status='approved'", (autor.id,))
             runs = int(runs_row["total"] if runs_row else 0)
             if intent == "meu_saldo":
-                return f"Seu saldo é **{int(user['denarios'] or 0)} Denários**. Consulte **Loja** no `/nara` para ver os itens disponíveis."
+                texto = f"Seu saldo é **{int(user['denarios'] or 0)} Denários**. Consulte **Loja** no `/nara` para ver os itens disponíveis."
+                return nara_voz.enquadrar(texto, "saldo")
             if intent == "minhas_platinas":
                 rows = await db.platinas_do_usuario(autor.id)
                 lista = "\n".join(f"• {r['game']} ({r['platform']})" for r in rows[:10]) or "Nenhuma platina aprovada ainda."
-                return f"Você tem **{platinas} platina(s) aprovada(s)**.\n{lista}"
+                return nara_voz.enquadrar(f"Você tem **{platinas} platina(s) aprovada(s)**.\n{lista}", "platinas")
             if intent == "meus_zerados":
                 rows = await db.zerados_do_usuario(autor.id)
                 lista = "\n".join(f"• {r['game']} ({r['platform']})" for r in rows[:10]) or "Nenhum jogo zerado registrado ainda."
-                return f"Você tem **{zerados} jogo(s) zerado(s)** registrado(s).\n{lista}"
+                return nara_voz.enquadrar(f"Você tem **{zerados} jogo(s) zerado(s)** registrado(s).\n{lista}", "zerados")
             if intent == "minhas_runs":
-                return f"Você tem **{runs} run(s) aprovada(s)** na Central Soulslike. Abra `/nara` para consultar seus registros e desafios."
+                texto = f"Você tem **{runs} run(s) aprovada(s)** na Central Soulslike. Abra `/nara` para consultar seus registros e desafios."
+                return nara_voz.enquadrar(texto, "runs")
             if intent == "meu_inventario":
                 import loja
                 rows = await db.inventario_do_usuario(autor.id)
                 if not rows:
-                    return "Seu inventário cosmético está vazio. Consulte **Loja** no `/nara` para ver cores e títulos disponíveis."
+                    return nara_voz.enquadrar("Seu inventário cosmético está vazio. Consulte **Loja** no `/nara` para ver cores e títulos disponíveis. Ainda dá para começar uma coleção sem transformar isso em uma missão épica.", "inventario")
                 itens = []
                 for row in rows[:15]:
                     item = loja.POR_ID.get(row["item"])
                     nome = item.nome if item else row["item"]
                     estado = "equipado" if row["equipado"] else "guardado"
                     itens.append(f"• {nome} — {estado}")
-                return "**Seu inventário:**\n" + "\n".join(itens)
+                return nara_voz.enquadrar("**Seu inventário:**\n" + "\n".join(itens), "inventario")
             from levels import barra_progresso, xp_para_nivel
             prox = xp_para_nivel(nivel + 1) - xp
             posicao = await db.posicao_xp(xp)
-            return (f"**Perfil de {autor.display_name}**\nNível **{nivel}** — {patente_por_nivel(nivel)}\n"
+            texto_perfil = (f"**Perfil de {autor.display_name}**\nNível **{nivel}** — {patente_por_nivel(nivel)}\n"
                     f"XP: **{xp}** ({barra_progresso(xp)})\nPróximo nível: **{max(0, prox)} XP**\n"
                     f"Denários: **{int(user['denarios'] or 0)}**\nPlatinas: **{platinas}** · Zerados: **{zerados}** · Runs: **{runs}**\n"
                     f"Posição no ranking XP: **#{posicao}**")
+            return nara_voz.enquadrar(texto_perfil, "perfil")
 
         if intent in {"ranking_xp", "ranking_platinas", "ranking_zerados"}:
             getters = {
@@ -706,13 +714,13 @@ class NaraIA(commands.Cog):
             getter, label = getters[intent]
             rows = await getter(10)
             if not rows:
-                return f"Ainda não há registros suficientes para montar o ranking de {label}."
+                return f"Ainda não há registros suficientes para montar o ranking de {label}. A arena está aberta; por enquanto, faltam competidores com registros válidos."
             linhas = []
             for i, row in enumerate(rows, 1):
                 membro = guild.get_member(int(row["user_id"])) if guild else None
                 nome = membro.display_name if membro else f"Membro {str(row['user_id'])[-4:]}"
                 linhas.append(f"**{i}.** {nome} — {int(row['valor'])} {label}")
-            return f"**Top {label}:**\n" + "\n".join(linhas)
+            return nara_voz.enquadrar(f"**Top {label}:**\n" + "\n".join(linhas), "ranking")
 
         return resposta_local_fallback(message.clean_content)
 
@@ -755,7 +763,9 @@ class NaraIA(commands.Cog):
               "Não alegue sucesso sem resultado da ferramenta. Ações com risco CONFIRMAR/MODERACAO "
               "devem aguardar o botão Confirmar do autor."
         )
-        system = (self.prompt_identidade or "") + "\n\n" + inventario
+        system = "\n\n---\n\n".join(
+            bloco for bloco in (self.prompt_personalidade, self.prompt_identidade, inventario) if bloco
+        )
         gerar = self.ia.criar_gerador(system, registro)
         texto = await rodar_agente(gerar, self.ia, pedido, registro, ctx)
         return (texto or "Não consegui concluir a ação com as ferramentas disponíveis." ).strip(), ctx
@@ -845,7 +855,7 @@ class NaraIA(commands.Cog):
                 texto = await self._responder_local(message, intent)
             except Exception:
                 log.exception("Falha em uma resposta local da Nara (intenção=%s)", intent)
-                texto = "Consigo responder sem IA, mas falhei ao consultar esse dado agora. Tente novamente."
+                texto = "A consulta local falhou desta vez. Tente novamente; prefiro reconhecer o erro a inventar seus dados."
             if tem_imagem:
                 texto += "\n\n_Não abri nem analisei o anexo; respondi apenas ao texto._"
             if intent == "como_transmitir_discord":
@@ -876,18 +886,18 @@ class NaraIA(commands.Cog):
                     texto = getattr(exc, "user_message", "A interpretação está indisponível; nenhuma ação foi executada.")
                 except TodosProvedoresIndisponiveis as exc:
                     log.error("Todos os provedores falharam ao interpretar ação: %s", exc.admin_message)
-                    texto = "Não consegui interpretar a solicitação agora. Nenhuma ação foi executada."
+                    texto = "Não consegui interpretar a solicitação com segurança. Nenhuma ação foi executada."
                 except Exception:
                     log.exception("Falha ao preparar ação da Nara.")
-                    texto = "A preparação da ação falhou. Nenhuma alteração foi confirmada."
+                    texto = "A preparação da ação falhou. Nenhuma alteração foi confirmada; o sistema não vai improvisar uma execução."
             if ctx is None:
                 return await message.reply(texto[:1900], allowed_mentions=sem_mencao)
             return await self._enviar(message, texto, ctx)
 
         if rota == "pedir_mencao":
             texto = (
-                "Essa pergunta precisa de pesquisa com fontes, recurso que está temporariamente indisponível. "
-                "para identificar o jogo e preparar o catálogo. Não consumo quota automaticamente no canal."
+                "Essa solicitação depende de pesquisa com fontes para identificar o jogo e preparar o catálogo. "
+                "Esse recurso está temporariamente indisponível; não vou chutar o título nem consumir quota automaticamente no canal."
             )
             if tem_imagem:
                 texto += "\n\n_Não abri nem analisei o print; considerei somente o texto._"
@@ -906,8 +916,8 @@ class NaraIA(commands.Cog):
             from nara_help_panel import AjudaAtalhoView
             texto = (
                 "Não encontrei uma resposta local confiável para isso. "
-                "Se quiser que eu tente entender melhor, repita a pergunta me marcando (@Nara). "
-                "Enquanto isso, deixei a Central de Ajuda logo abaixo — escolha um assunto e encontre a resposta sem precisar adivinhar comandos."
+                "Marque (@Nara) na mensagem para abrir a conversa livre, quando disponível. "
+                "Enquanto isso, a Central de Ajuda está logo abaixo: escolha um assunto. Não precisa adivinhar comando como quem procura uma passagem secreta."
             )
             return await message.reply(
                 texto, view=AjudaAtalhoView(self.bot), allowed_mentions=sem_mencao
@@ -923,7 +933,7 @@ class NaraIA(commands.Cog):
             texto = (
                 "Desativei a pesquisa conversacional para preservar a quota. Não vou chamar o Gemini para guias ou perguntas abertas no chat. "
                 "Para consultar os recursos disponíveis, abra a Central de Ajuda pelo `/nara`. "
-                "e só chama a pesquisa externa quando não encontra dados existentes."
+                "A pesquisa externa só deve entrar em cena quando os dados locais não resolvem a pergunta."
             )
             if tem_imagem:
                 texto += "\n\n_Não abri nem analisei o print; considerei somente o texto._"
@@ -940,8 +950,8 @@ class NaraIA(commands.Cog):
             from nara_help_panel import AjudaAtalhoView
             texto = (
                 "Ainda não tenho uma resposta local segura para essa pergunta. "
-                "Se quiser uma resposta conversacional, marque a Nara na mensagem; "
-                "ou abra a Central de Ajuda e escolha uma pergunta pronta."
+                "Marque a Nara para tentar uma resposta conversacional, quando o serviço estiver disponível, "
+                "ou abra a Central de Ajuda e escolha uma pergunta pronta. Prefiro pedir contexto a fabricar certeza."
             )
             if tem_imagem:
                 texto += "\n\n_Não abri nem analisei o anexo; considerei somente o texto._"
