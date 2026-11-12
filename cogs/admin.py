@@ -1275,9 +1275,19 @@ class ChannelSelectView(discord.ui.View):
         self.add_item(self.select)
 
     async def _salvar(self, interaction: discord.Interaction):
-        channel = self.select.values[0]
-        await GuildConfig.set(self.bot.db, interaction.guild_id, self.key, channel.id)
-        if self.key == "mod_channel":
+        escolhido = self.select.values[0]
+        await GuildConfig.set(self.bot.db, interaction.guild_id, self.key, escolhido.id)
+        # O ChannelSelect entrega um AppCommandChannel (só id/nome/menção). Para
+        # alterar permissões é preciso o canal real do servidor.
+        channel = interaction.guild.get_channel(escolhido.id) if interaction.guild else None
+        if channel is None:
+            try:
+                channel = await self.bot.fetch_channel(escolhido.id)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                channel = None
+        if self.key == "mod_channel" and channel is None:
+            log.warning("Canal central salvo, mas não foi possível carregá-lo para ajustar permissões.")
+        if self.key == "mod_channel" and channel is not None:
             role_id = await GuildConfig.get(self.bot.db, interaction.guild_id, "mod_role")
             role = interaction.guild.get_role(role_id) if role_id else None
             if role:
@@ -1289,10 +1299,10 @@ class ChannelSelectView(discord.ui.View):
                     )
                 except discord.Forbidden:
                     log.warning("Canal central alterado, mas o cargo de moderação não recebeu overwrite; verifique Gerenciar Canais.")
-        log.info("Admin: %s configurado como %s na guild %s", self.key, channel.id, interaction.guild_id)
+        log.info("Admin: %s configurado como %s na guild %s", self.key, escolhido.id, interaction.guild_id)
         embed = discord.Embed(
             title="✅ Canal Configurado",
-            description=f"**{LABELS.get(self.key, self.key)}** definido como {channel.mention}.",
+            description=f"**{LABELS.get(self.key, self.key)}** definido como {escolhido.mention}.",
             color=discord.Color.green(),
         )
         view = VoltarInicioView(self.bot)

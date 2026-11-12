@@ -772,7 +772,20 @@ class CatalogoPublicarChannelView(discord.ui.View):
         cog = interaction.client.get_cog("CatalogoIntegrado")
         if cog is None:
             return await interaction.response.send_message("O catálogo não está disponível.", ephemeral=True)
-        await cog.publicar_painel_publico(interaction, self.children[0].values[0])
+        # O ChannelSelect entrega um AppCommandChannel; para enviar/buscar mensagens
+        # é preciso o canal real do servidor.
+        escolhido = self.children[0].values[0]
+        canal = interaction.guild.get_channel(escolhido.id) if interaction.guild else None
+        if canal is None:
+            try:
+                canal = await interaction.client.fetch_channel(escolhido.id)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                canal = None
+        if not isinstance(canal, discord.TextChannel):
+            return await interaction.response.send_message(
+                "Não consegui acessar esse canal. Escolha um canal de texto deste servidor.", ephemeral=True
+            )
+        await cog.publicar_painel_publico(interaction, canal)
 
 
 # ------------------------------------------------------------------ painel admin
