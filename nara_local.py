@@ -383,7 +383,7 @@ def resposta_local_fallback(mensagem: str) -> str:
     t = normalizar(mensagem)
     if any(x in t for x in ("jogo", "elden", "souls", "boss", "chefe", "trofeu", "platina", "conquista", "dlc")):
         return (
-            "Consigo conversar sobre jogos e orientar com o que está verificado. A pesquisa automática de guias e checklists, porém, está indisponível no momento. "
+            "Posso trocar mensagens sobre jogos e orientar com o que está verificado. A pesquisa automática de guias e checklists está indisponível no momento. "
             "Não vou inventar requisito de troféu só para bancar a especialista — até eu tenho padrões."
         )
     return (

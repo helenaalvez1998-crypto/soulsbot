@@ -30,7 +30,7 @@ logging.captureWarnings(True)
 log = logging.getLogger("nara")
 
 EXTENSOES = (
-    "cogs.admin", "cogs.perfil", "cogs.platinas", "cogs.loja", "cogs.ranking",
+    "cogs.comunidade", "cogs.admin", "cogs.perfil", "cogs.platinas", "cogs.loja", "cogs.ranking",
     "cogs.colizeu", "cogs.cargos", "cogs.progressao", "cogs.youtube",
     "cogs.ofertas", "cogs.zerados", "cogs.santuario", "cogs.soulslike",
     "cogs.transmissoes", "cogs.nara_ia", "cogs.painel_rotativo",

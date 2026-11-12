@@ -24,6 +24,9 @@ KEYS = {
     "soulslike_channel":   ("SOULSLIKE_CHANNEL_ID", int),
     "colizeu_channel":     ("COLIZEU_CHANNEL_ID", int),
     "nara_channel":        ("NARA_CHANNEL_ID", int),
+    "lore_channel":        ("LORE_CHANNEL_ID", int),
+    "guides_channel":      ("GUIDES_CHANNEL_ID", int),
+    "community_channel":   ("COMMUNITY_CHANNEL_ID", int),
 
     # ── Cargos ────────────────────────────────────────────────────────
     "mod_role":           ("MOD_ROLE_ID", int),
@@ -36,6 +39,8 @@ KEYS = {
     "xp_zerado":          ("XP_ZERADO", int),
     "denarios_zerado":    ("DENARIOS_ZERADO", int),
     "zerados_xp_limite":  ("ZERADOS_XP_LIMITE_DIARIO", int),
+    "community_xp_default": ("COMMUNITY_XP_DEFAULT", int),
+    "community_xp_weekly_cap": ("COMMUNITY_XP_WEEKLY_CAP", int),
 }
 
 # Rótulos legíveis para exibição no painel administrativo
@@ -51,6 +56,9 @@ LABELS = {
     "soulslike_channel":   "Canal de anúncios de runs Soulslike",
     "colizeu_channel":     "Canal do painel principal do Colizeu",
     "nara_channel":        "Canal de conversa livre da Nara",
+    "lore_channel":        "Canal do Arquivo de Mundos (Lore e Teorias)",
+    "guides_channel":      "Canal da Biblioteca de Guias e Tutoriais",
+    "community_channel":   "Canal geral de publicações comunitárias",
     "mod_role":           "Cargo de moderador",
     "role_video":         "Cargo de aviso de vídeo",
     "role_live":          "Cargo de aviso de live",
@@ -59,16 +67,21 @@ LABELS = {
     "xp_zerado":          "XP por jogo zerado",
     "denarios_zerado":    "Denários por jogo zerado",
     "zerados_xp_limite":  "Limite diário de XP por zerados",
+    "community_xp_default": "XP padrão para tipos sem valor específico",
+    "community_xp_weekly_cap": "Limite semanal de XP comunitário por membro",
 }
 
 # Agrupamento das chaves por seção do painel
 SECTIONS = {
     "channels": ["mod_channel", "platinas_channel", "video_channel", "live_channel",
                  "zerados_channel", "perfis_channel", "games_channel", "promos_channel",
-                 "soulslike_channel", "colizeu_channel", "nara_channel"],
+                 "soulslike_channel", "colizeu_channel", "nara_channel",
+                 "lore_channel", "guides_channel", "community_channel"],
     "roles":    ["mod_role", "role_video", "role_live"],
     "economy":  ["xp_platina", "denarios_platina", "xp_zerado", "denarios_zerado",
                  "zerados_xp_limite"],
+    "community": ["lore_channel", "guides_channel", "community_channel",
+                  "community_xp_default", "community_xp_weekly_cap"],
 }
 
 

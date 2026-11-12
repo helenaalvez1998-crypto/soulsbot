@@ -134,11 +134,11 @@ def formatar_ajuda(bot: Any, member: Any = None, *, limite: int = 18) -> str:
     if not comandos:
         return (
             "Não encontrei comandos slash registrados e visíveis para sua conta neste momento. "
-            "Abra `/nara` para consultar os painéis disponíveis; não vou inventar atalhos que o Discord não registrou."
+            "Abra `/nara` para consultar os painéis disponíveis. Não vou inventar atalhos que o Discord não registrou; minha imaginação tem limites administrativos."
         )
 
     ordenados = sorted(comandos, key=lambda c: (_grupo_ajuda(c.caminho)[0], c.caminho.casefold()))
-    linhas = ["**Certo. Estes são os comandos registrados e visíveis para você:**"]
+    linhas = ["**Certo. Estes são os comandos registrados e visíveis para sua conta:**"]
     atual = None
     exibidos = 0
     for comando in ordenados:
@@ -157,7 +157,7 @@ def formatar_ajuda(bot: Any, member: Any = None, *, limite: int = 18) -> str:
     if len(comandos) > exibidos:
         linhas.append(f"\nMais {len(comandos) - exibidos} comando(s) estão disponíveis. Use `/nara` para consultar o índice completo por área.")
     else:
-        linhas.append("\nUse `/nara` para abrir o guia por área ou a **Central de ajuda** para consultar as respostas. Sem caça ao tesouro por comando.")
+        linhas.append("\nUse `/nara` para abrir o guia por área ou a **Central de ajuda** para consultar as respostas. Sem caça ao tesouro por comando; eu já organizei o mapa.")
     return "\n".join(linhas)
 
 
@@ -180,5 +180,5 @@ def canais_visiveis(guild: Any, member: Any) -> list[str]:
 def formatar_sistemas(bot: Any) -> str:
     nomes = cogs_carregados(bot)
     if not nomes:
-        return "Não consegui identificar os módulos ativos neste momento. Prefiro admitir a limitação a listar sistemas fantasmas."
-    return "**Estes são os módulos ativos agora:**\n" + "\n".join(f"• {nome}" for nome in nomes)
+        return "Não consegui identificar os módulos ativos neste momento. Prefiro admitir a limitação a desfilar sistemas fantasmas como se fossem reais."
+    return "**Relatório confirmado: estes são os módulos ativos agora:**\n" + "\n".join(f"• {nome}" for nome in nomes)

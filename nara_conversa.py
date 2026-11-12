@@ -106,7 +106,7 @@ def montar_pedido(autor: str, texto: str, contexto_nara: str = "") -> str:
     ctx = " ".join((contexto_nara or "").split())[:MAX_CONTEXTO]
     if ctx:
         partes.append(f"[Sua mensagem anterior, para contexto: {ctx}]")
-    partes.append(f"[{autor} diz]: {texto}")
+    partes.append(f"[Mensagem de {autor}]: {texto}")
     return "\n".join(partes)
 
 
@@ -172,17 +172,17 @@ class Cooldown:
         return True
 
 
-# Falas locais com personalidade para quando a IA não pode (ou não deve) responder.
-FALAS_SEM_IA = (
+# Respostas locais escritas com personalidade para quando a IA não pode (ou não deve) responder.
+RESPOSTAS_SEM_IA = (
     "Hm. Minha conversa avançada atingiu o limite por enquanto. Não é abandono dramático — os painéis e consultas locais continuam funcionando. Tente **meu perfil**, **meu saldo** ou **ajuda**.",
     "Pausa técnica no meu lado tagarela. Ainda consigo consultar **perfil**, **saldo**, **platinas** e orientar pelos painéis. A conversa livre volta quando a cota permitir.",
     "O espetáculo foi colocado em intervalo por limite de uso. Para não deixar você na mão, os recursos locais seguem disponíveis em `/nara`.",
 )
-FALA_LIMITE_USUARIO = (
+RESPOSTA_LIMITE_USUARIO = (
     "Sua cota de conversa comigo por hoje terminou, {nome}. Dramático? Um pouco. As consultas locais de perfil, saldo e FAQ continuam liberadas."
 )
-FALA_COOLDOWN = "Calma, {nome}, uma pergunta por vez. Até eu preciso de um intervalo entre perguntas; já respondo."
+RESPOSTA_COOLDOWN = "Calma, {nome}, uma pergunta por vez. Até eu preciso de um intervalo entre perguntas; já respondo."
 
 
-def fala_sem_ia() -> str:
-    return random.choice(FALAS_SEM_IA)
+def resposta_sem_ia() -> str:
+    return random.choice(RESPOSTAS_SEM_IA)

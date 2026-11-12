@@ -121,7 +121,7 @@ class AtalhoView(discord.ui.View):
     def _callback(self, chave: str):
         async def cb(interaction: discord.Interaction):
             if interaction.user.id != self.autor_id:
-                return await interaction.response.send_message("Esse botão é de quem pediu. Fale comigo para ter o seu.",
+                return await interaction.response.send_message("Esse botão é de quem pediu. Envie uma mensagem para solicitar o seu.",
                                                                ephemeral=True)
             try:
                 await abrir_painel(self.bot, chave, interaction)

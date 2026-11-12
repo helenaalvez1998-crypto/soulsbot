@@ -30,9 +30,10 @@ CREATE TABLE IF NOT EXISTS sl_games (
     name TEXT NOT NULL UNIQUE COLLATE NOCASE
 );
 CREATE TABLE IF NOT EXISTS sl_challenges (
-    id    INTEGER PRIMARY KEY AUTOINCREMENT,
-    name  TEXT NOT NULL UNIQUE COLLATE NOCASE,
-    rules TEXT NOT NULL DEFAULT ''
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    name    TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    rules   TEXT NOT NULL DEFAULT '',
+    game_id INTEGER
 );
 CREATE TABLE IF NOT EXISTS sl_runs (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -241,6 +242,180 @@ CREATE TABLE IF NOT EXISTS logs (
     details    TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Contribuições editoriais e interações sociais da comunidade NARA
+CREATE TABLE IF NOT EXISTS community_contributions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    game_name TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL,
+    summary TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL,
+    sources TEXT NOT NULL DEFAULT '',
+    spoiler_level TEXT NOT NULL DEFAULT 'none',
+    challenge_mode TEXT NOT NULL DEFAULT 'individual',
+    challenge_goal INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    reviewer_id INTEGER,
+    review_note TEXT NOT NULL DEFAULT '',
+    xp_awarded INTEGER NOT NULL DEFAULT 0,
+    published_channel_id INTEGER,
+    published_message_id INTEGER,
+    published_thread_id INTEGER,
+    applied_target_type TEXT NOT NULL DEFAULT '',
+    applied_target_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_community_contrib_status
+    ON community_contributions(guild_id, status, created_at, id);
+CREATE INDEX IF NOT EXISTS idx_community_contrib_author
+    ON community_contributions(guild_id, user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_community_contrib_kind
+    ON community_contributions(guild_id, kind, status);
+
+CREATE TABLE IF NOT EXISTS community_xp_awards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    contribution_id INTEGER NOT NULL UNIQUE,
+    guild_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    xp INTEGER NOT NULL DEFAULT 0,
+    awarded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(contribution_id) REFERENCES community_contributions(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_community_xp_weekly
+    ON community_xp_awards(guild_id, user_id, awarded_at);
+
+CREATE TABLE IF NOT EXISTS community_interactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id INTEGER NOT NULL,
+    target_type TEXT NOT NULL,
+    target_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    reaction_key TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(guild_id, target_type, target_id, user_id, reaction_key)
+);
+CREATE INDEX IF NOT EXISTS idx_community_interactions_target
+    ON community_interactions(guild_id, target_type, target_id, reaction_key);
+
+CREATE TABLE IF NOT EXISTS community_posts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id INTEGER NOT NULL,
+    target_type TEXT NOT NULL,
+    target_id INTEGER NOT NULL,
+    channel_id INTEGER NOT NULL,
+    message_id INTEGER NOT NULL,
+    thread_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_hidden INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(guild_id, target_type, target_id)
+);
+CREATE INDEX IF NOT EXISTS idx_community_posts_message ON community_posts(message_id);
+
+CREATE TABLE IF NOT EXISTS community_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id INTEGER NOT NULL,
+    reporter_id INTEGER NOT NULL,
+    target_type TEXT NOT NULL,
+    target_id INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    details TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    reviewer_id INTEGER,
+    review_note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_community_reports_status ON community_reports(guild_id,status,created_at,id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_community_reports_open_unique
+    ON community_reports(guild_id,reporter_id,target_type,target_id) WHERE status='pending';
+
+CREATE TABLE IF NOT EXISTS community_faq_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    contribution_id INTEGER NOT NULL UNIQUE,
+    guild_id INTEGER NOT NULL,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(contribution_id) REFERENCES community_contributions(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_community_faq_guild_status ON community_faq_entries(guild_id,status,created_at);
+
+CREATE TABLE IF NOT EXISTS community_guestbook (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id INTEGER NOT NULL,
+    owner_id INTEGER NOT NULL,
+    visitor_id INTEGER NOT NULL,
+    message TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK(owner_id <> visitor_id)
+);
+CREATE INDEX IF NOT EXISTS idx_community_guestbook_owner ON community_guestbook(guild_id,owner_id,created_at DESC);
+
+CREATE TABLE IF NOT EXISTS community_bookmarks (
+    guild_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    target_type TEXT NOT NULL,
+    target_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(guild_id, user_id, target_type, target_id)
+);
+
+CREATE TABLE IF NOT EXISTS community_follows (
+    guild_id INTEGER NOT NULL,
+    follower_id INTEGER NOT NULL,
+    followed_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(guild_id, follower_id, followed_id),
+    CHECK(follower_id <> followed_id)
+);
+
+CREATE TABLE IF NOT EXISTS community_honors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id INTEGER NOT NULL,
+    from_user_id INTEGER NOT NULL,
+    to_user_id INTEGER NOT NULL,
+    honor_key TEXT NOT NULL,
+    week_key TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(guild_id, from_user_id, week_key),
+    CHECK(from_user_id <> to_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_community_honors_recipient
+    ON community_honors(guild_id, to_user_id, week_key);
+
+CREATE TABLE IF NOT EXISTS community_challenge_participants (
+    guild_id INTEGER NOT NULL,
+    contribution_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'joined',
+    progress_note TEXT NOT NULL DEFAULT '',
+    evidence TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(guild_id, contribution_id, user_id),
+    FOREIGN KEY(contribution_id) REFERENCES community_contributions(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS community_activity_preferences (
+    guild_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    platinas INTEGER NOT NULL DEFAULT 1,
+    zerados INTEGER NOT NULL DEFAULT 1,
+    runs INTEGER NOT NULL DEFAULT 1,
+    lore INTEGER NOT NULL DEFAULT 1,
+    guides INTEGER NOT NULL DEFAULT 1,
+    challenges INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(guild_id, user_id)
+);
+
 """
 
 
@@ -268,6 +443,22 @@ MIGRACOES_COLUNAS = {
         "approved_at": "TEXT",
         "source_platina_id": "INTEGER",
     },
+    "sl_challenges": {
+        # NULL mantém compatibilidade com desafios globais já cadastrados.
+        "game_id": "INTEGER",
+    },
+    "community_contributions": {
+        "applied_target_type": "TEXT NOT NULL DEFAULT ''",
+        "applied_target_id": "INTEGER",
+        "challenge_mode": "TEXT NOT NULL DEFAULT 'individual'",
+        "challenge_goal": "INTEGER NOT NULL DEFAULT 0",
+    },
+    "community_challenge_participants": {
+        "evidence": "TEXT NOT NULL DEFAULT ''",
+    },
+    "community_posts": {
+        "is_hidden": "INTEGER NOT NULL DEFAULT 0",
+    },
 }
 
 # Índices que precisam das colunas acima; criados depois das migrações.
@@ -278,6 +469,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_catalog_jobs_dedupe_ativo
     WHERE dedupe_key <> '' AND status NOT IN ('published','rejected','resolved');
 CREATE INDEX IF NOT EXISTS idx_catalog_jobs_status ON catalog_import_jobs(status, updated_at);
 CREATE INDEX IF NOT EXISTS idx_catalog_search_kind_time ON catalog_search_requests(kind, created_at);
+CREATE INDEX IF NOT EXISTS idx_sl_challenges_game ON sl_challenges(game_id, name);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_zerados_source_platina_unique
     ON zerados(source_platina_id) WHERE source_platina_id IS NOT NULL;
 """
@@ -1085,6 +1277,41 @@ class Database:
         )
         await self.conn.commit()
 
+    async def ranking_runs(self, limite: int = 10):
+        return await self._all(
+            "SELECT user_id,COUNT(*) AS valor FROM sl_runs WHERE status='approved' GROUP BY user_id ORDER BY valor DESC,user_id LIMIT ?",
+            (max(1, min(int(limite), 100)),),
+        )
+
+    async def ranking_recordes_runs(self, limite: int = 10):
+        return await self._all(
+            """WITH classificados AS (
+                   SELECT user_id, ROW_NUMBER() OVER (
+                       PARTITION BY game_id,challenge_id ORDER BY seconds ASC,created_at ASC,id ASC
+                   ) AS posicao
+                   FROM sl_runs WHERE status='approved'
+               )
+               SELECT user_id,COUNT(*) AS valor FROM classificados WHERE posicao=1
+               GROUP BY user_id ORDER BY valor DESC,user_id LIMIT ?""",
+            (max(1, min(int(limite), 100)),),
+        )
+
+    async def listar_gladiadores_comparacao(self, limite: int = 25):
+        return await self._all(
+            """WITH ids AS (
+                   SELECT user_id FROM users WHERE xp>0
+                   UNION SELECT user_id FROM platinas WHERE status='approved'
+                   UNION SELECT user_id FROM zerados WHERE status='approved'
+                   UNION SELECT user_id FROM sl_runs WHERE status='approved'
+               )
+               SELECT ids.user_id,
+                      (SELECT COUNT(*) FROM platinas p WHERE p.user_id=ids.user_id AND p.status='approved') AS platinas,
+                      COALESCE(u.xp,0) AS xp
+               FROM ids LEFT JOIN users u ON u.user_id=ids.user_id
+               ORDER BY xp DESC,platinas DESC,ids.user_id LIMIT ?""",
+            (max(1, min(int(limite), 100)),),
+        )
+
     # ---------- santuários (perfil em thread privada) ----------
     async def get_perfil(self, user_id: int):
         return await self._one("SELECT * FROM perfis WHERE user_id=?", (user_id,))
@@ -1110,3 +1337,608 @@ class Database:
     async def apagar_perfil(self, user_id: int):
         await self.conn.execute("DELETE FROM perfis WHERE user_id=?", (user_id,))
         await self.conn.commit()
+
+    # ---------- contribuições e interações comunitárias ----------
+    async def criar_contribuicao(self, *, guild_id: int, user_id: int, kind: str,
+                                 game_name: str, title: str, summary: str,
+                                 content: str, sources: str = "",
+                                 spoiler_level: str = "none", challenge_mode: str = "individual",
+                                 challenge_goal: int = 0) -> int:
+        mode = str(challenge_mode or "individual").lower()
+        goal = max(0, min(int(challenge_goal or 0), 500))
+        if str(kind) == "challenge" and mode not in {"individual", "collective"}:
+            raise ValueError("Modalidade de desafio inválida.")
+        if str(kind) == "challenge" and mode == "collective" and goal < 2:
+            raise ValueError("Desafios coletivos precisam de uma meta mínima de 2 conclusões.")
+        async with self.transaction() as tx:
+            cur = await tx.conn.execute(
+                """INSERT INTO community_contributions
+                   (guild_id,user_id,kind,game_name,title,summary,content,sources,spoiler_level,challenge_mode,challenge_goal)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (int(guild_id), int(user_id), str(kind), str(game_name or ""),
+                 str(title), str(summary or ""), str(content), str(sources or ""),
+                 str(spoiler_level or "none"),
+                 mode if str(kind) == "challenge" else "individual",
+                 goal if str(kind) == "challenge" else 0),
+            )
+            return int(cur.lastrowid)
+
+    async def get_contribuicao(self, contribution_id: int):
+        return await self._one(
+            "SELECT * FROM community_contributions WHERE id=?", (int(contribution_id),)
+        )
+
+    async def listar_contribuicoes(self, *, guild_id: int, status: str | None = None,
+                                   user_id: int | None = None, limit: int = 20, offset: int = 0):
+        where = ["guild_id=?"]
+        args: list = [int(guild_id)]
+        if status:
+            where.append("status=?")
+            args.append(str(status))
+        if user_id is not None:
+            where.append("user_id=?")
+            args.append(int(user_id))
+        args.extend([max(1, min(int(limit), 50)), max(0, int(offset))])
+        return await self._all(
+            "SELECT * FROM community_contributions WHERE " + " AND ".join(where) +
+            " ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'changes_requested' THEN 1 ELSE 2 END, created_at DESC, id DESC LIMIT ? OFFSET ?",
+            tuple(args),
+        )
+
+    async def decidir_contribuicao(self, contribution_id: int, reviewer_id: int,
+                                   status: str, note: str = "", xp_base: int = 0,
+                                   xp_weekly_cap: int = 50):
+        """Decisão idempotente. Aprovação e XP são gravados na mesma transação."""
+        if status not in {"approved", "rejected", "changes_requested"}:
+            raise ValueError("Status de decisão inválido.")
+        async with self.transaction() as tx:
+            row = await tx._one(
+                "SELECT * FROM community_contributions WHERE id=? AND status IN ('pending','changes_requested')",
+                (int(contribution_id),),
+            )
+            if row is None:
+                return None
+            cur = await tx.conn.execute(
+                """UPDATE community_contributions
+                   SET status=?, reviewer_id=?, review_note=?, updated_at=CURRENT_TIMESTAMP
+                   WHERE id=? AND status IN ('pending','changes_requested')""",
+                (status, int(reviewer_id), str(note or "")[:1000], int(contribution_id)),
+            )
+            if cur.rowcount != 1:
+                return None
+            awarded = 0
+            old_level = new_level = None
+            total_xp = None
+            if status == "approved":
+                exists = await tx._one(
+                    "SELECT id FROM community_xp_awards WHERE contribution_id=?",
+                    (int(contribution_id),),
+                )
+                if exists is None:
+                    weekly = await tx._one(
+                        """SELECT COALESCE(SUM(xp),0) AS total FROM community_xp_awards
+                           WHERE guild_id=? AND user_id=? AND awarded_at >= datetime('now','-7 days')""",
+                        (int(row["guild_id"]), int(row["user_id"])),
+                    )
+                    already = int(weekly["total"] or 0) if weekly else 0
+                    awarded = max(0, min(int(xp_base), max(0, int(xp_weekly_cap) - already)))
+                    await tx.conn.execute("INSERT OR IGNORE INTO users(user_id) VALUES (?)", (int(row["user_id"]),))
+                    user_before = await tx._one("SELECT xp FROM users WHERE user_id=?", (int(row["user_id"]),))
+                    from levels import nivel_por_xp
+                    old_level = nivel_por_xp(int(user_before["xp"] or 0))
+                    if awarded:
+                        await tx.conn.execute("UPDATE users SET xp=xp+? WHERE user_id=?", (awarded, int(row["user_id"])))
+                    user_after = await tx._one("SELECT xp FROM users WHERE user_id=?", (int(row["user_id"]),))
+                    total_xp = int(user_after["xp"] or 0)
+                    new_level = nivel_por_xp(total_xp)
+                    await tx.conn.execute(
+                        "INSERT OR IGNORE INTO community_xp_awards(contribution_id,guild_id,user_id,xp) VALUES (?,?,?,?)",
+                        (int(contribution_id), int(row["guild_id"]), int(row["user_id"]), awarded),
+                    )
+                    await tx.conn.execute(
+                        "UPDATE community_contributions SET xp_awarded=? WHERE id=?",
+                        (awarded, int(contribution_id)),
+                    )
+            updated = await tx._one("SELECT * FROM community_contributions WHERE id=?", (int(contribution_id),))
+            return {
+                "contribution": dict(updated), "status": status, "xp_awarded": awarded,
+                "old_level": old_level, "new_level": new_level, "total_xp": total_xp,
+            }
+
+    async def marcar_publicacao_contribuicao(self, contribution_id: int, channel_id: int,
+                                              message_id: int, thread_id: int | None = None) -> bool:
+        async with self.transaction() as tx:
+            cur = await tx.conn.execute(
+                """UPDATE community_contributions SET published_channel_id=?, published_message_id=?,
+                   published_thread_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='approved'""",
+                (int(channel_id), int(message_id), int(thread_id) if thread_id else None, int(contribution_id)),
+            )
+            return cur.rowcount == 1
+
+    async def registrar_post_comunitario(self, guild_id: int, target_type: str, target_id: int,
+                                         channel_id: int, message_id: int, thread_id: int | None = None):
+        async with self.transaction() as tx:
+            await tx.conn.execute(
+                """INSERT INTO community_posts(guild_id,target_type,target_id,channel_id,message_id,thread_id)
+                   VALUES (?,?,?,?,?,?)
+                   ON CONFLICT(guild_id,target_type,target_id) DO UPDATE SET
+                   channel_id=excluded.channel_id,message_id=excluded.message_id,
+                   thread_id=COALESCE(excluded.thread_id,community_posts.thread_id),updated_at=CURRENT_TIMESTAMP""",
+                (int(guild_id), str(target_type), int(target_id), int(channel_id), int(message_id),
+                 int(thread_id) if thread_id else None),
+            )
+
+    async def listar_posts_comunitarios(self, limit: int = 500):
+        return await self._all(
+            "SELECT * FROM community_posts WHERE is_hidden=0 ORDER BY id DESC LIMIT ?", (max(1, min(int(limit), 2000)),)
+        )
+
+    async def get_post_comunitario(self, guild_id: int, target_type: str, target_id: int):
+        return await self._one(
+            "SELECT * FROM community_posts WHERE guild_id=? AND target_type=? AND target_id=?",
+            (int(guild_id), str(target_type), int(target_id)),
+        )
+
+    async def definir_thread_comunitaria(self, guild_id: int, target_type: str,
+                                         target_id: int, thread_id: int):
+        await self.conn.execute(
+            """UPDATE community_posts SET thread_id=?,updated_at=CURRENT_TIMESTAMP
+               WHERE guild_id=? AND target_type=? AND target_id=?""",
+            (int(thread_id), int(guild_id), str(target_type), int(target_id)),
+        )
+        await self.conn.commit()
+
+    async def alternar_interacao(self, guild_id: int, target_type: str, target_id: int,
+                                 user_id: int, reaction_key: str) -> bool:
+        """Alterna uma reação. Retorna True quando adicionou, False quando removeu."""
+        async with self.transaction() as tx:
+            existente = await tx._one(
+                """SELECT id FROM community_interactions WHERE guild_id=? AND target_type=?
+                   AND target_id=? AND user_id=? AND reaction_key=?""",
+                (int(guild_id), str(target_type), int(target_id), int(user_id), str(reaction_key)),
+            )
+            if existente:
+                await tx.conn.execute("DELETE FROM community_interactions WHERE id=?", (existente["id"],))
+                return False
+            await tx.conn.execute(
+                """INSERT OR IGNORE INTO community_interactions
+                   (guild_id,target_type,target_id,user_id,reaction_key) VALUES (?,?,?,?,?)""",
+                (int(guild_id), str(target_type), int(target_id), int(user_id), str(reaction_key)),
+            )
+            return True
+
+    async def contar_interacoes(self, guild_id: int, target_type: str, target_id: int) -> dict:
+        rows = await self._all(
+            """SELECT reaction_key,COUNT(*) AS total FROM community_interactions
+               WHERE guild_id=? AND target_type=? AND target_id=? GROUP BY reaction_key""",
+            (int(guild_id), str(target_type), int(target_id)),
+        )
+        return {str(r["reaction_key"]): int(r["total"]) for r in rows}
+
+    async def possui_interacao(self, guild_id: int, target_type: str, target_id: int,
+                               user_id: int, reaction_key: str) -> bool:
+        row = await self._one(
+            """SELECT 1 FROM community_interactions WHERE guild_id=? AND target_type=?
+               AND target_id=? AND user_id=? AND reaction_key=?""",
+            (int(guild_id), str(target_type), int(target_id), int(user_id), str(reaction_key)),
+        )
+        return row is not None
+
+    async def alternar_favorito(self, guild_id: int, user_id: int,
+                                target_type: str, target_id: int) -> bool:
+        async with self.transaction() as tx:
+            row = await tx._one(
+                """SELECT 1 FROM community_bookmarks WHERE guild_id=? AND user_id=?
+                   AND target_type=? AND target_id=?""",
+                (int(guild_id), int(user_id), str(target_type), int(target_id)),
+            )
+            if row:
+                await tx.conn.execute(
+                    "DELETE FROM community_bookmarks WHERE guild_id=? AND user_id=? AND target_type=? AND target_id=?",
+                    (int(guild_id), int(user_id), str(target_type), int(target_id)),
+                )
+                return False
+            await tx.conn.execute(
+                "INSERT OR IGNORE INTO community_bookmarks(guild_id,user_id,target_type,target_id) VALUES (?,?,?,?)",
+                (int(guild_id), int(user_id), str(target_type), int(target_id)),
+            )
+            return True
+
+    async def listar_favoritos(self, guild_id: int, user_id: int, limit: int = 20):
+        return await self._all(
+            """SELECT * FROM community_bookmarks WHERE guild_id=? AND user_id=?
+               ORDER BY created_at DESC LIMIT ?""",
+            (int(guild_id), int(user_id), max(1, min(int(limit), 50))),
+        )
+
+    async def alternar_seguir(self, guild_id: int, follower_id: int, followed_id: int) -> bool:
+        if int(follower_id) == int(followed_id):
+            raise ValueError("Não é possível acompanhar a si mesmo.")
+        async with self.transaction() as tx:
+            row = await tx._one(
+                "SELECT 1 FROM community_follows WHERE guild_id=? AND follower_id=? AND followed_id=?",
+                (int(guild_id), int(follower_id), int(followed_id)),
+            )
+            if row:
+                await tx.conn.execute(
+                    "DELETE FROM community_follows WHERE guild_id=? AND follower_id=? AND followed_id=?",
+                    (int(guild_id), int(follower_id), int(followed_id)),
+                )
+                return False
+            await tx.conn.execute(
+                "INSERT OR IGNORE INTO community_follows(guild_id,follower_id,followed_id) VALUES (?,?,?)",
+                (int(guild_id), int(follower_id), int(followed_id)),
+            )
+            return True
+
+    async def definir_preferencias_atividade(self, guild_id: int, user_id: int, **flags):
+        permitidos = {"platinas", "zerados", "runs", "lore", "guides", "challenges"}
+        valores = {k: int(bool(v)) for k, v in flags.items() if k in permitidos}
+        if not valores:
+            return
+        atual = await self._one(
+            "SELECT 1 FROM community_activity_preferences WHERE guild_id=? AND user_id=?",
+            (int(guild_id), int(user_id)),
+        )
+        if atual:
+            sets = ",".join(f"{k}=?" for k in valores)
+            await self.conn.execute(
+                f"UPDATE community_activity_preferences SET {sets},updated_at=CURRENT_TIMESTAMP WHERE guild_id=? AND user_id=?",
+                (*valores.values(), int(guild_id), int(user_id)),
+            )
+        else:
+            colunas = ["guild_id", "user_id", *valores.keys()]
+            placeholders = ",".join("?" for _ in colunas)
+            await self.conn.execute(
+                f"INSERT INTO community_activity_preferences({','.join(colunas)}) VALUES ({placeholders})",
+                (int(guild_id), int(user_id), *valores.values()),
+            )
+        await self.conn.commit()
+
+    async def registrar_honra(self, guild_id: int, from_user_id: int, to_user_id: int,
+                              honor_key: str, week_key: str) -> str:
+        if int(from_user_id) == int(to_user_id):
+            raise ValueError("Não é possível honrar a si mesmo.")
+        async with self.transaction() as tx:
+            row = await tx._one(
+                "SELECT id,honor_key FROM community_honors WHERE guild_id=? AND from_user_id=? AND week_key=?",
+                (int(guild_id), int(from_user_id), str(week_key)),
+            )
+            if row:
+                if row["honor_key"] == str(honor_key):
+                    return "already"
+                await tx.conn.execute(
+                    "UPDATE community_honors SET honor_key=?,to_user_id=?,created_at=CURRENT_TIMESTAMP WHERE id=?",
+                    (str(honor_key), int(to_user_id), int(row["id"])),
+                )
+                return "changed"
+            await tx.conn.execute(
+                "INSERT INTO community_honors(guild_id,from_user_id,to_user_id,honor_key,week_key) VALUES (?,?,?,?,?)",
+                (int(guild_id), int(from_user_id), int(to_user_id), str(honor_key), str(week_key)),
+            )
+            return "created"
+
+    async def contar_honras(self, guild_id: int, user_id: int) -> dict:
+        rows = await self._all(
+            "SELECT honor_key,COUNT(*) AS total FROM community_honors WHERE guild_id=? AND to_user_id=? GROUP BY honor_key",
+            (int(guild_id), int(user_id)),
+        )
+        return {str(r["honor_key"]): int(r["total"]) for r in rows}
+
+    async def contar_seguidores(self, guild_id: int, user_id: int) -> int:
+        row = await self._one(
+            "SELECT COUNT(*) AS n FROM community_follows WHERE guild_id=? AND followed_id=?",
+            (int(guild_id), int(user_id)),
+        )
+        return int(row["n"] or 0) if row else 0
+
+    async def editar_contribuicao(self, contribution_id: int, user_id: int, *, game_name: str,
+                                  title: str, summary: str, content: str, sources: str = "",
+                                  spoiler_level: str = "none", challenge_mode: str = "individual",
+                                  challenge_goal: int = 0) -> bool:
+        """Permite ao autor responder a um pedido de ajustes, sem apagar o histórico da decisão."""
+        async with self.transaction() as tx:
+            existing = await tx._one(
+                "SELECT kind FROM community_contributions WHERE id=? AND user_id=? AND status='changes_requested'",
+                (int(contribution_id), int(user_id)),
+            )
+            if existing is None:
+                return False
+            is_challenge = str(existing["kind"]) == "challenge"
+            mode = str(challenge_mode or "individual").lower() if is_challenge else "individual"
+            goal = max(0, min(int(challenge_goal or 0), 500)) if is_challenge else 0
+            if is_challenge and (mode not in {"individual", "collective"} or (mode == "collective" and goal < 2)):
+                raise ValueError("Modalidade ou meta coletiva inválida.")
+            cur = await tx.conn.execute(
+                """UPDATE community_contributions
+                   SET game_name=?,title=?,summary=?,content=?,sources=?,spoiler_level=?,challenge_mode=?,challenge_goal=?,
+                       status='pending',reviewer_id=NULL,review_note='',updated_at=CURRENT_TIMESTAMP
+                   WHERE id=? AND user_id=? AND status='changes_requested'""",
+                (str(game_name or "")[:80], str(title)[:90], str(summary)[:350], str(content)[:1500],
+                 str(sources or "")[:700], str(spoiler_level or "none"), mode, goal,
+                 int(contribution_id), int(user_id)),
+            )
+            return cur.rowcount == 1
+
+    async def aplicar_contribuicao_soulslike(self, contribution_id: int):
+        """Materializa uma sugestão aprovada no catálogo de Runs, sem duplicar registros."""
+        async with self.transaction() as tx:
+            contrib = await tx._one(
+                "SELECT * FROM community_contributions WHERE id=? AND status='approved'",
+                (int(contribution_id),),
+            )
+            if contrib is None:
+                raise ValueError("A contribuição não está aprovada.")
+            if contrib["applied_target_type"] and contrib["applied_target_id"]:
+                return {"type": contrib["applied_target_type"], "id": int(contrib["applied_target_id"]), "created": False}
+
+            kind = str(contrib["kind"])
+            if kind == "game_suggestion":
+                name = str(contrib["title"]).strip()[:80]
+                if not name:
+                    raise ValueError("O nome do jogo está vazio.")
+                existing = await tx._one("SELECT id FROM sl_games WHERE name=? COLLATE NOCASE", (name,))
+                created = existing is None
+                await tx.conn.execute("INSERT OR IGNORE INTO sl_games(name) VALUES (?)", (name,))
+                row = await tx._one("SELECT id FROM sl_games WHERE name=? COLLATE NOCASE", (name,))
+                target_type = "sl_game"
+            elif kind == "challenge":
+                game_name = str(contrib["game_name"] or "").strip()
+                name = str(contrib["title"]).strip()[:80]
+                if not game_name:
+                    raise ValueError("O desafio precisa estar vinculado a um jogo.")
+                game = await tx._one("SELECT id FROM sl_games WHERE name=? COLLATE NOCASE", (game_name,))
+                if game is None:
+                    raise ValueError(f"O jogo **{game_name}** ainda não está no catálogo Soulslike. Aprove primeiro a sugestão do jogo ou cadastre-o no painel de Runs.")
+                existing = await tx._one("SELECT id,game_id FROM sl_challenges WHERE name=? COLLATE NOCASE", (name,))
+                if existing is not None:
+                    raise ValueError(f"Já existe um desafio chamado **{name}**. Verifique o Livro dos Desafios antes de aprovar.")
+                created = True
+                await tx.conn.execute(
+                    "INSERT INTO sl_challenges(name,rules,game_id) VALUES (?,?,?)",
+                    (name, str(contrib["content"])[:1000], int(game["id"])),
+                )
+                row = await tx._one("SELECT id FROM sl_challenges WHERE name=? COLLATE NOCASE", (name,))
+                target_type = "sl_challenge"
+            else:
+                return None
+
+            if row is None:
+                raise RuntimeError("Não foi possível localizar o registro criado no catálogo Soulslike.")
+            target_id = int(row["id"])
+            await tx.conn.execute(
+                "UPDATE community_contributions SET applied_target_type=?,applied_target_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                (target_type, target_id, int(contribution_id)),
+            )
+            return {"type": target_type, "id": target_id, "created": created}
+
+    async def alternar_participacao_desafio(self, guild_id: int, contribution_id: int, user_id: int) -> bool:
+        async with self.transaction() as tx:
+            row = await tx._one(
+                "SELECT status FROM community_challenge_participants WHERE guild_id=? AND contribution_id=? AND user_id=?",
+                (int(guild_id), int(contribution_id), int(user_id)),
+            )
+            if row:
+                if row["status"] == "completed":
+                    raise ValueError("Sua participação já foi marcada como concluída e não pode ser removida pelo botão de inscrição.")
+                await tx.conn.execute(
+                    "DELETE FROM community_challenge_participants WHERE guild_id=? AND contribution_id=? AND user_id=?",
+                    (int(guild_id), int(contribution_id), int(user_id)),
+                )
+                return False
+            await tx.conn.execute(
+                "INSERT INTO community_challenge_participants(guild_id,contribution_id,user_id,status) VALUES (?,?,?,'joined')",
+                (int(guild_id), int(contribution_id), int(user_id)),
+            )
+            return True
+
+    async def atualizar_progresso_desafio(self, guild_id: int, contribution_id: int, user_id: int,
+                                          status: str, progress_note: str, evidence: str = "") -> bool:
+        if status not in {"in_progress", "completed"}:
+            raise ValueError("Status de participação inválido.")
+        async with self.transaction() as tx:
+            cur = await tx.conn.execute(
+                """UPDATE community_challenge_participants
+                   SET status=?,progress_note=?,evidence=?,updated_at=CURRENT_TIMESTAMP
+                   WHERE guild_id=? AND contribution_id=? AND user_id=?""",
+                (status, str(progress_note)[:700], str(evidence)[:500], int(guild_id), int(contribution_id), int(user_id)),
+            )
+            return cur.rowcount == 1
+
+    async def contar_participantes_desafio(self, guild_id: int, contribution_id: int) -> dict:
+        rows = await self._all(
+            "SELECT status,COUNT(*) AS total FROM community_challenge_participants WHERE guild_id=? AND contribution_id=? GROUP BY status",
+            (int(guild_id), int(contribution_id)),
+        )
+        return {str(row["status"]): int(row["total"]) for row in rows}
+
+    async def listar_participantes_desafio(self, guild_id: int, contribution_id: int, limit: int = 25):
+        return await self._all(
+            """SELECT user_id,status,progress_note,evidence,created_at,updated_at
+               FROM community_challenge_participants WHERE guild_id=? AND contribution_id=?
+               ORDER BY CASE status WHEN 'completed' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END,
+                        updated_at DESC,user_id LIMIT ?""",
+            (int(guild_id), int(contribution_id), max(1, min(int(limit), 25))),
+        )
+
+    async def get_preferencias_atividade(self, guild_id: int, user_id: int) -> dict:
+        row = await self._one(
+            "SELECT * FROM community_activity_preferences WHERE guild_id=? AND user_id=?",
+            (int(guild_id), int(user_id)),
+        )
+        keys = ("platinas", "zerados", "runs", "lore", "guides", "challenges")
+        return {key: bool(row[key]) if row else True for key in keys}
+
+
+    async def ativar_faq_comunitaria(self, contribution_id: int) -> int | None:
+        """Materializa FAQ aprovada em base comunitária consultável pela NARA."""
+        async with self.transaction() as tx:
+            row = await tx._one(
+                "SELECT * FROM community_contributions WHERE id=? AND kind='faq' AND status='approved'",
+                (int(contribution_id),),
+            )
+            if row is None:
+                return None
+            await tx.conn.execute(
+                """INSERT INTO community_faq_entries(contribution_id,guild_id,question,answer,status)
+                   VALUES (?,?,?,?, 'active')
+                   ON CONFLICT(contribution_id) DO UPDATE SET question=excluded.question,
+                     answer=excluded.answer,status='active',updated_at=CURRENT_TIMESTAMP""",
+                (int(row['id']), int(row['guild_id']), str(row['title'])[:200], str(row['content'])[:1500]),
+            )
+            entry = await tx._one("SELECT id FROM community_faq_entries WHERE contribution_id=?", (int(contribution_id),))
+            return int(entry['id']) if entry else None
+
+    async def buscar_faq_comunitaria(self, guild_id: int, question: str, min_score: float = 0.68):
+        """Busca conservadora por pergunta, retornando apenas correspondência inequívoca."""
+        import re
+        import unicodedata
+        from difflib import SequenceMatcher
+
+        def normalizar(value: str) -> str:
+            value = unicodedata.normalize('NFKD', str(value or '').casefold())
+            value = ''.join(ch for ch in value if not unicodedata.combining(ch))
+            value = re.sub(r'[^a-z0-9 ]', ' ', value)
+            return re.sub(r'\s+', ' ', value).strip()
+
+        tokens_stop = {'como','qual','quais','onde','quando','porque','para','com','sem','uma','uns','das','dos','que','por','me','minha','meu','eu','voce','tem','faz','fazer','a','o','e','de','da','do','em','no','na'}
+        query = normalizar(question)
+        qtokens = {t for t in query.split() if len(t) > 2 and t not in tokens_stop}
+        if len(qtokens) < 2:
+            return None
+        rows = await self._all(
+            "SELECT * FROM community_faq_entries WHERE guild_id=? AND status='active' ORDER BY created_at DESC LIMIT 300",
+            (int(guild_id),),
+        )
+        ranked = []
+        for row in rows:
+            candidate = normalizar(row['question'])
+            ctokens = {t for t in candidate.split() if len(t) > 2 and t not in tokens_stop}
+            shared = qtokens & ctokens
+            if len(shared) < 2:
+                continue
+            coverage = len(shared) / max(1, min(len(qtokens), len(ctokens)))
+            sequence = SequenceMatcher(None, query, candidate).ratio()
+            score = 0.62 * coverage + 0.38 * sequence
+            ranked.append((score, row))
+        ranked.sort(key=lambda item: item[0], reverse=True)
+        if not ranked or ranked[0][0] < float(min_score):
+            return None
+        second = ranked[1][0] if len(ranked) > 1 else 0.0
+        if ranked[0][0] - second < 0.10:
+            return None
+        return ranked[0][1]
+
+    async def obter_faq_comunitaria(self, entry_id: int):
+        return await self._one(
+            "SELECT * FROM community_faq_entries WHERE id=? AND status='active'",
+            (int(entry_id),),
+        )
+
+    async def arquivar_faq_contribuicao(self, contribution_id: int):
+        await self.conn.execute(
+            "UPDATE community_faq_entries SET status='archived',updated_at=CURRENT_TIMESTAMP WHERE contribution_id=?",
+            (int(contribution_id),),
+        )
+        await self.conn.commit()
+
+    async def criar_mensagem_santuario(self, guild_id: int, owner_id: int, visitor_id: int,
+                                       message: str) -> int | None:
+        if int(owner_id) == int(visitor_id):
+            raise ValueError("Você não pode deixar mensagem no próprio livro de visitas.")
+        async with self.transaction() as tx:
+            recent = await tx._one(
+                """SELECT COUNT(*) AS n FROM community_guestbook WHERE guild_id=? AND owner_id=?
+                   AND visitor_id=? AND created_at>=datetime('now','-1 day')""",
+                (int(guild_id), int(owner_id), int(visitor_id)),
+            )
+            if int(recent["n"] or 0) >= 1:
+                return None
+            cur = await tx.conn.execute(
+                "INSERT INTO community_guestbook(guild_id,owner_id,visitor_id,message) VALUES (?,?,?,?)",
+                (int(guild_id), int(owner_id), int(visitor_id), str(message).strip()[:300]),
+            )
+            return int(cur.lastrowid)
+
+    async def listar_mensagens_santuario(self, guild_id: int, owner_id: int, limit: int = 10):
+        return await self._all(
+            """SELECT * FROM community_guestbook WHERE guild_id=? AND owner_id=?
+               ORDER BY created_at DESC,id DESC LIMIT ?""",
+            (int(guild_id), int(owner_id), max(1, min(int(limit), 25))),
+        )
+
+    async def apagar_mensagem_santuario(self, guild_id: int, owner_id: int, message_id: int) -> bool:
+        async with self.transaction() as tx:
+            cur = await tx.conn.execute(
+                "DELETE FROM community_guestbook WHERE guild_id=? AND owner_id=? AND id=?",
+                (int(guild_id), int(owner_id), int(message_id)),
+            )
+            return cur.rowcount == 1
+
+    async def criar_denuncia_comunitaria(self, guild_id: int, reporter_id: int, target_type: str,
+                                         target_id: int, reason: str, details: str = "") -> int | None:
+        """Cria denúncia única pendente por autor/publicação, evitando spam duplicado."""
+        async with self.transaction() as tx:
+            duplicate = await tx._one(
+                """SELECT id FROM community_reports WHERE guild_id=? AND reporter_id=?
+                   AND target_type=? AND target_id=? AND status='pending'""",
+                (int(guild_id), int(reporter_id), str(target_type), int(target_id)),
+            )
+            if duplicate:
+                return None
+            cur = await tx.conn.execute(
+                """INSERT INTO community_reports(guild_id,reporter_id,target_type,target_id,reason,details)
+                   VALUES (?,?,?,?,?,?)""",
+                (int(guild_id), int(reporter_id), str(target_type), int(target_id),
+                 str(reason)[:90], str(details)[:700]),
+            )
+            return int(cur.lastrowid)
+
+    async def get_denuncia_comunitaria(self, report_id: int):
+        return await self._one("SELECT * FROM community_reports WHERE id=?", (int(report_id),))
+
+    async def listar_denuncias_comunitarias(self, guild_id: int, status: str = "pending", limit: int = 50):
+        return await self._all(
+            """SELECT * FROM community_reports WHERE guild_id=? AND status=?
+               ORDER BY created_at ASC,id ASC LIMIT ?""",
+            (int(guild_id), str(status), max(1, min(int(limit), 100))),
+        )
+
+    async def decidir_denuncia_comunitaria(self, report_id: int, reviewer_id: int,
+                                           action: str, note: str = ""):
+        if action not in {"hidden", "dismissed"}:
+            raise ValueError("Decisão de denúncia inválida.")
+        async with self.transaction() as tx:
+            report = await tx._one(
+                "SELECT * FROM community_reports WHERE id=? AND status='pending'", (int(report_id),)
+            )
+            if report is None:
+                return None
+            cur = await tx.conn.execute(
+                """UPDATE community_reports SET status=?,reviewer_id=?,review_note=?,updated_at=CURRENT_TIMESTAMP
+                   WHERE id=? AND status='pending'""",
+                (action, int(reviewer_id), str(note or "")[:700], int(report_id)),
+            )
+            if cur.rowcount != 1:
+                return None
+            if action == "hidden":
+                await tx.conn.execute(
+                    """UPDATE community_posts SET is_hidden=1,updated_at=CURRENT_TIMESTAMP
+                       WHERE guild_id=? AND target_type=? AND target_id=?""",
+                    (int(report["guild_id"]), str(report["target_type"]), int(report["target_id"])),
+                )
+                if str(report["target_type"]).startswith("contrib_"):
+                    kind = str(report["target_type"]).removeprefix("contrib_")
+                    if kind == "faq":
+                        await tx.conn.execute(
+                            "UPDATE community_faq_entries SET status='archived',updated_at=CURRENT_TIMESTAMP WHERE contribution_id=?",
+                            (int(report["target_id"]),),
+                        )
+                    await tx.conn.execute(
+                        """UPDATE community_contributions SET status='archived',reviewer_id=?,review_note=?,
+                           updated_at=CURRENT_TIMESTAMP WHERE id=? AND guild_id=? AND kind=? AND status='approved'""",
+                        (int(reviewer_id), str(note or "")[:700], int(report["target_id"]), int(report["guild_id"]), kind),
+                    )
+            updated = await tx._one("SELECT * FROM community_reports WHERE id=?", (int(report_id),))
+            return dict(updated)
+

@@ -48,6 +48,9 @@ PLATINAS_CHANNEL_ID = _env_int("PLATINAS_CHANNEL_ID", 0)
 MOD_ROLE_ID = _env_int("MOD_ROLE_ID", 0)
 PERFIS_CHANNEL_ID = _env_int("PERFIS_CHANNEL_ID", 0)
 ZERADOS_CHANNEL_ID = _env_int("ZERADOS_CHANNEL_ID", 0)
+LORE_CHANNEL_ID = _env_int("LORE_CHANNEL_ID", 0)
+GUIDES_CHANNEL_ID = _env_int("GUIDES_CHANNEL_ID", 0)
+COMMUNITY_CHANNEL_ID = _env_int("COMMUNITY_CHANNEL_ID", 0)
 DATA_DIR = get_data_dir()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = os.getenv("DB_PATH", str(DATA_DIR / "colizeu.db")).strip() or str(DATA_DIR / "colizeu.db")
@@ -57,6 +60,8 @@ DENARIOS_PLATINA = _env_int("DENARIOS_PLATINA", 50, minimo=0)
 XP_ZERADO = _env_int("XP_ZERADO", 50, minimo=0)
 DENARIOS_ZERADO = _env_int("DENARIOS_ZERADO", 10, minimo=0)
 ZERADOS_XP_LIMITE_DIARIO = _env_int("ZERADOS_XP_LIMITE_DIARIO", 3, minimo=0)
+COMMUNITY_XP_DEFAULT = _env_int("COMMUNITY_XP_DEFAULT", 10, minimo=0)
+COMMUNITY_XP_WEEKLY_CAP = _env_int("COMMUNITY_XP_WEEKLY_CAP", 50, minimo=0)
 
 
 # =====================================================================

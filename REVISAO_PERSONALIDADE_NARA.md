@@ -2,17 +2,17 @@
 
 ## Objetivo editorial
 
-Aplicar a identidade definida para a NARA às interações em que a assistente fala com os membros, sem transformar toda a interface em uma sequência de piadas. A personalidade é contextual: provocadora em conversas leves, teatral em situações de jogo, precisa em suporte técnico e estritamente factual em moderação, privacidade e falhas.
+Aplicar a identidade definida para a NARA às interações em que a assistente escreve mensagens para os membros, sem transformar toda a interface em uma sequência de piadas. A personalidade é contextual: provocadora em conversas leves, teatral em situações de jogo, precisa em suporte técnico e estritamente factual em moderação, privacidade e falhas.
 
 ## Superfícies revisadas
 
-Foi feita uma varredura estática dos módulos Python e dos pontos de envio/edição de mensagens, respostas e embeds dos Cogs. O inventário encontrou aproximadamente 697 chamadas relevantes distribuídas por 20 Cogs. A revisão editorial concentrou as alterações nos textos que representam a voz da NARA, sem reescrever automaticamente rótulos ou dados apresentados pela aplicação.
+Foi feita uma varredura estática dos módulos Python e dos pontos de envio/edição de mensagens, respostas e embeds dos Cogs. O inventário encontrou aproximadamente 697 chamadas relevantes distribuídas por 20 Cogs. A revisão editorial concentrou as alterações nos textos que representam o estilo textual da NARA, sem reescrever automaticamente rótulos ou dados apresentados pela aplicação.
 
 Módulos e superfícies com alterações nesta rodada:
 
 - `prompts/nara_personalidade_runtime.md`, `prompts/nara_conversa.md` e `prompts/nara_pesquisa.md`: identidade canônica, seis modos adaptativos, leitura social, limites de humor e regras de veracidade.
-- `nara_local.py` e `cogs/nara_ia.py`: fallback local, falas determinísticas, respostas de consultas e enquadramento textual de saldo, perfil, platinas, zerados, runs, inventário e ranking.
-- `nara_voz.py`: camada determinística pequena para introduções contextuais. Ela preserva integralmente o corpo da resposta e não altera valores, permissões ou estado.
+- `nara_local.py` e `cogs/nara_ia.py`: fallback local, respostas determinísticas, respostas de consultas e enquadramento textual de saldo, perfil, platinas, zerados, runs, inventário e ranking.
+- `nara_estilo_textual.py`: camada determinística pequena para introduções contextuais em respostas escritas. Ela preserva integralmente o corpo da resposta e não altera valores, permissões ou estado.
 - `nara_conhecimento.py`, `nara_help_panel.py` e `cogs/painel_membros.py`: ajuda, apresentação dos sistemas, instruções de navegação e central do membro.
 - `cogs/admin.py`, `cogs/cargos.py` e `cogs/transmissoes.py`: textos introdutórios de administração, moderação e configuração.
 - `cogs/platinas.py`, `cogs/zerados.py`, `cogs/soulslike.py`, `cogs/santuario.py`, `cogs/loja.py`, `cogs/catalogo_integrado.py`, `cogs/perfil.py`, `cogs/progressao.py`, `cogs/ranking.py` e `cogs/colizeu.py`: descrições de painéis, consultas, rankings e notificações de progresso.
@@ -32,13 +32,17 @@ A estrutura social já existente foi preservada. O perfil social é separado por
 
 ## Integridade funcional
 
-As alterações são editoriais. Não foram intencionalmente modificados comandos, condições de autorização, valores de economia, fórmulas de XP, regras de aprovação, persistência, prazos ou destinos de notificações. O helper `nara_voz.enquadrar()` apenas acrescenta uma abertura curta a respostas locais selecionadas e preserva o texto e os valores originais.
+As alterações são editoriais. Não foram intencionalmente modificados comandos, condições de autorização, valores de economia, fórmulas de XP, regras de aprovação, persistência, prazos ou destinos de notificações. O helper `nara_estilo_textual.enquadrar()` apenas acrescenta uma abertura curta a respostas locais selecionadas e preserva o texto e os valores originais.
 
 ## Verificações executadas
 
 - `python -m compileall -q .`
-- `pytest -q`
-- Testes específicos da camada de voz em `tests/test_nara_voz.py`.
-- Verificação do tamanho de `conv.carregar_prompt()`: 5.948 caracteres, abaixo do limite de 6.000 definido pelo projeto.
+- `pytest -q` — 138 testes aprovados.
+- Testes específicos da camada de estilo textual em `tests/test_nara_estilo_textual.py`.
+- Verificação do tamanho de `conv.carregar_prompt()`: 5.942 caracteres, abaixo do limite de 6.000 definido pelo projeto.
 
 As mensagens de interface que devem ser neutras foram mantidas assim deliberadamente. O objetivo é uma NARA reconhecível e consistente, não uma interface que prejudica a leitura ou transforma toda validação em sarcasmo.
+
+
+## Correção de presença textual
+A NARA se comunica exclusivamente por mensagens escritas no Discord. Prompts, respostas determinísticas, fallbacks e respostas relevantes da FAQ foram ajustados para não sugerir fala, escuta ou envio de áudio pela própria NARA. Referências a canais de voz do Discord e ao XP por participação nesses canais foram preservadas, pois descrevem um recurso real do servidor, não uma capacidade vocal da assistente.

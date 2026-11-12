@@ -178,6 +178,11 @@ O botão **Central de ajuda** no `/nara` abre o painel privado com 12 categorias
 ## Central de Aprovação
 
 
+
+## Contribuições da comunidade, Arquivo de Mundos e Coliseu Social
+
+O projeto inclui um fluxo moderado de contribuições, publicações de lore e teorias, guias, FAQ comunitária, interações em Runs/platinas/zerados, comparação de gladiadores e Livro de Visitas dos Santuários. Consulte **[GUIA_CONTRIBUICOES_INTERACOES_NARA.md](GUIA_CONTRIBUICOES_INTERACOES_NARA.md)** para ativar canais, configurar XP, publicar o painel e revisar contribuições.
+
 ## Configuração visual por servidor
 
 Use `/adm` no Discord. O botão **Configuração Automática** cria a categoria e os canais oficiais do NARA, vincula cada destino ao sistema correspondente e preserva canais existentes. Depois, em **Canais**, cada destino pode ser trocado individualmente com um seletor nativo do Discord. Em **Cargos**, escolha o cargo da equipe para conceder acesso à Central privada de Aprovação. Consulte `GUIA_CONFIGURACAO_VISUAL.md` para detalhes e permissões.
