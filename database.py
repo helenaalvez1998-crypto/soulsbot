@@ -257,6 +257,8 @@ CREATE TABLE IF NOT EXISTS community_contributions (
     spoiler_level TEXT NOT NULL DEFAULT 'none',
     challenge_mode TEXT NOT NULL DEFAULT 'individual',
     challenge_goal INTEGER NOT NULL DEFAULT 0,
+    origin_sector TEXT NOT NULL DEFAULT '',
+    origin_channel_id INTEGER,
     status TEXT NOT NULL DEFAULT 'pending',
     reviewer_id INTEGER,
     review_note TEXT NOT NULL DEFAULT '',
@@ -452,6 +454,8 @@ MIGRACOES_COLUNAS = {
         "applied_target_id": "INTEGER",
         "challenge_mode": "TEXT NOT NULL DEFAULT 'individual'",
         "challenge_goal": "INTEGER NOT NULL DEFAULT 0",
+        "origin_sector": "TEXT NOT NULL DEFAULT ''",
+        "origin_channel_id": "INTEGER",
     },
     "community_challenge_participants": {
         "evidence": "TEXT NOT NULL DEFAULT ''",
@@ -1343,7 +1347,8 @@ class Database:
                                  game_name: str, title: str, summary: str,
                                  content: str, sources: str = "",
                                  spoiler_level: str = "none", challenge_mode: str = "individual",
-                                 challenge_goal: int = 0) -> int:
+                                 challenge_goal: int = 0, origin_sector: str = "",
+                                 origin_channel_id: int | None = None) -> int:
         mode = str(challenge_mode or "individual").lower()
         goal = max(0, min(int(challenge_goal or 0), 500))
         if str(kind) == "challenge" and mode not in {"individual", "collective"}:
@@ -1353,13 +1358,14 @@ class Database:
         async with self.transaction() as tx:
             cur = await tx.conn.execute(
                 """INSERT INTO community_contributions
-                   (guild_id,user_id,kind,game_name,title,summary,content,sources,spoiler_level,challenge_mode,challenge_goal)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                   (guild_id,user_id,kind,game_name,title,summary,content,sources,spoiler_level,challenge_mode,challenge_goal,origin_sector,origin_channel_id)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (int(guild_id), int(user_id), str(kind), str(game_name or ""),
                  str(title), str(summary or ""), str(content), str(sources or ""),
                  str(spoiler_level or "none"),
                  mode if str(kind) == "challenge" else "individual",
-                 goal if str(kind) == "challenge" else 0),
+                 goal if str(kind) == "challenge" else 0,
+                 str(origin_sector or "")[:40], int(origin_channel_id) if origin_channel_id else None),
             )
             return int(cur.lastrowid)
 

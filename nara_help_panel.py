@@ -318,6 +318,11 @@ class CentralAjudaView(discord.ui.View):
         self.bot = bot
         self.add_item(AjudaCategoriaSelect(bot))
         self.add_item(AbrirComandosButton(bot))
+        from cogs.comunidade import adicionar_botao_contribuicao_contextual
+        adicionar_botao_contribuicao_contextual(
+            self, "faq", "ajuda", "Sugerir pergunta ou resposta", "💡", row=2,
+            style=discord.ButtonStyle.success,
+        )
 
 
 class AjudaPerguntasView(discord.ui.View):
@@ -331,6 +336,11 @@ class AjudaPerguntasView(discord.ui.View):
                 label="Assistir ao vídeo tutorial", style=discord.ButtonStyle.link,
                 url=video_url, emoji="▶️"
             ))
+        from cogs.comunidade import adicionar_botao_contribuicao_contextual
+        adicionar_botao_contribuicao_contextual(
+            self, "faq", "ajuda", "Não encontrou? Sugerir resposta", "💡", row=2,
+            style=discord.ButtonStyle.success,
+        )
 
 
 class AjudaAtalhoView(discord.ui.View):

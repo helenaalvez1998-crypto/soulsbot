@@ -17,6 +17,28 @@ Este módulo acrescenta um fluxo comunitário moderado, um Arquivo de Mundos, in
 7. Use **Publicar painel do Arquivo de Mundos**. A publicação é atualizada no mesmo canal quando o ID salvo ainda existe.
 8. Para revisar envios, abra `/adm` → **Central de moderação** → **Contribuições**. Para denúncias, selecione **Sinalizações**.
 
+
+## 2.1. Ações contextuais: contribuir sem sair do setor
+
+O fluxo recomendado para o membro não começa em uma central genérica. Cada setor apresenta a ação de contribuição no próprio painel, catálogo ou estado sem resultados. O botão abre diretamente o formulário adequado e registra o setor/canal de origem para que a equipe veja o contexto da solicitação.
+
+| Onde o membro está | Ação contextual | Resultado após aprovação |
+|---|---|---|
+| Central Soulslike / Runs | Sugerir jogo ausente ou propor desafio | Inclusão em `sl_games` ou `sl_challenges` |
+| Registro de run, após escolher um jogo sem desafio compatível | Sugerir desafio (jogo já preenchido) | Desafio vinculado ao jogo selecionado |
+| Hall da Fama / Livro dos Desafios sem dados | Sugerir jogo ou desafio sem voltar à central | Conteúdo entra no cadastro Soulslike |
+| Busca do Catálogo sem resultados | Enviar jogo ou mod ausente | Fila já existente do catálogo, sem duplicar a fila comunitária |
+| Painel de Platinas e Jogos Zerados | Sugerir melhoria/correção do setor | Revisão pela equipe com setor de origem registrado |
+| Coliseu | Sugerir competição | Fila de contribuições do Coliseu |
+| Canal de Lore e Teorias | Publicar lore, teoria, descoberta, cronologia ou debate | Publicação no Arquivo de Mundos |
+| Biblioteca de Guias e Tutoriais | Enviar guia, tutorial ou sugerir FAQ | Publicação na Biblioteca |
+| Central de Ajuda, inclusive após escolher uma categoria | Sugerir pergunta ou resposta | Revisão da FAQ comunitária |
+| Loja e Santuário | Sugerir item ou melhoria | Revisão da equipe no setor de origem |
+
+A confirmação de envio oferece dois próximos passos no mesmo contexto: acompanhar as próprias contribuições ou enviar outra proposta do mesmo tipo. O membro não precisa localizar manualmente uma central distinta para verificar o status.
+
+O princípio de UX é: **se o usuário está procurando algo e não encontra, a opção para sugerir deve estar na própria tela de busca/consulta; se está consultando um setor, a ação relacionada deve estar nesse painel.** A central geral continua disponível como alternativa, mas não é uma etapa obrigatória.
+
 ## 2. Jornada do membro
 
 O painel do Arquivo de Mundos oferece:
