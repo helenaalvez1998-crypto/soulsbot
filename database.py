@@ -1,5 +1,6 @@
 import asyncio
 import os
+import unicodedata
 from contextlib import asynccontextmanager
 import aiosqlite
 from levels import nivel_por_xp
