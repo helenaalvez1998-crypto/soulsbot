@@ -61,8 +61,8 @@ COMANDOS_SECOES = (
         "description": "Os dois pontos de entrada da NARA", "title": "🌙 Comece por aqui",
         "intro": "A NARA possui dois comandos slash principais. O restante é acessado pelos painéis interativos — menos comandos para decorar, mais tempo para jogar.",
         "fields": (
-            ("Central do membro", "`/nara` — abre seu painel privado com jogos, conquistas, biblioteca, catálogos, perfil, Santuário, progresso, Loja e ajuda."),
-            ("Central administrativa", "`/adm` — abre o painel restrito à equipe para moderação, configuração, auditoria, catálogos e Radar de Games."),
+            ("Central do membro", "`/nara` — abre seu painel privado com Ports & Mods, biblioteca, perfil, Santuário, progresso, Loja, comunidade e ajuda."),
+            ("Central administrativa", "`/adm` — abre o painel restrito à equipe para moderação, configuração, auditoria, Ports & Mods e Radar de Games."),
             ("Navegação", "Use botões, menus e formulários dentro dos painéis. Não é necessário decorar comandos individuais."),
         ),
     },
@@ -72,7 +72,7 @@ COMANDOS_SECOES = (
         "intro": "Abra `/nara` e escolha uma categoria. Eu organizo a rota; suas consultas pessoais continuam privadas.",
         "fields": (
             ("Jogos e conquistas", "Acesse Coliseu, Platinas, Zerados, Runs e desafios."),
-            ("Biblioteca e catálogos", "Consulte seus jogos concluídos e explore o catálogo comunitário de jogos e mods. Você também pode pesquisar e enviar sugestões."),
+            ("Biblioteca", "Consulte seus jogos concluídos, platinas e runs. Para descobrir conteúdo comunitário, acesse Ports & Mods."),
             ("Progresso e recompensas", "Consulte nível, XP, patente, ranking e Loja de Denários."),
         ),
     },
@@ -87,13 +87,13 @@ COMANDOS_SECOES = (
         ),
     },
     {
-        "key": "catalogos", "label": "Catálogos", "emoji": "📚",
-        "description": "Jogos e mods da comunidade", "title": "📚 Catálogos de jogos e mods",
-        "intro": "Acesse **Catálogos** dentro de `/nara`. Explore primeiro; envie sugestões depois. A equipe revisa antes de publicar.",
+        "key": "catalogos", "label": "Ports & Mods", "emoji": "🎮",
+        "description": "Ports e modificações da comunidade", "title": "🎮 Ports & Mods",
+        "intro": "Acesse **Ports & Mods** dentro de `/nara`. Explore ports por plataforma e consulte os detalhes e links disponíveis. Sugestões passam pela revisão da equipe.",
         "fields": (
-            ("Catálogo de jogos", "Explore capas, filtre por plataforma, pesquise títulos e consulte detalhes e links disponíveis."),
-            ("Catálogo de mods", "Explore mods por jogo, consulte imagens, descrições e links."),
-            ("Envios da comunidade", "Envie jogos e mods para revisão. Eles só aparecem publicamente após aprovação da equipe."),
+            ("Catálogo de ports", "Explore capas, filtre pela plataforma indicada, pesquise ports e consulte detalhes, links de download, ISO original e tutoriais quando disponíveis."),
+            ("Catálogo de mods", "Explore mods associados aos ports, consulte imagens, descrições e links."),
+            ("Envios da comunidade", "Envie ports e mods para revisão. Eles só aparecem publicamente após aprovação da equipe."),
         ),
     },
     {
@@ -111,7 +111,7 @@ COMANDOS_SECOES = (
         "intro": "A equipe autorizada acessa a central pelo `/adm`. Nesta área, precisão e evidência vêm antes de qualquer espetáculo.",
         "fields": (
             ("Solicitações da NARA", "Revise Platinas, Runs/Desafios e Jogos Zerados na Central de Moderação."),
-            ("Envios de catálogo", "Aprove ou rejeite jogos e mods enviados pelos membros, preservando o fluxo de revisão."),
+            ("Envios de catálogo", "Aprove ou rejeite ports e mods enviados pelos membros, preservando o fluxo de revisão."),
             ("Auditoria", "Consulte histórico e indicadores operacionais disponíveis no painel administrativo."),
         ),
     },
@@ -121,7 +121,7 @@ COMANDOS_SECOES = (
         "intro": "As configurações da equipe ficam no `/adm`, organizadas por categoria. Use a opção correta e não transforme um ajuste simples numa expedição.",
         "fields": (
             ("Servidor e sistemas", "Configure canais, cargos, personalização e sistemas comunitários conforme suas permissões."),
-            ("Catálogos", "Gerencie jogos e mods, revise envios e configure notificações de moderação."),
+            ("Ports & Mods", "Gerencie ports e mods, revise envios e configure notificações de moderação."),
             ("Radar de Games", "Escolha o canal de notícias, cadastre feeds RSS, consulte fontes e envie uma publicação de teste."),
         ),
     },
