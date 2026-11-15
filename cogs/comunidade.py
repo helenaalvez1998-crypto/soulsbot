@@ -232,6 +232,28 @@ class ContributionModal(discord.ui.Modal):
             await self.cog.bot.db.log(interaction.user.id, "community_contribution_created", f"id={contribution_id} kind={self.kind}")
         except Exception:
             log.exception("Contribuição #%s salva, mas o log de auditoria falhou", contribution_id)
+        try:
+            mod_channel_id = await GuildConfig.get(self.cog.bot.db, interaction.guild_id, "mod_channel")
+            mod_channel = await get_text_channel(self.cog.bot, mod_channel_id) if mod_channel_id else None
+            if mod_channel:
+                kind_label = TIPOS.get(self.kind, ("Contribuição", "", 0))[0]
+                review_embed = discord.Embed(
+                    title="📥 Nova contribuição aguardando aprovação",
+                    description=(
+                        f"**ID:** `#{contribution_id}`\n"
+                        f"**Tipo:** {kind_label}\n"
+                        f"**Título:** {discord.utils.escape_markdown(title)[:200]}\n"
+                        f"**Jogo:** {discord.utils.escape_markdown(game)[:150] or 'Geral'}\n"
+                        f"**Autor:** {interaction.user.mention} (`{interaction.user.id}`)"
+                    ),
+                    color=config.COR_OURO,
+                )
+                review_embed.set_footer(text="Abra a fila de contribuições da Comunidade para analisar.")
+                await mod_channel.send(embed=review_embed, allowed_mentions=discord.AllowedMentions.none())
+            else:
+                log.error("Contribuição #%s salva, mas canal central de moderação não está configurado/acessível.", contribution_id)
+        except (discord.Forbidden, discord.HTTPException):
+            log.exception("Contribuição #%s salva, mas falhou o aviso no canal central de moderação.", contribution_id)
         await interaction.followup.send(
             f"📨 Sua contribuição **#{contribution_id} — {discord.utils.escape_markdown(title)}** foi enviada para análise.\n"
             "Ela só será publicada e recompensada depois da aprovação da equipe. Você pode acompanhar o andamento abaixo, sem sair do assunto em que estava.",

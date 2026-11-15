@@ -151,6 +151,29 @@ def set_config(chave, valor):
         conn.execute("INSERT OR REPLACE INTO config (chave, valor) VALUES (?, ?)", (chave, valor))
 
 
+async def resolver_canal_moderacao(guild_id=None):
+    """Prioriza o canal central de /adm; usa a configuração legada do catálogo como fallback."""
+    canal_id = None
+    if guild_id and bot is not None and getattr(bot, "db", None) is not None:
+        try:
+            from admin_config import GuildConfig
+            canal_id = await GuildConfig.get(bot.db, int(guild_id), "mod_channel")
+        except Exception as exc:
+            print("Falha ao consultar canal central de moderação:", repr(exc))
+    if not canal_id:
+        canal_id = get_config("canal_avisos")
+    if not canal_id or bot is None:
+        return None
+    try:
+        canal = bot.get_channel(int(canal_id)) or await bot.fetch_channel(int(canal_id))
+        if isinstance(canal, (discord.TextChannel, discord.Thread)):
+            return canal
+        print(f"Canal de moderação {canal_id} não é canal de texto ou thread.")
+    except (discord.NotFound, discord.Forbidden, discord.HTTPException, ValueError, TypeError) as exc:
+        print(f"Não foi possível acessar o canal de moderação {canal_id}:", repr(exc))
+    return None
+
+
 def listar(plataforma=None, query=None, page=0, status="aprovado"):
     where, params = ["status = ?"], [status]
     if plataforma:
@@ -653,9 +676,12 @@ class AddModal(discord.ui.Modal):
         jogo = get_jogo(cur.lastrowid)
         emb, file = jogo_embed(jogo)
         if self.publico:
-            await avisar_moderacao(jogo)
+            notificado = await avisar_moderacao(jogo, interaction.guild_id)
+            aviso = "A equipe foi notificada." if notificado else (
+                "⚠️ O envio foi salvo como pendente, mas a notificação falhou. Avise a equipe para conferir a fila."
+            )
             await interaction.edit_original_response(
-                content="✅ **Port enviado!** Ele aparecerá no catálogo após a aprovação da moderação.\n\nPrévia:",
+                content=f"✅ **Port enviado!** Ele aparecerá no catálogo após a aprovação da moderação.\n{aviso}\n\nPrévia:",
                 embed=emb, attachments=[file] if file else [], view=None)
         else:
             await interaction.edit_original_response(
@@ -666,19 +692,22 @@ class AddModal(discord.ui.Modal):
 # ------------------------------------------------------------------ moderação
 
 
-async def avisar_moderacao(jogo):
-    canal_id = get_config("canal_avisos")
-    if not canal_id:
-        return
+async def avisar_moderacao(jogo, guild_id=None):
+    canal = await resolver_canal_moderacao(guild_id)
+    if canal is None:
+        print("Port salvo como pendente, mas nenhum canal central de moderação acessível foi encontrado.")
+        return False
     try:
-        canal = bot.get_channel(int(canal_id)) or await bot.fetch_channel(int(canal_id))
         emb, file = jogo_embed(jogo)
         kw = {"file": file} if file else {}
         await canal.send(
-            content="📥 **Novo port aguardando aprovação!** Abra o botão 🛠 Admin → **Pendentes** para analisar.",
-            embed=emb, **kw)
-    except Exception as e:
-        print("Não consegui avisar a moderação:", repr(e))
+            content=f"📥 **Novo port aguardando aprovação!** ID: `{jogo['id']}`. Abra Ports & Mods → Administração → Pendentes.",
+            embed=emb, **kw,
+        )
+        return True
+    except (discord.Forbidden, discord.HTTPException) as exc:
+        print("Não consegui avisar a moderação sobre o port:", repr(exc))
+        return False
 
 
 async def avisar_autor(jogo, texto):
@@ -1284,13 +1313,18 @@ class AdicionarModModal(discord.ui.Modal):
                 "Ele aparecerá no catálogo após aprovação.",
                 ephemeral=True,
             )
-            canal_id = get_config("canal_avisos")
-            if canal_id:
+            canal = await resolver_canal_moderacao(interaction.guild_id)
+            if canal is None:
+                print(f"Mod #{mod_id} salvo como pendente, mas o canal central não está acessível.")
+            else:
                 try:
-                    canal = bot.get_channel(int(canal_id)) or await bot.fetch_channel(int(canal_id))
-                    await canal.send(f"📥 Novo mod aguardando aprovação: **{self.mod_nome.value.strip()}** (port: {self.jogo_nome.value.strip()}). Use `/painelmods` → **Pendentes**.")
-                except Exception as e:
-                    print("Não consegui avisar moderação sobre mod:", repr(e))
+                    await canal.send(
+                        f"🧩 **Novo mod aguardando aprovação!** ID: `{mod_id}` — "
+                        f"**{self.mod_nome.value.strip()}** (port: {jogo_canonico}). "
+                        "Abra Ports & Mods → Administração → Aprovar mods."
+                    )
+                except (discord.Forbidden, discord.HTTPException) as exc:
+                    print("Não consegui avisar a moderação sobre mod:", repr(exc))
         else:
             await interaction.response.send_message(
                 f"✅ Mod **{self.mod_nome.value.strip()}** cadastrado no catálogo. ID: `{mod_id}`.", ephemeral=True,
@@ -1453,6 +1487,17 @@ class ModPendentesView(discord.ui.View):
         await interaction.response.edit_message(content="## 🧩 Administração de mods\nEscolha uma opção no menu abaixo.", embed=None, attachments=[], view=ModAdminView())
 
 
+async def avisar_autor_mod(mod, texto):
+    autor_id = mod.get("autor_id") if hasattr(mod, "get") else mod["autor_id"]
+    if not autor_id:
+        return
+    try:
+        user = bot.get_user(int(autor_id)) or await bot.fetch_user(int(autor_id))
+        await user.send(texto)
+    except (discord.Forbidden, discord.HTTPException):
+        print(f"Não foi possível enviar DM ao autor do mod #{mod['id']}.")
+
+
 class ModDecisaoView(discord.ui.View):
     def __init__(self, mod):
         super().__init__(timeout=900)
@@ -1464,6 +1509,7 @@ class ModDecisaoView(discord.ui.View):
             await interaction.response.send_message("⛔ Apenas administradores podem moderar mods.", ephemeral=True); return
         with db() as conn:
             conn.execute("UPDATE mods SET status='aprovado' WHERE id=?", (self.mod["id"],))
+        await avisar_autor_mod(self.mod, f"✅ Seu mod **{self.mod['mod_nome']}** foi aprovado e já aparece no catálogo.")
         await interaction.response.edit_message(content=f"## ✅ Mod aprovado\n**{self.mod['mod_nome']}** já aparece no catálogo de mods.", embed=None, attachments=[], view=ModPendentesView())
 
     @discord.ui.button(label="Rejeitar", emoji="❌", style=discord.ButtonStyle.danger)
@@ -1473,6 +1519,7 @@ class ModDecisaoView(discord.ui.View):
         with db() as conn:
             conn.execute("DELETE FROM mods WHERE id=?", (self.mod["id"],))
         apagar_arquivo(self.mod["imagem"])
+        await avisar_autor_mod(self.mod, f"❌ Seu envio de mod **{self.mod['mod_nome']}** não foi aprovado pela moderação.")
         await interaction.response.edit_message(content=f"## ❌ Mod rejeitado\n**{self.mod['mod_nome']}** foi removido dos envios.", embed=None, attachments=[], view=ModPendentesView())
 
 
