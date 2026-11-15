@@ -79,6 +79,125 @@ def _install_process_exception_hooks() -> None:
 _install_process_exception_hooks()
 
 
+
+
+class RelatorioErroModal(discord.ui.Modal, title="Reportar problema com o NARA"):
+    descricao = discord.ui.TextInput(
+        label="O que você estava tentando fazer?",
+        placeholder="Descreva o que aconteceu e o que você esperava que acontecesse...",
+        style=discord.TextStyle.paragraph,
+        min_length=8,
+        max_length=1000,
+        required=True,
+    )
+
+    def __init__(self, contexto: dict[str, str]):
+        super().__init__(timeout=300)
+        self.contexto = contexto
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        canal_id = int(getattr(config, "MOD_CHANNEL_ID", 0) or 0)
+        canal = interaction.client.get_channel(canal_id) if canal_id else None
+        if canal is None and canal_id:
+            try:
+                canal = await interaction.client.fetch_channel(canal_id)
+            except (discord.HTTPException, discord.Forbidden):
+                canal = None
+
+        if canal is None or not hasattr(canal, "send"):
+            return await interaction.response.send_message(
+                "Não foi possível encaminhar o relatório: o canal de moderação não está configurado ou está inacessível. Avise a equipe por outro meio.",
+                ephemeral=True,
+            )
+
+        embed = discord.Embed(
+            title="🐛 Novo relatório de erro",
+            description=str(self.descricao.value)[:1000],
+            color=0xE67E22,
+            timestamp=discord.utils.utcnow(),
+        )
+        embed.add_field(name="Usuário", value=f"{interaction.user.mention}\n`{interaction.user.id}`", inline=True)
+        embed.add_field(name="Servidor", value=f"`{self.contexto.get('guild', 'DM')}`", inline=True)
+        embed.add_field(name="Comando/ação", value=f"`{self.contexto.get('acao', 'não identificada')[:200]}`", inline=False)
+        embed.add_field(name="Tipo de erro", value=f"`{self.contexto.get('erro', 'não identificado')[:200]}`", inline=True)
+        embed.add_field(name="Canal", value=f"`{self.contexto.get('canal', 'não identificado')}`", inline=True)
+        embed.add_field(name="ID da interação", value=f"`{self.contexto.get('interaction_id', 'não disponível')}`", inline=False)
+        try:
+            await canal.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+        except (discord.HTTPException, discord.Forbidden):
+            return await interaction.response.send_message(
+                "Não consegui enviar o relatório à moderação. Tente novamente mais tarde.",
+                ephemeral=True,
+            )
+        await interaction.response.send_message(
+            "Relatório enviado à equipe de moderação. Obrigado por ajudar a melhorar o NARA.",
+            ephemeral=True,
+        )
+
+
+class RelatorioErroView(discord.ui.View):
+    def __init__(self, contexto: dict[str, str]):
+        super().__init__(timeout=300)
+        self.contexto = contexto
+
+    @discord.ui.button(
+        label="Reportar erro aos administradores",
+        emoji="🐛",
+        style=discord.ButtonStyle.secondary,
+    )
+    async def reportar(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await interaction.response.send_modal(RelatorioErroModal(self.contexto))
+
+
+def _contexto_relatorio(interaction: discord.Interaction, acao: str, error: BaseException) -> dict[str, str]:
+    return {
+        "acao": acao,
+        "erro": type(error).__name__,
+        "guild": str(interaction.guild_id or "DM"),
+        "canal": str(interaction.channel_id or "desconhecido"),
+        "interaction_id": str(interaction.id),
+    }
+
+
+async def _responder_erro_interacao(
+    interaction: discord.Interaction,
+    mensagem: str,
+    contexto: dict[str, str],
+) -> None:
+    view = RelatorioErroView(contexto)
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(mensagem, ephemeral=True, view=view)
+        else:
+            await interaction.response.send_message(mensagem, ephemeral=True, view=view)
+    except (discord.HTTPException, discord.InteractionResponded, RuntimeError):
+        log.debug("Não foi possível apresentar a opção de relatório; a interação expirou.", exc_info=True)
+
+
+async def _nara_view_on_error(
+    view: discord.ui.View,
+    interaction: discord.Interaction,
+    error: Exception,
+    item: discord.ui.Item[Any],
+) -> None:
+    """Tratamento padrão para falhas em botões/selects sem handler local."""
+    acao = getattr(item, "label", None) or getattr(item, "custom_id", None) or type(item).__name__
+    log.error(
+        "Falha em componente de interface (%s).",
+        acao,
+        exc_info=(type(error), error, error.__traceback__),
+    )
+    await _responder_erro_interacao(
+        interaction,
+        "Ocorreu um erro ao executar essa ação. Se quiser, envie um relatório para a equipe de moderação.",
+        _contexto_relatorio(interaction, str(acao), error),
+    )
+
+
+# Views que não implementam on_error próprio passam a oferecer o fluxo de relatório.
+discord.ui.View.on_error = _nara_view_on_error
+
+
 class NaraCommandTree(app_commands.CommandTree):
     """Tratamento central de erros de slash commands com resposta privada."""
 
@@ -126,13 +245,11 @@ class NaraCommandTree(app_commands.CommandTree):
             log.warning("Erro de interação em /%s: %s", command_name, type(error).__name__, exc_info=(type(error), error, error.__traceback__))
             mensagem = "Não foi possível concluir a solicitação. Tente novamente; se continuar, avise a moderação."
 
-        try:
-            if interaction.response.is_done():
-                await interaction.followup.send(mensagem, ephemeral=True)
-            else:
-                await interaction.response.send_message(mensagem, ephemeral=True)
-        except (discord.HTTPException, discord.InteractionResponded, RuntimeError):
-            log.debug("A interação de /%s expirou antes da resposta amigável.", command_name, exc_info=True)
+        await _responder_erro_interacao(
+            interaction,
+            mensagem,
+            _contexto_relatorio(interaction, f"/{command_name}", original),
+        )
 
 
 class NaraBot(commands.Bot):
