@@ -6,7 +6,7 @@ import time
 
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 import config
 from admin_config import GuildConfig
@@ -50,10 +50,75 @@ class Santuario(commands.Cog):
         self.bot = bot
         self._lock_criar = asyncio.Lock()
         self._ultimo_refresh: dict[int, float] = {}
+        self._ultima_atividade: dict[int, float] = {}
 
     async def cog_load(self):
         self.bot.add_view(SantuarioPublicoView(self))
         self.bot.add_view(CartaoView(self))
+        if not self._monitorar_santuarios.is_running():
+            self._monitorar_santuarios.start()
+
+    def cog_unload(self):
+        self._monitorar_santuarios.cancel()
+
+    def _marcar_atividade_local(self, thread_id: int) -> None:
+        self._ultima_atividade[thread_id] = time.monotonic()
+
+    @tasks.loop(seconds=60)
+    async def _monitorar_santuarios(self):
+        """Arquiva santuários após 10 min sem mensagens ou interações humanas."""
+        try:
+            perfis = await self.bot.db._all("SELECT user_id, thread_id FROM perfis")
+        except Exception:
+            log.exception("Não foi possível consultar os santuários para arquivamento por inatividade")
+            return
+
+        agora = time.monotonic()
+        for perfil in perfis:
+            thread_id = int(perfil["thread_id"])
+            # Após reinício, concede uma janela completa de 10 minutos antes de
+            # qualquer arquivamento. Evita fechar espaços sem conhecer a atividade
+            # ocorrida enquanto o processo estava desligado.
+            ultima = self._ultima_atividade.setdefault(thread_id, agora)
+            if agora - ultima < 600:
+                continue
+
+            thread = await self._thread(thread_id)
+            if thread is None or thread.archived:
+                self._ultima_atividade.pop(thread_id, None)
+                continue
+            try:
+                await thread.edit(archived=True, reason="Santuário sem atividade por 10 minutos")
+                self._ultima_atividade.pop(thread_id, None)
+                log.info("Santuário arquivado por 10 min de inatividade: thread=%s owner=%s", thread_id, perfil["user_id"])
+            except discord.NotFound:
+                self._ultima_atividade.pop(thread_id, None)
+            except discord.Forbidden:
+                log.warning("Sem permissão para arquivar santuário %s; verifique Gerenciar tópicos", thread_id)
+            except discord.HTTPException:
+                log.warning("Falha ao arquivar santuário %s por inatividade", thread_id, exc_info=True)
+
+    @_monitorar_santuarios.before_loop
+    async def _antes_monitorar_santuarios(self):
+        await self.bot.wait_until_ready()
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if message.author.bot or not isinstance(message.channel, discord.Thread):
+            return
+        perfil = await self.bot.db.get_perfil_por_thread(message.channel.id)
+        if perfil:
+            self._marcar_atividade_local(message.channel.id)
+
+    @commands.Cog.listener()
+    async def on_interaction(self, interaction: discord.Interaction):
+        if interaction.user.bot or not interaction.channel_id:
+            return
+        canal = interaction.channel or self.bot.get_channel(interaction.channel_id)
+        if isinstance(canal, discord.Thread):
+            perfil = await self.bot.db.get_perfil_por_thread(canal.id)
+            if perfil:
+                self._marcar_atividade_local(canal.id)
 
     # ------------------------------------------------------------ infraestrutura
     async def _thread(self, thread_id: int) -> discord.Thread | None:
@@ -408,6 +473,7 @@ class Santuario(commands.Cog):
             if thread.archived:
                 await thread.edit(archived=False)
             await thread.add_user(interaction.user)
+            self._marcar_atividade_local(thread.id)
             # A entrada do proprietário não deve deixar o aviso automático do Discord no Santuário.
             await self._limpar_notificacoes_sistema(thread)
             await self.atualizar(interaction.user.id, force_new=True)
@@ -447,6 +513,7 @@ class Santuario(commands.Cog):
             if thread.archived:
                 await thread.edit(archived=False)
             await thread.add_user(interaction.user)
+            self._marcar_atividade_local(thread.id)
             # Mantém o espaço limpo também após uma visita. Só remove mensagens de sistema.
             await self._limpar_notificacoes_sistema(thread)
         except discord.HTTPException:
@@ -473,7 +540,10 @@ class Santuario(commands.Cog):
                 privado_origem=privado_origem, view=view_voltar,
             )
         try:
+            if thread.archived:
+                await thread.edit(archived=False)
             await thread.add_user(interaction.user)
+            self._marcar_atividade_local(thread.id)
         except discord.HTTPException:
             pass
         await self._responder_fluxo(
