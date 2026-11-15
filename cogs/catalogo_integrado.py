@@ -32,6 +32,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from admin_config import GuildConfig
+from utils import get_text_channel
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Dados isolados do catálogo, mas dentro do volume persistente da NARA.
 # Para reutilizar o diretório do bot antigo, defina CATALOGO_DATA_DIR para a pasta
@@ -105,12 +108,9 @@ def init_db():
         )
         # migração: bancos criados por versões anteriores ganham as colunas novas
         existentes = {r[1] for r in conn.execute("PRAGMA table_info(jogos)")}
-        for coluna, ddl in (("iso", "TEXT"), ("status", "TEXT NOT NULL DEFAULT 'aprovado'"), ("autor_id", "INTEGER"), ("criado_em", "TEXT")):
+        for coluna, ddl in (("iso", "TEXT"), ("status", "TEXT NOT NULL DEFAULT 'aprovado'"), ("autor_id", "INTEGER")):
             if coluna not in existentes:
                 conn.execute(f"ALTER TABLE jogos ADD COLUMN {coluna} {ddl}")
-        # Registros antigos recebem uma data de migração; novos envios gravam
-        # o horário real de criação no INSERT abaixo.
-        conn.execute("UPDATE jogos SET criado_em = CURRENT_TIMESTAMP WHERE criado_em IS NULL OR criado_em = ''")
         conn.execute("CREATE TABLE IF NOT EXISTS config (chave TEXT PRIMARY KEY, valor TEXT)")
         # Catálogo de mods separado do catálogo de ports.
         conn.execute("""CREATE TABLE IF NOT EXISTS mods (
@@ -671,15 +671,15 @@ class AddModal(discord.ui.Modal):
         status = "pendente" if self.publico else "aprovado"
         with db() as conn:
             cur = conn.execute(
-                "INSERT INTO jogos (nome, plataforma, link, iso, tutorial, capa, status, autor_id, criado_em) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
+                "INSERT INTO jogos (nome, plataforma, link, iso, tutorial, capa, status, autor_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (self.nome.value.strip(), self.plataforma, link, iso or None, tutorial or None,
                  path, status, interaction.user.id),
             )
         jogo = get_jogo(cur.lastrowid)
         emb, file = jogo_embed(jogo)
         if self.publico:
-            await avisar_moderacao(jogo)
+            await avisar_moderacao(jogo, interaction.guild_id)
             await interaction.edit_original_response(
                 content="✅ **Port enviado!** Ele aparecerá no catálogo após a aprovação da moderação.\n\nPrévia:",
                 embed=emb, attachments=[file] if file else [], view=None)
@@ -692,19 +692,37 @@ class AddModal(discord.ui.Modal):
 # ------------------------------------------------------------------ moderação
 
 
-async def avisar_moderacao(jogo):
-    canal_id = get_config("canal_avisos")
+async def obter_canal_moderacao(guild_id: int):
+    """Usa exclusivamente o canal central configurado em /adm; o legado é fallback opcional."""
+    if bot is None or getattr(bot, "db", None) is None:
+        return None
+    canal_id = await GuildConfig.get(bot.db, int(guild_id), "mod_channel")
     if not canal_id:
-        return
+        return None
+    return await get_text_channel(bot, canal_id)
+
+
+async def avisar_moderacao(jogo, guild_id: int) -> bool:
     try:
-        canal = bot.get_channel(int(canal_id)) or await bot.fetch_channel(int(canal_id))
+        canal = await obter_canal_moderacao(guild_id)
+        if canal is None:
+            print(f"Canal central de moderação ausente/inacessível para guild={guild_id}; port #{jogo['id']} permanece pendente.")
+            return False
         emb, file = jogo_embed(jogo)
         kw = {"file": file} if file else {}
         await canal.send(
-            content="📥 **Novo port aguardando aprovação!** Abra o botão 🛠 Admin → **Pendentes** para analisar.",
-            embed=emb, **kw)
-    except Exception as e:
-        print("Não consegui avisar a moderação:", repr(e))
+            content="📥 **NOVO PORT — aguardando aprovação**\\n"
+                    f"**ID:** `#{jogo['id']}` · **Autor:** <@{jogo['autor_id']}>\\n"
+                    "Analise esta solicitação pela Central de Moderação da NARA.",
+            embed=emb, **kw,
+            view=PendenteView(jogo, {"mode": "pendentes", "plataforma": None, "query": None, "page": 0}),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+        return True
+    except Exception:
+        import logging
+        logging.getLogger("catalogo").exception("Falha ao notificar port #%s no canal central.", jogo["id"])
+        return False
 
 
 async def avisar_autor(jogo, texto):
@@ -1348,13 +1366,34 @@ class AdicionarModModal(discord.ui.Modal):
                 "Ele aparecerá no catálogo após aprovação.",
                 ephemeral=True,
             )
-            canal_id = get_config("canal_avisos")
-            if canal_id:
-                try:
-                    canal = bot.get_channel(int(canal_id)) or await bot.fetch_channel(int(canal_id))
-                    await canal.send(f"📥 Novo mod aguardando aprovação: **{self.mod_nome.value.strip()}** (port: {self.jogo_nome.value.strip()}). Use `/painelmods` → **Pendentes**.")
-                except Exception as e:
-                    print("Não consegui avisar moderação sobre mod:", repr(e))
+            try:
+                canal = await obter_canal_moderacao(interaction.guild_id)
+                if canal is None:
+                    raise RuntimeError("Canal central de moderação não configurado ou inacessível.")
+                embed = discord.Embed(
+                    title="🛠️ NOVO MOD — aguardando aprovação",
+                    description=(
+                        f"**ID:** `#{mod_id}`\\n"
+                        f"**Mod:** {discord.utils.escape_markdown(self.mod_nome.value.strip())}\\n"
+                        f"**Jogo:** {discord.utils.escape_markdown(jogo_canonico)}\\n"
+                        f"**Autor:** {interaction.user.mention}"
+                    ),
+                    color=discord.Color.orange(),
+                )
+                embed.set_footer(text="Analise esta solicitação pela Central de Moderação da NARA.")
+                mod_row = get_mod(int(mod_id))
+                files = []
+                if mod_row and mod_row["imagem"] and os.path.exists(mod_row["imagem"]):
+                    files.append(discord.File(mod_row["imagem"], filename="mod_pendente.png"))
+                    embed.set_image(url="attachment://mod_pendente.png")
+                await canal.send(
+                    embed=embed, files=files,
+                    view=ModDecisaoView(mod_row) if mod_row else None,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            except Exception:
+                import logging
+                logging.getLogger("catalogo").exception("Falha ao notificar mod #%s no canal central.", mod_id)
         else:
             await interaction.response.send_message(
                 f"✅ Mod **{self.mod_nome.value.strip()}** cadastrado no catálogo. ID: `{mod_id}`.", ephemeral=True,

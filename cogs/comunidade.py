@@ -1015,6 +1015,32 @@ class CommunityReportModal(discord.ui.Modal):
             )
         except Exception:
             log.exception("Denúncia #%s criada, mas o log de auditoria falhou", report_id)
+        # Toda denúncia também precisa gerar um aviso no canal configurado em /adm.
+        try:
+            mod_channel_id = await GuildConfig.get(self.cog.bot.db, interaction.guild_id, "mod_channel")
+            mod_channel = await get_text_channel(self.cog.bot, mod_channel_id) if mod_channel_id else None
+            if mod_channel is None:
+                log.error("Denúncia #%s salva, mas o canal central de moderação está ausente/inacessível.", report_id)
+            else:
+                report_embed = discord.Embed(
+                    title="🚩 NOVA DENÚNCIA — aguardando análise",
+                    description=(
+                        f"**Denúncia:** `#{report_id}`\\n"
+                        f"**Conteúdo:** `{self.target_type}:{self.target_id}`\\n"
+                        f"**Motivo:** {discord.utils.escape_markdown(str(self.reason.value).strip())}\\n"
+                        f"**Detalhes:** {discord.utils.escape_markdown(str(self.details.value).strip())}\\n"
+                        "**Denunciante:** identidade privada — visível apenas nos controles de moderação."
+                    ),
+                    color=config.COR_PRATA,
+                )
+                report_embed.set_footer(text="Abra a Central de Moderação da NARA para analisar a denúncia.")
+                await mod_channel.send(
+                    embed=report_embed,
+                    view=CommunityReportReviewView(self.cog, report_id),
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+        except Exception:
+            log.exception("Denúncia #%s salva, mas falhou o aviso no canal central.", report_id)
         await interaction.response.send_message(
             f"🚩 Sinalização registrada como `#{report_id}`. A equipe analisará o conteúdo; o autor não verá quem enviou.", ephemeral=True
         )
