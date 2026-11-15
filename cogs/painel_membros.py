@@ -257,7 +257,7 @@ async def _executar_acao_membro(
                 f"{patente_por_nivel(nivel_atual)} · {row['valor']} XP"
             )
         return await interaction.response.edit_message(
-            "## 🏆 Ranking de XP da NARA\n\n" + "\n".join(linhas),
+            content="## 🏆 Ranking de XP da NARA\n\n" + "\n".join(linhas),
             embed=None,
             view=view_so_com_voltar(voltar),
         )
