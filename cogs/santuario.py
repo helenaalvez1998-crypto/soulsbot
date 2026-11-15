@@ -76,9 +76,7 @@ class Santuario(commands.Cog):
         agora = time.monotonic()
         for perfil in perfis:
             thread_id = int(perfil["thread_id"])
-            # Após reinício, concede uma janela completa de 10 minutos antes de
-            # qualquer arquivamento. Evita fechar espaços sem conhecer a atividade
-            # ocorrida enquanto o processo estava desligado.
+            # Após reinício, concede uma janela completa de 10 minutos.
             ultima = self._ultima_atividade.setdefault(thread_id, agora)
             if agora - ultima < 600:
                 continue
@@ -90,7 +88,7 @@ class Santuario(commands.Cog):
             try:
                 await thread.edit(archived=True, reason="Santuário sem atividade por 10 minutos")
                 self._ultima_atividade.pop(thread_id, None)
-                log.info("Santuário arquivado por 10 min de inatividade: thread=%s owner=%s", thread_id, perfil["user_id"])
+                log.info("Santuário arquivado por inatividade: thread=%s owner=%s", thread_id, perfil["user_id"])
             except discord.NotFound:
                 self._ultima_atividade.pop(thread_id, None)
             except discord.Forbidden:
@@ -645,6 +643,59 @@ class CartaoView(discord.ui.View):
         adicionar_botao_contribuicao_contextual(
             self, "idea", "santuario", "Sugerir melhoria no Santuário", "💡", row=3,
         )
+
+    @discord.ui.button(
+        label="SAIR DO SANTUÁRIO",
+        style=discord.ButtonStyle.danger,
+        emoji="🚪",
+        custom_id="sant:leave",
+        row=4,
+    )
+    async def sair_santuario(self, interaction: discord.Interaction, button: discord.ui.Button):
+        thread = interaction.channel
+        if not isinstance(thread, discord.Thread):
+            return await interaction.response.send_message(
+                "Este botão só funciona dentro de um tópico de Santuário.", ephemeral=True
+            )
+        perfil = await self.cog.bot.db.get_perfil_por_thread(thread.id)
+        if perfil is None:
+            return await interaction.response.send_message(
+                "Não encontrei o Santuário associado a este tópico.", ephemeral=True
+            )
+
+        proprietario = int(perfil["user_id"]) == interaction.user.id
+        try:
+            await interaction.response.defer(ephemeral=True, thinking=True)
+            if proprietario:
+                # O dono fecha o espaço para todos. O tópico e o histórico são preservados.
+                await thread.edit(
+                    archived=True,
+                    reason=f"Santuário fechado pelo proprietário {interaction.user.id}",
+                )
+                self._ultima_atividade.pop(thread.id, None)
+                mensagem = (
+                    "🔒 **Seu Santuário foi fechado.** O tópico foi arquivado e seu histórico continua salvo. "
+                    "Quando quiser voltar, abra **Meu Santuário** pelo `/nara`."
+                )
+            else:
+                # Um visitante sai apenas da lista de membros; não fecha o espaço do proprietário.
+                await thread.remove_user(interaction.user)
+                mensagem = "🚪 Você saiu deste Santuário. O espaço continua disponível para o proprietário."
+            await interaction.followup.send(mensagem, ephemeral=True)
+        except discord.Forbidden:
+            log.warning("Sem permissão para fechar/remover membro do Santuário %s", thread.id, exc_info=True)
+            mensagem = "Não consegui concluir a saída. A NARA precisa da permissão **Gerenciar Tópicos**."
+            if interaction.response.is_done():
+                await interaction.followup.send(mensagem, ephemeral=True)
+            else:
+                await interaction.response.send_message(mensagem, ephemeral=True)
+        except discord.HTTPException:
+            log.exception("Falha ao sair/fechar Santuário %s", thread.id)
+            mensagem = "O Discord não permitiu concluir a ação. Tente novamente."
+            if interaction.response.is_done():
+                await interaction.followup.send(mensagem, ephemeral=True)
+            else:
+                await interaction.response.send_message(mensagem, ephemeral=True)
 
     @discord.ui.button(label="Personalizar", style=discord.ButtonStyle.primary, emoji="✏️", custom_id="sant:perfil")
     async def personalizar(self, interaction: discord.Interaction, button: discord.ui.Button):

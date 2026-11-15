@@ -441,14 +441,11 @@ class MembrosCategoriaView(discord.ui.View):
         return True
 
     async def on_timeout(self) -> None:
-        # O timeout da View é renovado automaticamente pelo discord.py a cada interação.
-        # Ao completar 10 minutos sem uso, remove a resposta efêmera em vez de deixar
-        # um painel aparentemente ativo, mas com botões expirados.
         mensagem = getattr(self, "message", None)
         if mensagem is not None:
             try:
                 await mensagem.delete()
-            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            except discord.HTTPException:
                 pass
 
 
@@ -513,12 +510,11 @@ class PainelMembrosView(discord.ui.View):
         return True
 
     async def on_timeout(self) -> None:
-        # Cada clique válido renova o timeout de 10 minutos da View.
         mensagem = getattr(self, "message", None)
         if mensagem is not None:
             try:
                 await mensagem.delete()
-            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            except discord.HTTPException:
                 pass
 
 
