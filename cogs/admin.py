@@ -7,6 +7,7 @@ config.py quando não há valor personalizado.
 """
 
 import logging
+import sqlite3
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -58,6 +59,8 @@ class ModeracaoCategoriaSelect(discord.ui.Select):
                 discord.SelectOption(label="Jogos zerados", value="zerados", description="Registros de jogos concluídos", emoji="🎮"),
                 discord.SelectOption(label="Contribuições", value="contribuicoes", description="Lore, teorias, guias, desafios e ideias", emoji="📚"),
                 discord.SelectOption(label="Sinalizações", value="denuncias", description="Publicações reportadas pela comunidade", emoji="🚩"),
+                discord.SelectOption(label="Ports", value="ports", description="Ports enviados pela comunidade", emoji="🕹️"),
+                discord.SelectOption(label="Mods", value="mods", description="Mods enviados pela comunidade", emoji="🧩"),
             ],
         )
 
@@ -149,6 +152,25 @@ class ModeracaoPainelView(discord.ui.View):
             registros.extend({**dict(r), "tipo":"contribuicoes",
                               "tipo_label":("Publicação pendente" if r["status"] == "approved" else f"Contribuição · {r['kind']}"),
                               "emoji":"🔁" if r["status"] == "approved" else "📚"} for r in rows)
+        if self.categoria in ("all", "ports", "mods"):
+            try:
+                from cogs import catalogo_integrado as catalogo
+                with sqlite3.connect(catalogo.DB_PATH) as conn:
+                    conn.row_factory = sqlite3.Row
+                    if self.categoria in ("all", "ports"):
+                        rows = conn.execute(
+                            "SELECT id, nome AS titulo, autor_id AS user_id, plataforma, criado_em AS criado "
+                            "FROM jogos WHERE status='pendente' ORDER BY id ASC LIMIT 100"
+                        ).fetchall()
+                        registros.extend({**dict(r), "tipo":"ports", "tipo_label":"Port", "emoji":"🕹️"} for r in rows)
+                    if self.categoria in ("all", "mods"):
+                        rows = conn.execute(
+                            "SELECT id, mod_nome AS titulo, autor_id AS user_id, jogo_nome, "
+                            "datetime('now') AS criado FROM mods WHERE status='pendente' ORDER BY id ASC LIMIT 100"
+                        ).fetchall()
+                        registros.extend({**dict(r), "tipo":"mods", "tipo_label":"Mod", "emoji":"🧩"} for r in rows)
+            except Exception:
+                log.exception("Falha ao consultar pendências do catálogo Ports & Mods na Central de Moderação.")
         if self.categoria in ("all", "denuncias"):
             rows = await db.listar_denuncias_comunitarias(self.guild_id or 0, "pending", 100)
             for report in rows:
@@ -198,7 +220,7 @@ class ModeracaoPainelView(discord.ui.View):
             ), color=COR_PAINEL,
         )
         embed.add_field(name="Na lista atual", value=f"**{pendentes}** solicitação(ões) exibida(s)", inline=True)
-        embed.add_field(name="Categoria", value={"all":"Todas", "platinas":"Platinas", "runs":"Runs e desafios", "zerados":"Jogos zerados", "contribuicoes":"Contribuições", "denuncias":"Sinalizações"}.get(self.categoria, "Todas"), inline=True)
+        embed.add_field(name="Categoria", value={"all":"Todas", "platinas":"Platinas", "runs":"Runs e desafios", "zerados":"Jogos zerados", "contribuicoes":"Contribuições", "denuncias":"Sinalizações", "ports":"Ports", "mods":"Mods"}.get(self.categoria, "Todas"), inline=True)
         embed.add_field(name="Página", value=f"{self.pagina + 1} · {max(1, (len(self.registros) + 24) // 25)}", inline=True)
         if pagina_registros:
             linhas = []
@@ -225,6 +247,34 @@ class ModeracaoPainelView(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=self)
 
     async def abrir_solicitacao(self, interaction: discord.Interaction, tipo: str, registro_id: int):
+        if tipo in ("ports", "mods"):
+            from cogs import catalogo_integrado as catalogo
+            with sqlite3.connect(catalogo.DB_PATH) as conn:
+                conn.row_factory = sqlite3.Row
+                tabela = "jogos" if tipo == "ports" else "mods"
+                row = conn.execute(f"SELECT * FROM {tabela} WHERE id=? AND status='pendente'", (registro_id,)).fetchone()
+            if row is None:
+                return await interaction.response.send_message(
+                    "Esta solicitação já foi processada ou removida. Atualize a fila.", ephemeral=True
+                )
+            row = dict(row)
+            if tipo == "ports":
+                embed, arquivo = catalogo.jogo_embed(row)
+                view = catalogo.PendenteView(row, {"pagina": 0})
+                kwargs = {"embed": embed, "view": view}
+                if arquivo:
+                    kwargs["file"] = arquivo
+                return await interaction.response.send_message(**kwargs, ephemeral=True)
+            detalhes = (
+                f"**Port relacionado:** {row.get('jogo_nome') or 'Não informado'}\\n"
+                f"**Descrição:** {row.get('descricao') or 'Sem descrição'}\\n"
+                f"**Link:** {row.get('link') or 'Não informado'}\\n"
+                f"**Autor:** <@{row.get('autor_id')}>"
+            )
+            embed = discord.Embed(title=f"🧩 {row.get('mod_nome')}", description=detalhes, color=discord.Color.orange())
+            return await interaction.response.send_message(
+                embed=embed, view=catalogo.ModDecisaoView(row), ephemeral=True
+            )
         if tipo == "denuncias":
             report = await self.bot.db.get_denuncia_comunitaria(registro_id)
             if report is None or report["status"] != "pending" or int(report["guild_id"]) != int(self.guild_id or 0):
