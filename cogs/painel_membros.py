@@ -106,6 +106,7 @@ MEMBROS_CATEGORIAS = {
         "descricao": "Encontre orientações para usar os recursos da comunidade.",
         "acoes": [
             ("ajuda", "Abrir central de ajuda", "📖", discord.ButtonStyle.primary),
+            ("tutorial_transmissao", "Como transmitir a tela", "📺", discord.ButtonStyle.success),
         ],
     },
     "comunidade": {
@@ -156,6 +157,70 @@ def _retorno_categoria_membro(bot: commands.Bot, user_id: int, categoria: str):
             view=MembrosCategoriaView(bot, user_id, categoria),
         )
     return voltar
+
+
+LUATOOLS_DOWNLOAD_URL = "https://github.com/madoiscool/LuaTools/releases/download/v1.3.2/LuaTools-win-Setup.exe"
+LUATOOLS_TUTORIAL_URL = "https://discord.com/channels/1563028028508995585/1564047314937716736/1564048613250965726"
+
+
+def luatools_embed() -> discord.Embed:
+    return discord.Embed(
+        title="🎮 LuaTools — Integração com Steam",
+        description=(
+            "Conheça o LuaTools! Aprenda a utilizar a ferramenta para adicionar e instalar "
+            "jogos na sua biblioteca Steam e conhecer seus recursos.\n\n"
+            "📌 Confira os requisitos e as instruções do tutorial e baixe ferramentas somente "
+            "de fontes confiáveis.\n\n"
+            "⚠️ Adicionar um jogo à biblioteca não garante uma licença válida para jogá-lo. "
+            "A disponibilidade e a execução dependem da compatibilidade e dos direitos de uso."
+        ),
+        color=config.COR_OURO,
+    )
+
+
+class LuaToolsLinksView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(discord.ui.Button(
+            label="Baixar LuaTools v1.3.2", emoji="⬇️",
+            style=discord.ButtonStyle.link, url=LUATOOLS_DOWNLOAD_URL,
+        ))
+        self.add_item(discord.ui.Button(
+            label="Assistir ao tutorial", emoji="📹",
+            style=discord.ButtonStyle.link, url=LUATOOLS_TUTORIAL_URL,
+        ))
+
+
+def tutorial_transmissao_embed() -> discord.Embed:
+    embed = discord.Embed(
+        title="📺 Como transmitir sua tela no Discord",
+        description=(
+            "Siga os passos abaixo para compartilhar um jogo, aplicativo ou a tela inteira "
+            "com as pessoas em um canal de voz.\n\n"
+            "**💻 No computador (Windows/macOS)**\n"
+            "1. Entre em um canal de voz ou inicie uma chamada.\n"
+            "2. Clique em **Compartilhar sua tela** (ícone de monitor).\n"
+            "3. Escolha uma janela específica ou a tela inteira.\n"
+            "4. Ajuste a resolução e a taxa de quadros disponíveis.\n"
+            "5. Se quiser transmitir o áudio, selecione uma janela/aplicativo compatível "
+            "e habilite o compartilhamento de som quando essa opção aparecer.\n"
+            "6. Clique em **Transmitir ao vivo**. Para encerrar, clique em **Parar transmissão**.\n\n"
+            "**📱 No celular**\n"
+            "1. Entre em um canal de voz ou chamada pelo aplicativo Discord.\n"
+            "2. Abra os controles da chamada e toque em **Compartilhar tela**.\n"
+            "3. Confirme **Iniciar agora** (Android) ou **Iniciar transmissão** (iOS), "
+            "quando solicitado pelo sistema.\n"
+            "4. Para encerrar, volte ao Discord e toque em **Parar compartilhamento**.\n\n"
+            "**🔧 Se algo não funcionar**\n"
+            "• Verifique se o Discord tem permissão para capturar a tela.\n"
+            "• Feche e abra novamente o Discord; no computador, tente executar o app com as permissões adequadas.\n"
+            "• Algumas plataformas, aplicativos protegidos e conteúdos com DRM podem bloquear a captura.\n"
+            "• A disponibilidade de áudio e de opções de qualidade varia conforme o dispositivo e o sistema."
+        ),
+        color=config.COR_OURO,
+    )
+    embed.set_footer(text="NARA • Ajuda e suporte")
+    return embed
 
 
 async def _executar_acao_membro(
@@ -291,8 +356,15 @@ async def _executar_acao_membro(
         return await cog.abrir_membros(interaction)
 
     if action == "luatools":
-        return await interaction.response.send_message(
-            embed=luatools_embed(), view=LuaToolsLinksView(), ephemeral=True
+        return await interaction.response.edit_message(
+            content=None, embed=luatools_embed(), view=LuaToolsLinksView()
+        )
+
+    if action == "tutorial_transmissao":
+        return await interaction.response.edit_message(
+            content=None,
+            embed=tutorial_transmissao_embed(),
+            view=view_so_com_voltar(voltar),
         )
 
     if action in ("community_home", "community_archive", "community_mine"):
@@ -349,40 +421,6 @@ class MembrosVoltarButton(discord.ui.Button):
         )
         embed.set_footer(text="NARA • Central de acesso dos membros")
         await interaction.response.edit_message(embed=embed, view=PainelMembrosView(self.bot, self.user_id))
-
-
-LUATOOLS_DOWNLOAD_URL = "https://github.com/madoiscool/LuaTools/releases/download/v1.3.2/LuaTools-win-Setup.exe"
-LUATOOLS_TUTORIAL_URL = "https://discord.com/channels/1563028028508995585/1564047314937716736/1564048613250965726"
-
-
-def luatools_embed() -> discord.Embed:
-    embed = discord.Embed(
-        title="🎮 LuaTools — Integração com Steam",
-        description=(
-            "Conheça o LuaTools! Aprenda a utilizar a ferramenta para adicionar e instalar "
-            "jogos na sua biblioteca Steam e conhecer seus recursos.\n\n"
-            "📌 Confira os requisitos e as instruções do tutorial e baixe ferramentas somente "
-            "de fontes confiáveis.\n\n"
-            "⚠️ Adicionar um jogo à biblioteca não garante uma licença válida para jogá-lo. "
-            "A disponibilidade e a execução dependem da compatibilidade e dos direitos de uso."
-        ),
-        color=config.COR_OURO,
-    )
-    embed.set_footer(text="NARA • Ports & Mods")
-    return embed
-
-
-class LuaToolsLinksView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        self.add_item(discord.ui.Button(
-            label="Baixar LuaTools v1.3.2", emoji="⬇️",
-            style=discord.ButtonStyle.link, url=LUATOOLS_DOWNLOAD_URL,
-        ))
-        self.add_item(discord.ui.Button(
-            label="Assistir ao tutorial", emoji="📹",
-            style=discord.ButtonStyle.link, url=LUATOOLS_TUTORIAL_URL,
-        ))
 
 
 class MembrosCategoriaView(discord.ui.View):
