@@ -68,10 +68,10 @@ class GuiaMembrosSelect(discord.ui.Select):
 
 MEMBROS_CATEGORIAS = {
     "jogos": {
-        "titulo": "🎮 Jogos e conquistas",
-        "descricao": "Entre no Coliseu para acessar **Platinas**, **Zerados** e **Runs e desafios**.",
+        "titulo": "🎮 Ports & Mods",
+        "descricao": "Explore ports de jogos organizados por plataforma e mods relacionados. Pesquise títulos ou envie sugestões para análise da equipe.",
         "acoes": [
-            ("coliseu", "Abrir Coliseu", "🏛️", discord.ButtonStyle.primary),
+            ("catalogos", "Abrir Ports & Mods", "🎮", discord.ButtonStyle.primary),
         ],
     },
     "biblioteca": {
@@ -107,13 +107,6 @@ MEMBROS_CATEGORIAS = {
             ("ajuda", "Abrir central de ajuda", "📖", discord.ButtonStyle.primary),
         ],
     },
-    "catalogos": {
-        "titulo": "📚 Catálogos de jogos e mods",
-        "descricao": "Explore a biblioteca de jogos e mods da comunidade, pesquise títulos ou envie sugestões para análise da equipe.",
-        "acoes": [
-            ("catalogos", "Abrir catálogo de jogos e mods", "🎮", discord.ButtonStyle.primary),
-        ],
-    },
     "comunidade": {
         "titulo": "📡 Comunidade e contribuições",
         "descricao": "Participe da comunidade, publique Lore e Teorias, envie guias e acompanhe suas contribuições. Tudo passa por revisão humana antes da publicação.",
@@ -146,9 +139,9 @@ def _retorno_categoria_membro(bot: commands.Bot, user_id: int, categoria: str):
             embed = discord.Embed(
                 title="🌙 NARA — CENTRAL DO MEMBRO",
                 description=(
-                    "**Bem-vindo à sua central de jogos e conquistas.**\n\n"
+                    "**Bem-vindo à sua central NARA.**\n\n"
                     "Escolha uma categoria. Eu organizo os caminhos; você fica com a parte interessante.\n"
-                    "🎮 **Jogos e conquistas** · 📚 **Minha biblioteca** · 🏆 **Meu progresso**\n"
+                    "🎮 **Ports & Mods** · 📚 **Minha biblioteca** · 🏆 **Meu progresso**\n"
                     "🧠 **Preferências** · 📡 **Comunidade** · ❔ **Ajuda e suporte**\n\n"
                     "🔒 Esta central é privada e só pode ser utilizada por você."
                 ),
@@ -293,7 +286,7 @@ async def _executar_acao_membro(
     if action == "catalogos":
         cog = bot.get_cog("CatalogoIntegrado")
         if cog is None:
-            return await interaction.response.send_message("Os catálogos ainda não estão disponíveis.", ephemeral=True)
+            return await interaction.response.send_message("O catálogo Ports & Mods ainda não está disponível.", ephemeral=True)
         return await cog.abrir_membros(interaction)
 
     if action in ("community_home", "community_archive", "community_mine"):
@@ -335,9 +328,9 @@ class MembrosVoltarButton(discord.ui.Button):
         embed = discord.Embed(
             title="🌙 NARA — CENTRAL DO MEMBRO",
             description=(
-                "**Bem-vindo à sua central de jogos e conquistas.**\n\n"
+                "**Bem-vindo à sua central de recursos.**\n\n"
                 "Escolha uma categoria para encontrar a função desejada:\n"
-                "🎮 **Jogos e conquistas:** Coliseu (Platinas, Zerados, Runs e desafios).\n"
+                "🎮 **Ports & Mods:** explore ports de jogos e mods da comunidade.\n"
                 "📚 **Minha biblioteca:** Platinas, Zerados e Runs e desafios.\n"
                 "🏆 **Meu progresso:** nível, XP, ranking e Loja.\n"
                 "👤 **Meu perfil:** estatísticas, patente e rankings pessoais.\n"
@@ -408,12 +401,11 @@ class PainelMembrosView(discord.ui.View):
         self.bot = bot
         self.user_id = user_id
         categorias = [
-            ("jogos", "Jogos e conquistas", "🎮"),
+            ("jogos", "Ports & Mods", "🎮"),
             ("biblioteca", "Minha biblioteca", "📚"),
             ("progresso", "Meu progresso", "🏆"),
             ("preferencias", "Preferências", "🧠"),
             ("ajuda", "Ajuda e suporte", "❔"),
-            ("catalogos", "Catálogos", "📚"),
             ("comunidade", "Comunidade", "📡"),
         ]
         for index, (key, label, emoji) in enumerate(categorias):
@@ -436,14 +428,14 @@ class PainelMembros(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(name="nara", description="Abra sua central de jogos, biblioteca, progresso, recompensas e suporte.")
+    @app_commands.command(name="nara", description="Abra sua central de Ports & Mods, biblioteca, progresso, recompensas e suporte.")
     @app_commands.guild_only()
     async def nara(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title="🌙 NARA — CENTRAL DO MEMBRO",
             description=(
-                "**Bem-vindo à sua central de jogos e conquistas.**\n\n"
-                "🎮 **Jogos e conquistas:** Coliseu (Platinas, Zerados, Runs e desafios).\n"
+                "**Bem-vindo à sua central NARA.**\n\n"
+                "🎮 **Ports & Mods:** explore ports de jogos e mods da comunidade, pesquise e envie sugestões.\n"
                 "📚 **Minha biblioteca:** acesse Platinas, Zerados e Runs e desafios.\n"
                 "🏆 **Meu progresso:** acompanhe nível, XP, ranking e Loja.\n"
                 "👤 **Meu perfil:** veja suas estatísticas e posições nos rankings.\n"

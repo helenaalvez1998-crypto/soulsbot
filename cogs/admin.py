@@ -628,7 +628,7 @@ class PublicarPaineisView(discord.ui.View):
             discord.SelectOption(label="Painel de Platinas", value="platinas", emoji="🏆"),
             discord.SelectOption(label="Painel de Jogos Zerados", value="zerados", emoji="✅"),
             discord.SelectOption(label="Central de Ajuda da NARA", value="ajuda", emoji="📚"),
-            discord.SelectOption(label="Catálogo de Jogos e Mods", value="catalogo", emoji="🕹️"),
+            discord.SelectOption(label="Catálogo de Ports e Mods", value="catalogo", emoji="🕹️"),
         ]
         seletor = discord.ui.Select(placeholder="1. Escolha o painel", options=opcoes)
         seletor.callback = self._selecionar_tipo
@@ -980,10 +980,10 @@ ADMIN_CATEGORIAS = {
         ],
     },
     "catalogos": {
-        "titulo": "📚 Catálogos de jogos e mods",
-        "descricao": "Administre a biblioteca de jogos, os envios da comunidade e o catálogo de mods.",
+        "titulo": "🎮 Ports & Mods",
+        "descricao": "Administre o catálogo de ports, os envios da comunidade e o catálogo de mods.",
         "acoes": [
-            ("catalogo_jogos", "Gerenciar jogos e envios", "🎮"),
+            ("catalogo_jogos", "Gerenciar ports e envios", "🎮"),
             ("catalogo_mods", "Gerenciar mods", "🧩"),
         ],
     },
@@ -1123,7 +1123,7 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
                 embed=None, attachments=[], view=com_voltar(ModAdminView()),
             )
         return await interaction.response.edit_message(
-            content="## 🎮 Administração do catálogo de jogos\\nEscolha uma ação no menu abaixo.",
+            content="## 🎮 Administração do catálogo de ports\\nEscolha uma ação no menu abaixo.",
             embed=None, attachments=[], view=com_voltar(AdminView()),
         )
     if action == "radar_games":
@@ -1363,7 +1363,7 @@ class AdminMainView(discord.ui.View):
             ("economia", "Economia", "🪙"),
             ("diagnostico", "Diagnóstico", "📊"),
             ("paineis", "Painéis", "📌"),
-            ("catalogos", "Catálogos", "📚"),
+            ("catalogos", "Ports & Mods", "🎮"),
             ("comunidade", "Comunidade", "🌑"),
             ("radar", "Radar e conteúdo", "📡"),
             ("cargos", "Cargos e acesso", "🎭"),

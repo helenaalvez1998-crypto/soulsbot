@@ -1,12 +1,12 @@
 """
-Bot de catálogo de jogos para Discord, tudo por botões.
+Catálogo comunitário de ports e mods para Discord, operado por botões.
 
 ÚNICO COMANDO:  /catalogo  (admin) -> publica o catálogo no canal onde for usado.
 
 A mensagem publicada tem 4 botões:
-  📚 Ver catálogo  -> filtro por plataforma, paginação e página do jogo (capa grande, download, ISO, tutorial)
-  🔎 Buscar jogo   -> busca pelo nome
-  📤 Enviar jogo   -> qualquer pessoa envia um jogo; fica PENDENTE até um moderador aprovar
+  📚 Ver catálogo  -> filtro por plataforma, paginação e ficha do port (capa, download, ISO original, tutorial)
+  🔎 Buscar port   -> busca pelo nome
+  📤 Enviar port   -> qualquer pessoa sugere um port; fica PENDENTE até aprovação da moderação
   🛠 Admin         -> só para quem tem "Gerenciar Servidor": adicionar, editar, remover,
                       aprovar/rejeitar pendentes e escolher o canal de avisos
 
@@ -49,7 +49,7 @@ PAGE_SIZE = 8  # 4 colunas x 2 linhas na grade visual
 MAX_CAPA_BYTES = 8 * 1024 * 1024
 MAX_PENDENTES_POR_USUARIO = 3
 
-# Console de origem do jogo (máximo 24 itens, limite do Discord para menus)
+# Plataformas disponíveis para identificar cada port (máximo 24 itens, limite do Discord para menus)
 PLATAFORMAS = {
     "PlayStation 1": "🟦",
     "PlayStation 2": "🟦",
@@ -109,7 +109,7 @@ def init_db():
             if coluna not in existentes:
                 conn.execute(f"ALTER TABLE jogos ADD COLUMN {coluna} {ddl}")
         conn.execute("CREATE TABLE IF NOT EXISTS config (chave TEXT PRIMARY KEY, valor TEXT)")
-        # Catálogo de mods separado do catálogo de jogos.
+        # Catálogo de mods separado do catálogo de ports.
         conn.execute("""CREATE TABLE IF NOT EXISTS mods (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             jogo_nome TEXT NOT NULL,
@@ -243,7 +243,7 @@ def jogo_embed(j):
         color=discord.Color.orange() if pendente else discord.Color.blurple(),
     )
     emoji = PLATAFORMAS.get(j["plataforma"], "🎮")
-    emb.add_field(name="Plataforma de origem", value=f"{emoji} {j['plataforma']}", inline=True)
+    emb.add_field(name="Plataforma", value=f"{emoji} {j['plataforma']}", inline=True)
     if j["iso"]:
         emb.add_field(name="ISO original", value="✅ Disponível", inline=True)
     if j["tutorial"]:
@@ -272,12 +272,12 @@ def link_buttons(j):
 def main_content():
     """Conteúdo Markdown do painel principal; os botões ficam na mesma mensagem."""
     return (
-        "# 🎮 Catálogo de Jogos\n"
-        "Encontre jogos por plataforma, consulte detalhes e acesse os links disponíveis. Explore com calma; sugestões da comunidade passam pela revisão da equipe.\n\n"
-        "📚 **Ver catálogo** — explore as capas e filtre por plataforma\n"
-        "🔎 **Buscar jogo** — encontre um título pelo nome\n"
-        "📤 **Enviar jogo** — sugira um jogo para análise da moderação\n"
-        "🧩 **Catálogo de mods** — navegue pelos mods em uma biblioteca separada\n\n"
+        "# 🎮 Ports & Mods\n"
+        "Explore ports de jogos por plataforma, consulte detalhes e acesse os links de download, ISO original e tutoriais quando disponíveis. Os mods ficam em um catálogo relacionado aos ports. Sugestões da comunidade passam pela revisão da equipe.\n\n"
+        "📚 **Ver ports** — explore as capas e filtre pela plataforma\n"
+        "🔎 **Buscar port** — encontre um port pelo nome\n"
+        "📤 **Enviar port** — sugira um port para análise da moderação\n"
+        "🧩 **Catálogo de mods** — navegue pelos mods associados aos ports\n\n"
         "-# Os envios da comunidade só aparecem depois da aprovação da moderação."
     )
 
@@ -379,9 +379,9 @@ class PlataformaSelect(discord.ui.Select):
 
 class JogoSelect(discord.ui.Select):
     PLACEHOLDERS = {
-        "ver": "Abrir um jogo...",
-        "editar": "Escolha o jogo para editar...",
-        "remover": "Escolha o jogo para remover...",
+        "ver": "Abrir um port...",
+        "editar": "Escolha o port para editar...",
+        "remover": "Escolha o port para remover...",
         "pendentes": "Escolha um envio para analisar...",
     }
 
@@ -399,7 +399,7 @@ class JogoSelect(discord.ui.Select):
         v: CatalogView = self.view
         jogo = get_jogo(int(self.values[0]))
         if not jogo:
-            await interaction.response.send_message("Esse jogo não existe mais.", ephemeral=True)
+            await interaction.response.send_message("Esse port não existe mais.", ephemeral=True)
             return
         emb, file = jogo_embed(jogo)
         if v.mode == "ver":
@@ -438,8 +438,8 @@ class PainelButton(discord.ui.Button):
 
 
 class CatalogView(discord.ui.View):
-    TITULOS = {"ver": "📚 Catálogo de jogos", "editar": "✏️ Editar jogo",
-               "remover": "🗑 Remover jogo", "pendentes": "📥 Envios pendentes"}
+    TITULOS = {"ver": "📚 Catálogo de ports", "editar": "✏️ Editar port",
+               "remover": "🗑 Remover port", "pendentes": "📥 Envios pendentes"}
 
     def __init__(self, mode="ver", plataforma=None, query=None, page=0):
         super().__init__(timeout=900)
@@ -462,13 +462,13 @@ class CatalogView(discord.ui.View):
             # A ação permanece disponível mesmo quando há resultados parciais:
             # o membro pode estar procurando um título específico que não apareceu.
             enviar = discord.ui.Button(
-                label="Não encontrou? Enviar jogo", emoji="📤",
+                label="Não encontrou? Enviar port", emoji="📤",
                 style=discord.ButtonStyle.success, row=2, custom_id="catalogo:enviar_ausente",
             )
             async def _enviar_ausente(interaction: discord.Interaction):
                 texto = (
-                    "## 📤 Cadastrar jogo ausente\n\n"
-                    "Escolha a plataforma e envie as informações do jogo. A equipe revisará o cadastro."
+                    "## 📤 Cadastrar port ausente\n\n"
+                    "Escolha a plataforma e envie as informações do port. A equipe revisará o cadastro."
                 )
                 await interaction.response.send_message(
                     content=texto, view=PlataformaPickView(publico=True), ephemeral=True
@@ -491,14 +491,14 @@ class CatalogView(discord.ui.View):
         file = None
         if self.mode == "ver":
             if self.rows:
-                desc = "Selecione um jogo no menu abaixo para abrir a ficha completa. Use o filtro de plataforma e os botões para navegar."
+                desc = "Selecione um port no menu abaixo para abrir a ficha completa. Use o filtro de plataforma e os botões para navegar."
                 file = criar_grade_capas(self.rows)
             else:
-                desc = "Nenhum jogo encontrado. Tente outra busca ou plataforma."
+                desc = "Nenhum port encontrado. Tente outra busca ou plataforma."
             emb = discord.Embed(title=titulo, description=desc, color=discord.Color.blurple())
             if file:
                 emb.set_image(url="attachment://catalogo.png")
-            emb.set_footer(text=f"Página {self.page + 1}/{pages} • {self.total} jogo(s)")
+            emb.set_footer(text=f"Página {self.page + 1}/{pages} • {self.total} port(s)")
             return emb, file
 
         if self.mode == "pendentes" and not self.rows:
@@ -509,11 +509,11 @@ class CatalogView(discord.ui.View):
                 for i, r in enumerate(self.rows, start=1)
             )
         else:
-            desc = "Nenhum jogo encontrado."
-        status = {"editar": "Selecione um jogo no menu para alterar os dados ou a descrição.",
-                  "remover": "Selecione um jogo no menu para revisar e confirmar a remoção.",
+            desc = "Nenhum port encontrado."
+        status = {"editar": "Selecione um port no menu para alterar os dados ou a descrição.",
+                  "remover": "Selecione um port no menu para revisar e confirmar a remoção.",
                   "pendentes": "Selecione um envio no menu para aprovar ou rejeitar."}.get(self.mode, "")
-        resumo = f"## {titulo}\n\n{status}\n\n{desc}\n\n-# Página {self.page + 1}/{pages} · {self.total} jogo(s)"
+        resumo = f"## {titulo}\n\n{status}\n\n{desc}\n\n-# Página {self.page + 1}/{pages} · {self.total} port(s)"
         return resumo, None
 
     def embed(self):
@@ -546,8 +546,8 @@ class DetalheView(discord.ui.View):
 # ------------------------------------------------------------------ busca
 
 
-class BuscaModal(discord.ui.Modal, title="Buscar jogo"):
-    nome = discord.ui.TextInput(label="Nome do jogo", max_length=100, placeholder="Ex: Resident Evil")
+class BuscaModal(discord.ui.Modal, title="Buscar port"):
+    nome = discord.ui.TextInput(label="Nome do port", max_length=100, placeholder="Ex.: nome do jogo portado")
 
     async def on_submit(self, interaction: discord.Interaction):
         termo = self.nome.value.strip()
@@ -566,7 +566,7 @@ class BuscaModal(discord.ui.Modal, title="Buscar jogo"):
 
 
 class BuscarModModal(discord.ui.Modal, title="Buscar mod"):
-    termo = discord.ui.TextInput(label="Nome do mod ou do jogo", max_length=100,
+    termo = discord.ui.TextInput(label="Nome do mod ou do port", max_length=100,
                                  placeholder="Ex.: Skyrim, texturas HD, roupa do Leon")
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -579,7 +579,7 @@ class BuscarModModal(discord.ui.Modal, title="Buscar mod"):
         await interaction.response.send_message(**kwargs)
 
 
-# ------------------------------------------------------------------ enviar / adicionar jogo
+# ------------------------------------------------------------------ enviar / adicionar port
 
 
 class PlataformaPickView(discord.ui.View):
@@ -589,7 +589,7 @@ class PlataformaPickView(discord.ui.View):
         super().__init__(timeout=900)
         self.publico = publico
         opts = [discord.SelectOption(label=n, value=n, emoji=e) for n, e in PLATAFORMAS.items()]
-        sel = discord.ui.Select(placeholder="Plataforma de origem do jogo", options=opts, row=0)
+        sel = discord.ui.Select(placeholder="Plataforma do port", options=opts, row=0)
         sel.callback = self.escolheu
         self.select = sel
         self.add_item(sel)
@@ -607,10 +607,10 @@ class PlataformaPickView(discord.ui.View):
 
 class AddModal(discord.ui.Modal):
     def __init__(self, plataforma, publico=False):
-        super().__init__(title=f"{'Enviar' if publico else 'Novo'} jogo • {plataforma}"[:45])
+        super().__init__(title=f"{'Enviar' if publico else 'Novo'} port • {plataforma}"[:45])
         self.plataforma, self.publico = plataforma, publico
-        self.nome = discord.ui.TextInput(label="Nome do jogo", max_length=100)
-        self.link = discord.ui.TextInput(label="Link de download do jogo", max_length=500, placeholder="https://...")
+        self.nome = discord.ui.TextInput(label="Nome do port", max_length=100)
+        self.link = discord.ui.TextInput(label="Link de download do port", max_length=500, placeholder="https://...")
         self.iso = discord.ui.TextInput(label="Link da ISO original (opcional)", required=False, max_length=500)
         self.tutorial = discord.ui.TextInput(label="Link do tutorial (opcional)", required=False, max_length=500)
         self.capa = discord.ui.FileUpload(required=True, min_values=1, max_values=1)
@@ -655,11 +655,11 @@ class AddModal(discord.ui.Modal):
         if self.publico:
             await avisar_moderacao(jogo)
             await interaction.edit_original_response(
-                content="✅ **Jogo enviado!** Ele aparecerá no catálogo após a aprovação da moderação.\n\nPrévia:",
+                content="✅ **Port enviado!** Ele aparecerá no catálogo após a aprovação da moderação.\n\nPrévia:",
                 embed=emb, attachments=[file] if file else [], view=None)
         else:
             await interaction.edit_original_response(
-                content="✅ **Jogo adicionado!** Prévia:", embed=emb,
+                content="✅ **Port adicionado!** Prévia:", embed=emb,
                 attachments=[file] if file else [], view=AdminView())
 
 
@@ -675,7 +675,7 @@ async def avisar_moderacao(jogo):
         emb, file = jogo_embed(jogo)
         kw = {"file": file} if file else {}
         await canal.send(
-            content="📥 **Novo jogo aguardando aprovação!** Abra o botão 🛠 Admin → **Pendentes** para analisar.",
+            content="📥 **Novo port aguardando aprovação!** Abra o botão 🛠 Admin → **Pendentes** para analisar.",
             embed=emb, **kw)
     except Exception as e:
         print("Não consegui avisar a moderação:", repr(e))
@@ -728,8 +728,8 @@ class PendenteView(discord.ui.View):
             return
         with db() as conn:
             conn.execute("UPDATE jogos SET status = 'aprovado' WHERE id = ?", (self.jogo["id"],))
-        await avisar_autor(self.jogo, f"✅ Seu jogo **{self.jogo['nome']}** foi aprovado e já está no catálogo!")
-        texto = f"## ✅ Jogo aprovado\n**{self.jogo['nome']}** já está no catálogo."
+        await avisar_autor(self.jogo, f"✅ Seu port **{self.jogo['nome']}** foi aprovado e já está no catálogo!")
+        texto = f"## ✅ Port aprovado\n**{self.jogo['nome']}** já está no catálogo."
         await interaction.response.edit_message(content=texto, embed=None, attachments=[], view=VoltarPendentesView(self.estado))
 
     async def rejeitar(self, interaction: discord.Interaction):
@@ -739,7 +739,7 @@ class PendenteView(discord.ui.View):
         with db() as conn:
             conn.execute("DELETE FROM jogos WHERE id = ?", (self.jogo["id"],))
         apagar_arquivo(self.jogo["capa"])
-        await avisar_autor(self.jogo, f"❌ Seu envio **{self.jogo['nome']}** não foi aprovado pela moderação.")
+        await avisar_autor(self.jogo, f"❌ Seu envio de port **{self.jogo['nome']}** não foi aprovado pela moderação.")
         texto = f"## ❌ Envio rejeitado\n**{self.jogo['nome']}** foi removido."
         await interaction.response.edit_message(content=texto, embed=None, attachments=[], view=VoltarPendentesView(self.estado))
 
@@ -815,10 +815,10 @@ class AdminView(discord.ui.View):
         n_jogos = contar_pendentes()
         n_mods = contar_mods_pendentes()
         options = [
-            discord.SelectOption(label="Adicionar jogo", value="add_game", emoji="➕", description="Cadastrar um jogo"),
-            discord.SelectOption(label="Editar jogo", value="edit_game", emoji="✏️", description="Alterar dados de um jogo"),
-            discord.SelectOption(label="Remover jogo", value="delete_game", emoji="🗑️", description="Excluir um jogo"),
-            discord.SelectOption(label=f"Aprovar jogos ({n_jogos})", value="pending_games", emoji="🎮", description="Revisar envios de jogos"),
+            discord.SelectOption(label="Adicionar port", value="add_game", emoji="➕", description="Cadastrar um port"),
+            discord.SelectOption(label="Editar port", value="edit_game", emoji="✏️", description="Alterar dados de um port"),
+            discord.SelectOption(label="Remover port", value="delete_game", emoji="🗑️", description="Excluir um port"),
+            discord.SelectOption(label=f"Aprovar ports ({n_jogos})", value="pending_games", emoji="🎮", description="Revisar envios de ports"),
             discord.SelectOption(label="Gerenciar mods", value="mods", emoji="🧩", description="Adicionar, editar, remover e moderar mods"),
             discord.SelectOption(label=f"Aprovar mods ({n_mods})", value="pending_mods", emoji="📥", description="Revisar envios de mods"),
             discord.SelectOption(label="Canal de avisos", value="channel", emoji="📢", description="Configurar notificações da moderação"),
@@ -834,7 +834,7 @@ class AdminView(discord.ui.View):
             return
         action = interaction.data.get("values", [""])[0]
         if action == "add_game":
-            texto = "## ➕ Adicionar jogo\nEscolha a plataforma de origem no menu abaixo para abrir o formulário."
+            texto = "## ➕ Adicionar port\nEscolha a plataforma do port no menu abaixo para abrir o formulário."
             view = PlataformaPickView()
             await interaction.response.edit_message(content=texto, embed=None, attachments=[], view=view)
         elif action == "edit_game":
@@ -905,10 +905,10 @@ class EditarView(discord.ui.View):
 
 class EditModal(discord.ui.Modal):
     def __init__(self, jogo):
-        super().__init__(title=f"Editar • {jogo['nome']}"[:45])
+        super().__init__(title=f"Editar port • {jogo['nome']}"[:45])
         self.jogo = jogo
-        self.nome = discord.ui.TextInput(label="Nome do jogo", max_length=100, default=jogo["nome"])
-        self.link = discord.ui.TextInput(label="Link de download do jogo", max_length=500, default=jogo["link"])
+        self.nome = discord.ui.TextInput(label="Nome do port", max_length=100, default=jogo["nome"])
+        self.link = discord.ui.TextInput(label="Link de download do port", max_length=500, default=jogo["link"])
         self.iso = discord.ui.TextInput(label="Link da ISO (vazio = sem ISO)", required=False, max_length=500,
                                         default=jogo["iso"] or "")
         self.tutorial = discord.ui.TextInput(label="Link do tutorial (vazio = sem tutorial)", required=False,
@@ -945,7 +945,7 @@ class EditModal(discord.ui.Modal):
             )
         emb, file = jogo_embed(get_jogo(self.jogo["id"]))
         await interaction.edit_original_response(
-            content="✅ **Jogo atualizado!** Prévia:", embed=emb,
+            content="✅ **Port atualizado!** Prévia:", embed=emb,
             attachments=[file] if file else [], view=AdminView())
 
 
@@ -985,7 +985,7 @@ class RemoverView(discord.ui.View):
         with db() as conn:
             conn.execute("DELETE FROM jogos WHERE id = ?", (self.jogo["id"],))
         apagar_arquivo(self.jogo["capa"])
-        texto = f"## 🗑️ Jogo removido\n**{self.jogo['nome']}** saiu do catálogo."
+        texto = f"## 🗑️ Port removido\n**{self.jogo['nome']}** saiu do catálogo."
         await interaction.response.edit_message(content=texto, embed=None, attachments=[], view=AdminView())
 
     async def cancelar(self, interaction: discord.Interaction):
@@ -1001,7 +1001,7 @@ class MainView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)  # não expira; continua funcionando após reiniciar o bot
 
-    @discord.ui.button(label="Catálogo de jogos", emoji="📚", style=discord.ButtonStyle.primary, custom_id="catalogo:ver", row=0)
+    @discord.ui.button(label="Catálogo de ports", emoji="📚", style=discord.ButtonStyle.primary, custom_id="catalogo:ver", row=0)
     async def ver(self, interaction: discord.Interaction, button: discord.ui.Button):
         v = CatalogView()
         emb, file = v.render()
@@ -1009,14 +1009,14 @@ class MainView(discord.ui.View):
             **send_kwargs(emb, file, v), ephemeral=True
         )
 
-    @discord.ui.button(label="Buscar jogo", emoji="🔎", style=discord.ButtonStyle.secondary, custom_id="catalogo:buscar", row=2)
+    @discord.ui.button(label="Buscar port", emoji="🔎", style=discord.ButtonStyle.secondary, custom_id="catalogo:buscar", row=2)
     async def buscar(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(BuscaModal())
 
-    @discord.ui.button(label="Enviar jogo", emoji="📤", style=discord.ButtonStyle.success, custom_id="catalogo:enviar", row=1)
+    @discord.ui.button(label="Enviar port", emoji="📤", style=discord.ButtonStyle.success, custom_id="catalogo:enviar", row=1)
     async def enviar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        texto = ("## 📤 Enviar um jogo\n\n"
-                 "Escolha a **plataforma de origem** no menu e preencha o formulário.\n"
+        texto = ("## 📤 Enviar um port\n\n"
+                 "Escolha a **plataforma do port** no menu e preencha o formulário.\n"
                  "O envio será revisado pela **moderação** e só aparecerá no catálogo depois de aprovado.\n\n"
                  "-# Envios com links inválidos ou que violem as regras serão rejeitados.")
         await interaction.response.send_message(content=texto, view=PlataformaPickView(publico=True), ephemeral=True)
@@ -1135,7 +1135,7 @@ class ModSelect(discord.ui.Select):
     def __init__(self, rows):
         options = [discord.SelectOption(
             label=r["mod_nome"][:100], value=str(r["id"]),
-            description=f"Jogo: {r['jogo_nome']}"[:100], emoji="🧩") for r in rows]
+            description=f"Port: {r['jogo_nome']}"[:100], emoji="🧩") for r in rows]
         super().__init__(placeholder="Escolha um mod para ver os detalhes", options=options, row=0)
 
     async def callback(self, interaction: discord.Interaction):
@@ -1146,7 +1146,7 @@ class ModSelect(discord.ui.Select):
         descricao = mod["descricao"] or "Sem descrição cadastrada."
         embed = discord.Embed(
             title=mod["mod_nome"],
-            description=(f"**Jogo:** {mod['jogo_nome']}\n\n{descricao}")[:4000],
+            description=(f"**Port relacionado:** {mod['jogo_nome']}\n\n{descricao}")[:4000],
             color=discord.Color.dark_teal(),
         )
         file = None
@@ -1167,7 +1167,7 @@ class ModSelect(discord.ui.Select):
         if file:
             await interaction.response.edit_message(embed=embed, attachments=[file], view=view)
         else:
-            texto = f"## 🧩 {mod['mod_nome']}\n\n**Jogo:** {mod['jogo_nome']}\n\n{descricao}"
+            texto = f"## 🧩 {mod['mod_nome']}\n\n**Port relacionado:** {mod['jogo_nome']}\n\n{descricao}"
             await interaction.response.edit_message(content=texto, embed=None, attachments=[], view=view)
 
 
@@ -1228,7 +1228,7 @@ class ModsCatalogView(discord.ui.View):
 
 
 class AdicionarModModal(discord.ui.Modal):
-    jogo_nome = discord.ui.TextInput(label="Nome do jogo", max_length=100, placeholder="Ex.: Skyrim")
+    jogo_nome = discord.ui.TextInput(label="Nome do port", max_length=100, placeholder="Ex.: port de Skyrim")
     mod_nome = discord.ui.TextInput(label="Nome do mod", max_length=100, placeholder="Ex.: Texturas HD")
     descricao = discord.ui.TextInput(label="Descrição do mod", style=discord.TextStyle.paragraph,
                                      required=True, max_length=1500, placeholder="O que o mod altera/adiciona?")
@@ -1280,7 +1280,7 @@ class AdicionarModModal(discord.ui.Modal):
         if self.publico:
             await interaction.response.send_message(
                 f"✅ Seu mod **{self.mod_nome.value.strip()}** foi enviado para análise da moderação.\n"
-                f"Jogo identificado como: **{jogo_canonico}**.\n"
+                f"Port identificado como: **{jogo_canonico}**.\n"
                 "Ele aparecerá no catálogo após aprovação.",
                 ephemeral=True,
             )
@@ -1288,7 +1288,7 @@ class AdicionarModModal(discord.ui.Modal):
             if canal_id:
                 try:
                     canal = bot.get_channel(int(canal_id)) or await bot.fetch_channel(int(canal_id))
-                    await canal.send(f"📥 Novo mod aguardando aprovação: **{self.mod_nome.value.strip()}** (jogo: {self.jogo_nome.value.strip()}). Use `/painelmods` → **Pendentes**.")
+                    await canal.send(f"📥 Novo mod aguardando aprovação: **{self.mod_nome.value.strip()}** (port: {self.jogo_nome.value.strip()}). Use `/painelmods` → **Pendentes**.")
                 except Exception as e:
                     print("Não consegui avisar moderação sobre mod:", repr(e))
         else:
@@ -1303,7 +1303,7 @@ class ModAdminSelect(discord.ui.Select):
     def __init__(self, action, rows):
         self.action = action
         opts = [discord.SelectOption(label=f"{r['mod_nome']}"[:100], value=str(r['id']),
-                                     description=f"Jogo: {r['jogo_nome']}"[:100], emoji="🧩") for r in rows]
+                                     description=f"Port: {r['jogo_nome']}"[:100], emoji="🧩") for r in rows]
         super().__init__(placeholder="Selecione o mod", options=opts, row=0)
 
     async def callback(self, interaction: discord.Interaction):
@@ -1368,7 +1368,7 @@ class EditarModModal(discord.ui.Modal):
         super().__init__(title=f"Editar mod: {mod['mod_nome']}"[:45])
         self.mod_id = mod['id']
         self.mod = mod
-        self.jogo_nome = discord.ui.TextInput(label="Nome do jogo", max_length=100, default=mod['jogo_nome'])
+        self.jogo_nome = discord.ui.TextInput(label="Nome do port", max_length=100, default=mod['jogo_nome'])
         self.mod_nome = discord.ui.TextInput(label="Nome do mod", max_length=100, default=mod['mod_nome'])
         self.descricao = discord.ui.TextInput(label="Descrição", style=discord.TextStyle.paragraph, required=True, max_length=1500, default=(mod['descricao'] or '')[:1500])
         self.link = discord.ui.TextInput(label="Link do mod", max_length=500, default=mod['link'])
@@ -1413,7 +1413,7 @@ class ConfirmarRemocaoModView(discord.ui.View):
 
 class ModPendentesSelect(discord.ui.Select):
     def __init__(self, rows):
-        options = [discord.SelectOption(label=r["mod_nome"][:100], value=str(r["id"]), description=f"Jogo: {r['jogo_nome']}"[:100]) for r in rows]
+        options = [discord.SelectOption(label=r["mod_nome"][:100], value=str(r["id"]), description=f"Port: {r['jogo_nome']}"[:100]) for r in rows]
         super().__init__(placeholder="Escolha um mod pendente", options=options, row=0)
 
     async def callback(self, interaction: discord.Interaction):
@@ -1424,7 +1424,7 @@ class ModPendentesSelect(discord.ui.Select):
         if not mod or mod["status"] != "pendente":
             await interaction.response.send_message("Esse envio não está mais pendente.", ephemeral=True)
             return
-        detalhes = (f"**Jogo:** {mod['jogo_nome']}\n**Descrição:** {mod['descricao'] or 'Sem descrição'}\n**Link:** {mod['link']}"
+        detalhes = (f"**Port relacionado:** {mod['jogo_nome']}\n**Descrição:** {mod['descricao'] or 'Sem descrição'}\n**Link:** {mod['link']}"
                     + (f"\n**Enviado por:** <@{mod['autor_id']}>" if mod['autor_id'] else ""))
         if mod["imagem"] and os.path.exists(mod["imagem"]):
             emb = discord.Embed(title=mod["mod_nome"], description=detalhes, color=discord.Color.orange())
@@ -1486,7 +1486,7 @@ class ModAdminView(discord.ui.View):
             discord.SelectOption(label="Editar mod", value="edit", emoji="✏️", description="Alterar dados de um mod existente"),
             discord.SelectOption(label="Remover mod", value="remove", emoji="🗑️", description="Excluir um mod do catálogo"),
             discord.SelectOption(label=f"Envios pendentes ({n})", value="pending", emoji="📥", description="Aprovar ou rejeitar envios dos membros"),
-            discord.SelectOption(label="Voltar ao painel principal", value="back", emoji="⬅️", description="Voltar às opções de jogos e configuração"),
+            discord.SelectOption(label="Voltar ao painel principal", value="back", emoji="⬅️", description="Voltar às opções de ports e configuração"),
         ]
         sel = discord.ui.Select(placeholder="Gerenciar catálogo de mods...", options=options)
         sel.callback = self.escolher
@@ -1516,7 +1516,7 @@ class ModAdminView(discord.ui.View):
 
 
 class CatalogoIntegrado(commands.Cog):
-    """Catálogo de jogos e mods incorporado à única aplicação NARA."""
+    """Catálogo de ports e mods incorporado à única aplicação NARA."""
 
     def __init__(self, bot_instance):
         self.bot = bot_instance
@@ -1567,7 +1567,7 @@ class CatalogoIntegrado(commands.Cog):
         if mensagem is None and hasattr(canal, "history"):
             try:
                 async for candidata in canal.history(limit=100):
-                    if candidata.author.id == self.bot.user.id and "🎮 Catálogo de Jogos" in (candidata.content or ""):
+                    if candidata.author.id == self.bot.user.id and any(t in (candidata.content or "") for t in ("🎮 Catálogo de Jogos", "🎮 Ports & Mods")):
                         mensagem = candidata
                         break
             except (discord.Forbidden, discord.HTTPException):
