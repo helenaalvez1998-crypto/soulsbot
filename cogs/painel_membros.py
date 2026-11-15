@@ -72,6 +72,7 @@ MEMBROS_CATEGORIAS = {
         "descricao": "Explore ports de jogos organizados por plataforma e mods relacionados. Pesquise títulos ou envie sugestões para análise da equipe.",
         "acoes": [
             ("catalogos", "Abrir Ports & Mods", "🎮", discord.ButtonStyle.primary),
+            ("luatools", "LuaTools — Steam", "🕹️", discord.ButtonStyle.success),
         ],
     },
     "biblioteca": {
@@ -289,6 +290,11 @@ async def _executar_acao_membro(
             return await interaction.response.send_message("O catálogo Ports & Mods ainda não está disponível.", ephemeral=True)
         return await cog.abrir_membros(interaction)
 
+    if action == "luatools":
+        return await interaction.response.send_message(
+            embed=luatools_embed(), view=LuaToolsLinksView(), ephemeral=True
+        )
+
     if action in ("community_home", "community_archive", "community_mine"):
         cog = bot.get_cog("Comunidade")
         if cog is None:
@@ -320,7 +326,7 @@ class MembrosAcaoButton(discord.ui.Button):
 
 class MembrosVoltarButton(discord.ui.Button):
     def __init__(self, bot: commands.Bot, user_id: int):
-        super().__init__(label="Voltar à central", emoji="🏠", style=discord.ButtonStyle.secondary, row=1)
+        super().__init__(label="Voltar à central", emoji="🏠", style=discord.ButtonStyle.secondary, row=4)
         self.bot = bot
         self.user_id = user_id
 
@@ -345,6 +351,40 @@ class MembrosVoltarButton(discord.ui.Button):
         await interaction.response.edit_message(embed=embed, view=PainelMembrosView(self.bot, self.user_id))
 
 
+LUATOOLS_DOWNLOAD_URL = "https://github.com/madoiscool/LuaTools/releases/download/v1.3.2/LuaTools-win-Setup.exe"
+LUATOOLS_TUTORIAL_URL = "https://discord.com/channels/1563028028508995585/1564047314937716736/1564048613250965726"
+
+
+def luatools_embed() -> discord.Embed:
+    embed = discord.Embed(
+        title="🎮 LuaTools — Integração com Steam",
+        description=(
+            "Conheça o LuaTools! Aprenda a utilizar a ferramenta para adicionar e instalar "
+            "jogos na sua biblioteca Steam e conhecer seus recursos.\n\n"
+            "📌 Confira os requisitos e as instruções do tutorial e baixe ferramentas somente "
+            "de fontes confiáveis.\n\n"
+            "⚠️ Adicionar um jogo à biblioteca não garante uma licença válida para jogá-lo. "
+            "A disponibilidade e a execução dependem da compatibilidade e dos direitos de uso."
+        ),
+        color=config.COR_OURO,
+    )
+    embed.set_footer(text="NARA • Ports & Mods")
+    return embed
+
+
+class LuaToolsLinksView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(discord.ui.Button(
+            label="Baixar LuaTools v1.3.2", emoji="⬇️",
+            style=discord.ButtonStyle.link, url=LUATOOLS_DOWNLOAD_URL,
+        ))
+        self.add_item(discord.ui.Button(
+            label="Assistir ao tutorial", emoji="📹",
+            style=discord.ButtonStyle.link, url=LUATOOLS_TUTORIAL_URL,
+        ))
+
+
 class MembrosCategoriaView(discord.ui.View):
     def __init__(self, bot: commands.Bot, user_id: int, categoria: str):
         super().__init__(timeout=600)
@@ -353,7 +393,7 @@ class MembrosCategoriaView(discord.ui.View):
         self.categoria = categoria
         dados = MEMBROS_CATEGORIAS[categoria]
         for index, (action, label, emoji, style) in enumerate(dados["acoes"]):
-            self.add_item(MembrosAcaoButton(self, action, label, emoji, style, row=0 if index < 3 else 1))
+            self.add_item(MembrosAcaoButton(self, action, label, emoji, style, row=index // 2))
         self.add_item(MembrosVoltarButton(bot, user_id))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -455,6 +495,27 @@ class PainelMembros(commands.Cog):
             view=PainelMembrosView(self.bot, interaction.user.id),
             ephemeral=True,
         )
+
+    @app_commands.command(name="publicar_luatools", description="Publica e fixa o painel do LuaTools em um canal.")
+    @app_commands.guild_only()
+    @app_commands.default_permissions(manage_guild=True)
+    async def publicar_luatools(self, interaction: discord.Interaction, canal: discord.TextChannel):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message(
+                "Você precisa da permissão Gerenciar servidor para publicar este painel.",
+                ephemeral=True,
+            )
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        mensagem = await canal.send(embed=luatools_embed(), view=LuaToolsLinksView())
+        try:
+            await mensagem.pin(reason=f"Painel LuaTools publicado por {interaction.user}")
+            resultado = f"Painel do LuaTools publicado e fixado em {canal.mention}."
+        except discord.Forbidden:
+            resultado = (
+                f"Painel publicado em {canal.mention}, mas não consegui fixá-lo. "
+                "Conceda ao bot a permissão Gerenciar mensagens."
+            )
+        await interaction.followup.send(resultado, ephemeral=True)
 
     async def cog_load(self):
         # Os comandos continuam implementados nos módulos originais e são acessados
