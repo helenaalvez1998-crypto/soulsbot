@@ -159,8 +159,9 @@ class ModeracaoPainelView(discord.ui.View):
                     conn.row_factory = sqlite3.Row
                     if self.categoria in ("all", "ports"):
                         rows = conn.execute(
-                            "SELECT id, nome AS titulo, autor_id AS user_id, plataforma, criado_em AS criado "
-                            "FROM jogos WHERE status='pendente' ORDER BY id ASC LIMIT 100"
+                            "SELECT id, nome AS titulo, autor_id AS user_id, plataforma, "
+                            "COALESCE(NULLIF(criado_em, ''), datetime('now')) AS criado "
+                            "FROM jogos WHERE status='pendente' ORDER BY criado ASC, id ASC LIMIT 100"
                         ).fetchall()
                         registros.extend({**dict(r), "tipo":"ports", "tipo_label":"Port", "emoji":"🕹️"} for r in rows)
                     if self.categoria in ("all", "mods"):

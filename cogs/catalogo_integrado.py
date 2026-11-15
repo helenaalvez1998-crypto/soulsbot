@@ -105,9 +105,12 @@ def init_db():
         )
         # migração: bancos criados por versões anteriores ganham as colunas novas
         existentes = {r[1] for r in conn.execute("PRAGMA table_info(jogos)")}
-        for coluna, ddl in (("iso", "TEXT"), ("status", "TEXT NOT NULL DEFAULT 'aprovado'"), ("autor_id", "INTEGER")):
+        for coluna, ddl in (("iso", "TEXT"), ("status", "TEXT NOT NULL DEFAULT 'aprovado'"), ("autor_id", "INTEGER"), ("criado_em", "TEXT")):
             if coluna not in existentes:
                 conn.execute(f"ALTER TABLE jogos ADD COLUMN {coluna} {ddl}")
+        # Registros antigos recebem uma data de migração; novos envios gravam
+        # o horário real de criação no INSERT abaixo.
+        conn.execute("UPDATE jogos SET criado_em = CURRENT_TIMESTAMP WHERE criado_em IS NULL OR criado_em = ''")
         conn.execute("CREATE TABLE IF NOT EXISTS config (chave TEXT PRIMARY KEY, valor TEXT)")
         # Catálogo de mods separado do catálogo de ports.
         conn.execute("""CREATE TABLE IF NOT EXISTS mods (
@@ -668,8 +671,8 @@ class AddModal(discord.ui.Modal):
         status = "pendente" if self.publico else "aprovado"
         with db() as conn:
             cur = conn.execute(
-                "INSERT INTO jogos (nome, plataforma, link, iso, tutorial, capa, status, autor_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO jogos (nome, plataforma, link, iso, tutorial, capa, status, autor_id, criado_em) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
                 (self.nome.value.strip(), self.plataforma, link, iso or None, tutorial or None,
                  path, status, interaction.user.id),
             )
