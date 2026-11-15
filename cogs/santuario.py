@@ -70,7 +70,7 @@ class Santuario(commands.Cog):
         self._ultima_atividade[thread_id] = time.monotonic()
 
     def _agendar_saida_visitante(self, thread_id: int, user_id: int) -> None:
-        """Remove o visitante da thread 2 minutos após a liberação da visita."""
+        """Remove o visitante da thread 30 segundos após a liberação da visita."""
         chave = (int(thread_id), int(user_id))
         anterior = self._saidas_visitantes.pop(chave, None)
         if anterior and not anterior.done():
@@ -78,7 +78,7 @@ class Santuario(commands.Cog):
 
         async def executar_saida():
             try:
-                await asyncio.sleep(120)
+                await asyncio.sleep(30)
                 perfil = await self.bot.db.get_perfil_por_thread(thread_id)
                 if perfil is None or int(perfil["user_id"]) == user_id:
                     return
@@ -87,7 +87,7 @@ class Santuario(commands.Cog):
                     return
                 await thread.remove_user(discord.Object(id=user_id))
                 log.info(
-                    "Visitante removido automaticamente do Santuário após 2 minutos: thread=%s user=%s",
+                    "Visitante removido automaticamente do Santuário após 30 segundos: thread=%s user=%s",
                     thread_id, user_id,
                 )
             except asyncio.CancelledError:
@@ -194,6 +194,7 @@ class Santuario(commands.Cog):
             valor for valor in (
                 getattr(discord.MessageType, "thread_member_join", None),
                 getattr(discord.MessageType, "thread_member_remove", None),
+                getattr(discord.MessageType, "pins_add", None),
             ) if valor is not None
         }
         if not tipos:
@@ -441,6 +442,9 @@ class Santuario(commands.Cog):
             await msg.pin()
         except discord.HTTPException:
             pass
+        # O Discord gera uma mensagem de sistema "Nara fixou uma mensagem"
+        # depois do pin; limpar novamente para manter apenas o cartão e conteúdo real.
+        await self._limpar_notificacoes_sistema(thread)
         return True
 
     def _fonte_ephemeral(self, interaction: discord.Interaction) -> bool:
