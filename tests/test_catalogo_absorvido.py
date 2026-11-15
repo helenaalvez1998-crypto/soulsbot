@@ -18,6 +18,10 @@ def test_catalog_module_does_not_create_or_run_a_second_bot():
     assert ".run(" not in source
     assert "class MainView" in source
     assert "class AdminView" in source
+    assert "# 🎮 Ports & Mods" in source
+    assert 'label="Catálogo de ports"' in source
+    assert 'label="Buscar port"' in source
+    assert 'label="Enviar port"' in source
 
 
 def test_news_module_uses_catalog_database_and_no_second_bot():
@@ -31,9 +35,14 @@ def test_news_module_uses_catalog_database_and_no_second_bot():
 def test_member_and_admin_panels_expose_integrated_features():
     member = (ROOT / "cogs" / "painel_membros.py").read_text(encoding="utf-8")
     admin = (ROOT / "cogs" / "admin.py").read_text(encoding="utf-8")
-    assert '"catalogos": {' in member
-    assert '("catalogos", "Catálogos", "📚")' in member
+    assert '"jogos": {' in member
+    assert '"titulo": "🎮 Ports & Mods"' in member
+    assert '("jogos", "Ports & Mods", "🎮")' in member
+    assert '🎮 **Ports & Mods**' in member
+    assert '("catalogos", "Catálogos", "📚")' not in member
+    assert '"biblioteca": {' in member
     assert '"catalogos": {' in admin
+    assert '("catalogos", "Ports & Mods", "🎮")' in admin
     assert '"radar": {' in admin
     assert 'if action == "radar_games":' in admin
     assert 'if action in ("catalogo_jogos", "catalogo_mods"):' in admin

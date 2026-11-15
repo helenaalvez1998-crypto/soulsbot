@@ -17,9 +17,9 @@ def test_runs_keep_suggestions_inside_central_and_empty_states():
 
 def test_catalogs_keep_submission_actions_available_during_search():
     source = read("cogs/catalogo_integrado.py")
-    assert "Não encontrou? Enviar jogo" in source
+    assert "Não encontrou? Enviar port" in source
     assert "Não encontrou? Enviar mod" in source
-    # O botão do jogo fica fora do if de resultados: também aparece quando a busca
+    # O botão de port fica fora do if de resultados: também aparece quando a busca
     # retorna resultados parecidos, mas não o título que a pessoa queria.
     build = source.split("class CatalogView", 1)[1].split("class ", 1)[0]
     assert 'if self.mode == "ver":' in build
