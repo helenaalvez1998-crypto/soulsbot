@@ -591,6 +591,13 @@ class PainelView(discord.ui.View):
             texto = f"## 📜 Coleção de {membro.display_name}\n\nAinda não há platinas aprovadas para exibir."
         await interaction.response.edit_message(content=texto, embeds=[], view=VoltarPainelView(self.cog, self.user, membro))
 
+    @discord.ui.button(label="Galeria", style=discord.ButtonStyle.primary, emoji="🖼️", row=2)
+    async def galeria_platinas(self, interaction: discord.Interaction, button: discord.ui.Button):
+        membro = self._membro()
+        rows = await self.cog.bot.db.platinas_do_usuario(membro.id)
+        view = GaleriaPlatinasView(self.cog, self.user, membro, rows)
+        await interaction.response.edit_message(content=None, embeds=view.embeds(), view=view)
+
     @discord.ui.button(label="Ranking", style=discord.ButtonStyle.secondary, emoji="🏆", row=1)
     async def ranking(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = RankingView(self.cog, "platinas", self.user, self._membro())
@@ -614,6 +621,93 @@ class PainelView(discord.ui.View):
                 embed=await self.embed(), view=self,
             )
         await self.cog.bot.get_cog("Santuario").visitar(interaction, self.alvo.id)
+
+
+class GaleriaPlatinasView(discord.ui.View):
+    """Galeria paginada de platinas aprovadas; mantém a lista textual como alternativa."""
+    PAGE_SIZE = 5
+
+    def __init__(self, cog, owner, alvo, rows, page=0):
+        super().__init__(timeout=900)
+        self.cog, self.owner, self.alvo = cog, owner, alvo
+        self.rows = list(rows)
+        self.page = max(0, min(page, max(0, (len(self.rows) - 1) // self.PAGE_SIZE)))
+        self._sync()
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.owner.id:
+            await interaction.response.send_message("Esta galeria pertence a outra pessoa.", ephemeral=True)
+            return False
+        return True
+
+    def embeds(self):
+        inicio = self.page * self.PAGE_SIZE
+        fatia = self.rows[inicio:inicio + self.PAGE_SIZE]
+        total_paginas = max(1, (len(self.rows) + self.PAGE_SIZE - 1) // self.PAGE_SIZE)
+        cards = []
+        for idx, row in enumerate(fatia, start=inicio + 1):
+            e = discord.Embed(
+                title=f"🏆 {row['game']}",
+                description=f"**Plataforma:** {row['platform']}\\n**Conquistada em:** {row['earned_at']}\\n**Registro:** `#{row['id']}`",
+                color=config.COR_OURO,
+            )
+            # proof_url é o comprovante fornecido no registro, não uma capa oficial.
+            url = str(row["proof_url"] or "").strip()
+            if url.startswith(("https://", "http://")):
+                e.set_image(url=url)
+                e.set_footer(text="Comprovante enviado pelo jogador")
+            else:
+                e.set_footer(text="Capa/comprovante visual não disponível")
+            cards.append(e)
+        if not cards:
+            cards.append(discord.Embed(
+                title=f"🏆 Platinas de {self.alvo.display_name}",
+                description="Ainda não há platinas aprovadas para exibir.",
+                color=config.COR_OURO,
+            ))
+        cards[0].description = (
+            f"**Coleção de {self.alvo.display_name}**\\n"
+            f"Página {self.page + 1}/{total_paginas} · {len(self.rows)} conquista(s)\\n\\n"
+            + (cards[0].description or "")
+        )
+        return cards
+
+    def _sync(self):
+        self.clear_items()
+        total_paginas = max(1, (len(self.rows) + self.PAGE_SIZE - 1) // self.PAGE_SIZE)
+        self.add_item(discord.ui.Button(label="Anterior", emoji="⬅️", style=discord.ButtonStyle.secondary,
+                                        disabled=self.page <= 0, row=0, custom_id=f"plat:galeria:prev:{self.page}"))
+        self.add_item(discord.ui.Button(label="Próxima", emoji="➡️", style=discord.ButtonStyle.secondary,
+                                        disabled=self.page >= total_paginas - 1, row=0,
+                                        custom_id=f"plat:galeria:next:{self.page}"))
+        self.add_item(discord.ui.Button(label="Lista por nome", emoji="📜", style=discord.ButtonStyle.primary,
+                                        row=1, custom_id=f"plat:galeria:lista:{self.page}"))
+        self.add_item(discord.ui.Button(label="Voltar ao painel", emoji="↩️", style=discord.ButtonStyle.secondary,
+                                        row=1, custom_id=f"plat:galeria:voltar:{self.page}"))
+        self.children[0].callback = self.anterior
+        self.children[1].callback = self.proxima
+        self.children[2].callback = self.lista
+        self.children[3].callback = self.voltar
+
+    async def anterior(self, interaction):
+        self.page = max(0, self.page - 1)
+        self._sync()
+        await interaction.response.edit_message(embeds=self.embeds(), view=self)
+
+    async def proxima(self, interaction):
+        self.page = min(max(0, (len(self.rows) - 1) // self.PAGE_SIZE), self.page + 1)
+        self._sync()
+        await interaction.response.edit_message(embeds=self.embeds(), view=self)
+
+    async def lista(self, interaction):
+        texto = await self.cog.bot.get_cog("Perfil").texto_platinas(self.alvo)
+        await interaction.response.edit_message(content=texto or "Ainda não há platinas aprovadas.",
+                                                embeds=[], view=VoltarPainelView(self.cog, self.owner, self.alvo))
+
+    async def voltar(self, interaction):
+        view = PainelView(self.cog, self.owner)
+        view.alvo = self.alvo if self.alvo.id != self.owner.id else None
+        await interaction.response.edit_message(content=None, embed=await view.embed(), view=view)
 
 
 class VoltarPainelView(discord.ui.View):

@@ -536,6 +536,13 @@ class ZeradosPainelView(discord.ui.View):
         texto = await self.cog.texto_lista(membro)
         await interaction.response.edit_message(content=texto, embeds=[], view=VoltarZeradosView(self.cog, self.user, self.alvo))
 
+    @discord.ui.button(label="Galeria", style=discord.ButtonStyle.primary, emoji="🖼️", row=2)
+    async def galeria_zerados(self, interaction: discord.Interaction, button: discord.ui.Button):
+        membro = self._membro()
+        rows = await self.cog.bot.db.zerados_do_usuario(membro.id)
+        view = GaleriaZeradosView(self.cog, self.user, membro, rows)
+        await interaction.response.edit_message(content=None, embeds=await view.embeds(), view=view)
+
     @discord.ui.button(label="Ranking", style=discord.ButtonStyle.secondary, emoji="🏆", row=1)
     async def ranking(self, interaction: discord.Interaction, button: discord.ui.Button):
         texto = await self.cog.texto_ranking("total")
@@ -549,6 +556,103 @@ class ZeradosPainelView(discord.ui.View):
             return await interaction.response.send_message("O Coliseu não está disponível.", ephemeral=True)
         view = ColiseuView(platinas, interaction.user)
         await interaction.response.edit_message(content=view.texto(), embeds=[], view=view)
+
+
+class GaleriaZeradosView(discord.ui.View):
+    """Galeria paginada de jogos concluídos, usando comprovante real quando disponível."""
+    PAGE_SIZE = 5
+
+    def __init__(self, cog, owner, alvo, rows, page=0):
+        super().__init__(timeout=900)
+        self.cog, self.owner, self.alvo = cog, owner, alvo
+        self.rows = list(rows)
+        self.page = max(0, min(page, max(0, (len(self.rows) - 1) // self.PAGE_SIZE)))
+        self._sync()
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.owner.id:
+            await interaction.response.send_message("Esta galeria pertence a outra pessoa.", ephemeral=True)
+            return False
+        return True
+
+    async def embeds(self):
+        inicio = self.page * self.PAGE_SIZE
+        fatia = self.rows[inicio:inicio + self.PAGE_SIZE]
+        total_paginas = max(1, (len(self.rows) + self.PAGE_SIZE - 1) // self.PAGE_SIZE)
+        cards = []
+        mod_ch_id = await GuildConfig.get(self.cog.bot.db, self.alvo.guild.id, "mod_channel") if getattr(self.alvo, "guild", None) else None
+        canal = await get_text_channel(self.cog.bot, mod_ch_id) if mod_ch_id else None
+        for row in fatia:
+            e = discord.Embed(
+                title=f"✅ {row['game']}",
+                description=f"**Plataforma:** {row['platform']}\\n**Concluído em:** {data_legivel(row['finished_at'])}\\n**Registro:** `#{row['id']}`",
+                color=discord.Color.green(),
+            )
+            comentario = str(row["comment"] or "").strip()
+            if comentario:
+                e.add_field(name="Comentário", value=comentario[:900], inline=False)
+            # O cartão original da moderação pode conter um comprovante anexado.
+            if canal and row["proof_msg_id"]:
+                try:
+                    mensagem = await canal.fetch_message(int(row["proof_msg_id"]))
+                    anexo = next((a for a in mensagem.attachments if (a.content_type or "").startswith("image/")), None)
+                    if anexo:
+                        e.set_image(url=anexo.url)
+                        e.set_footer(text="Comprovante enviado pelo jogador")
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    pass
+            if not e.footer.text:
+                e.set_footer(text="Imagem de capa não cadastrada")
+            cards.append(e)
+        if not cards:
+            cards.append(discord.Embed(
+                title=f"✅ Jogos zerados de {self.alvo.display_name}",
+                description="Ainda não há jogos concluídos aprovados para exibir.",
+                color=discord.Color.green(),
+            ))
+        cards[0].description = (
+            f"**Coleção de {self.alvo.display_name}**\\n"
+            f"Página {self.page + 1}/{total_paginas} · {len(self.rows)} jogo(s)\\n\\n"
+            + (cards[0].description or "")
+        )
+        return cards
+
+    def _sync(self):
+        self.clear_items()
+        total_paginas = max(1, (len(self.rows) + self.PAGE_SIZE - 1) // self.PAGE_SIZE)
+        botoes = [
+            discord.ui.Button(label="Anterior", emoji="⬅️", style=discord.ButtonStyle.secondary,
+                              disabled=self.page <= 0, row=0, custom_id=f"zer:galeria:prev:{self.page}"),
+            discord.ui.Button(label="Próxima", emoji="➡️", style=discord.ButtonStyle.secondary,
+                              disabled=self.page >= total_paginas - 1, row=0,
+                              custom_id=f"zer:galeria:next:{self.page}"),
+            discord.ui.Button(label="Lista por nome", emoji="📜", style=discord.ButtonStyle.primary,
+                              row=1, custom_id=f"zer:galeria:lista:{self.page}"),
+            discord.ui.Button(label="Voltar ao painel", emoji="↩️", style=discord.ButtonStyle.secondary,
+                              row=1, custom_id=f"zer:galeria:voltar:{self.page}"),
+        ]
+        for b, cb in zip(botoes, (self.anterior, self.proxima, self.lista, self.voltar)):
+            b.callback = cb
+            self.add_item(b)
+
+    async def anterior(self, interaction):
+        self.page = max(0, self.page - 1)
+        self._sync()
+        await interaction.response.edit_message(embeds=await self.embeds(), view=self)
+
+    async def proxima(self, interaction):
+        self.page = min(max(0, (len(self.rows) - 1) // self.PAGE_SIZE), self.page + 1)
+        self._sync()
+        await interaction.response.edit_message(embeds=await self.embeds(), view=self)
+
+    async def lista(self, interaction):
+        texto = await self.cog.texto_lista(self.alvo)
+        await interaction.response.edit_message(content=texto, embeds=[], view=VoltarZeradosView(self.cog, self.owner, self.alvo))
+
+    async def voltar(self, interaction):
+        view = ZeradosPainelView(self.cog, self.owner)
+        view.alvo = self.alvo if self.alvo.id != self.owner.id else None
+        await interaction.response.edit_message(content=None, embed=await view.embed(), view=view)
 
 
 class VoltarZeradosView(discord.ui.View):
