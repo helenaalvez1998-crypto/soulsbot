@@ -51,6 +51,8 @@ class Santuario(commands.Cog):
         self._lock_criar = asyncio.Lock()
         self._ultimo_refresh: dict[int, float] = {}
         self._ultima_atividade: dict[int, float] = {}
+        # Saída automática de visitantes 2 minutos após a liberação da visita.
+        self._saidas_visitantes: dict[tuple[int, int], asyncio.Task] = {}
 
     async def cog_load(self):
         self.bot.add_view(SantuarioPublicoView(self))
@@ -60,9 +62,59 @@ class Santuario(commands.Cog):
 
     def cog_unload(self):
         self._monitorar_santuarios.cancel()
+        for tarefa in self._saidas_visitantes.values():
+            tarefa.cancel()
+        self._saidas_visitantes.clear()
 
     def _marcar_atividade_local(self, thread_id: int) -> None:
         self._ultima_atividade[thread_id] = time.monotonic()
+
+    def _agendar_saida_visitante(self, thread_id: int, user_id: int) -> None:
+        """Remove o visitante da thread 2 minutos após a liberação da visita."""
+        chave = (int(thread_id), int(user_id))
+        anterior = self._saidas_visitantes.pop(chave, None)
+        if anterior and not anterior.done():
+            anterior.cancel()
+
+        async def executar_saida():
+            try:
+                await asyncio.sleep(120)
+                perfil = await self.bot.db.get_perfil_por_thread(thread_id)
+                if perfil is None or int(perfil["user_id"]) == user_id:
+                    return
+                thread = await self._thread(thread_id)
+                if thread is None or thread.archived:
+                    return
+                await thread.remove_user(discord.Object(id=user_id))
+                log.info(
+                    "Visitante removido automaticamente do Santuário após 2 minutos: thread=%s user=%s",
+                    thread_id, user_id,
+                )
+            except asyncio.CancelledError:
+                raise
+            except discord.NotFound:
+                pass  # O visitante já saiu ou o tópico não existe mais.
+            except discord.Forbidden:
+                log.warning(
+                    "Sem permissão para remover visitante automaticamente do Santuário %s; verifique Gerenciar Tópicos",
+                    thread_id,
+                )
+            except discord.HTTPException:
+                log.warning(
+                    "Falha ao executar saída automática do visitante %s no Santuário %s",
+                    user_id, thread_id, exc_info=True,
+                )
+            except Exception:
+                log.exception(
+                    "Erro inesperado na saída automática do visitante %s no Santuário %s",
+                    user_id, thread_id,
+                )
+            finally:
+                atual = self._saidas_visitantes.get(chave)
+                if atual is asyncio.current_task():
+                    self._saidas_visitantes.pop(chave, None)
+
+        self._saidas_visitantes[chave] = asyncio.create_task(executar_saida())
 
     @tasks.loop(seconds=60)
     async def _monitorar_santuarios(self):
@@ -512,6 +564,7 @@ class Santuario(commands.Cog):
                 await thread.edit(archived=False)
             await thread.add_user(interaction.user)
             self._marcar_atividade_local(thread.id)
+            self._agendar_saida_visitante(thread.id, interaction.user.id)
             # Mantém o espaço limpo também após uma visita. Só remove mensagens de sistema.
             await self._limpar_notificacoes_sistema(thread)
         except discord.HTTPException:
@@ -672,7 +725,7 @@ class CartaoView(discord.ui.View):
                     archived=True,
                     reason=f"Santuário fechado pelo proprietário {interaction.user.id}",
                 )
-                self._ultima_atividade.pop(thread.id, None)
+                self.cog._ultima_atividade.pop(thread.id, None)
                 mensagem = (
                     "🔒 **Seu Santuário foi fechado.** O tópico foi arquivado e seu histórico continua salvo. "
                     "Quando quiser voltar, abra **Meu Santuário** pelo `/nara`."
@@ -680,6 +733,9 @@ class CartaoView(discord.ui.View):
             else:
                 # Um visitante sai apenas da lista de membros; não fecha o espaço do proprietário.
                 await thread.remove_user(interaction.user)
+                tarefa = self.cog._saidas_visitantes.pop((thread.id, interaction.user.id), None)
+                if tarefa and not tarefa.done():
+                    tarefa.cancel()
                 mensagem = "🚪 Você saiu deste Santuário. O espaço continua disponível para o proprietário."
             await interaction.followup.send(mensagem, ephemeral=True)
         except discord.Forbidden:
