@@ -320,7 +320,7 @@ class MembrosAcaoButton(discord.ui.Button):
 
 class MembrosVoltarButton(discord.ui.Button):
     def __init__(self, bot: commands.Bot, user_id: int):
-        super().__init__(label="Voltar à central", emoji="🏠", style=discord.ButtonStyle.secondary, row=4)
+        super().__init__(label="Voltar à central", emoji="🏠", style=discord.ButtonStyle.secondary, row=1)
         self.bot = bot
         self.user_id = user_id
 
@@ -353,7 +353,7 @@ class MembrosCategoriaView(discord.ui.View):
         self.categoria = categoria
         dados = MEMBROS_CATEGORIAS[categoria]
         for index, (action, label, emoji, style) in enumerate(dados["acoes"]):
-            self.add_item(MembrosAcaoButton(self, action, label, emoji, style, row=index // 2))
+            self.add_item(MembrosAcaoButton(self, action, label, emoji, style, row=0 if index < 3 else 1))
         self.add_item(MembrosVoltarButton(bot, user_id))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
