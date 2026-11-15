@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS platinas (
     earned_at   TEXT NOT NULL,
     proof_url   TEXT NOT NULL,
     proof_msg_id INTEGER,
+    catalog_game_id INTEGER,
     status      TEXT NOT NULL DEFAULT 'pending',   -- pending | approved | rejected
     reviewer_id INTEGER,
     created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -27,7 +28,8 @@ CREATE INDEX IF NOT EXISTS idx_plat_user ON platinas(user_id, status);
 -- Sistema de runs Soulslike integrado
 CREATE TABLE IF NOT EXISTS sl_games (
     id   INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE COLLATE NOCASE
+    name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    catalog_game_id INTEGER
 );
 CREATE TABLE IF NOT EXISTS sl_challenges (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,6 +72,7 @@ CREATE TABLE IF NOT EXISTS zerados (
     reviewer_id      INTEGER,
     proof_msg_id     INTEGER,
     approved_at      TEXT,
+    catalog_game_id INTEGER,
     created_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_zer_user ON zerados(user_id);
@@ -437,7 +440,9 @@ MIGRACOES_COLUNAS = {
         "last_error": "TEXT NOT NULL DEFAULT ''",
         "game_id": "INTEGER",
     },
+    "platinas": {"catalog_game_id": "INTEGER"},
     "zerados": {
+        "catalog_game_id": "INTEGER",
         # Registros anteriores continuam aprovados. Os novos entram como pending.
         "status": "TEXT NOT NULL DEFAULT 'approved'",
         "reviewer_id": "INTEGER",
@@ -445,6 +450,7 @@ MIGRACOES_COLUNAS = {
         "approved_at": "TEXT",
         "source_platina_id": "INTEGER",
     },
+    "sl_games": {"catalog_game_id": "INTEGER"},
     "sl_challenges": {
         # NULL mantém compatibilidade com desafios globais já cadastrados.
         "game_id": "INTEGER",
@@ -547,6 +553,25 @@ class Database:
                                 WHERE dedupe_key <> '' AND status NOT IN ('published','rejected','resolved')
                                 GROUP BY dedupe_key)"""
         )
+        # Vincula registros históricos ao catálogo central por nome/alias exato.
+        # Não usa similaridade para evitar associar jogos diferentes.
+        session = DatabaseSession(self.conn)
+        for tabela, coluna, origem in (
+            ("platinas", "game", "historico_platina"),
+            ("zerados", "game", "historico_zerado"),
+            ("sl_games", "name", "historico_runs"),
+        ):
+            async with self.conn.execute(
+                f"SELECT id, {coluna} AS nome FROM {tabela} WHERE {coluna} IS NOT NULL AND TRIM({coluna})<>''"
+            ) as cur:
+                registros = await cur.fetchall()
+            coluna_ref = "catalog_game_id"
+            for registro in registros:
+                game_id = await self._resolver_jogo_catalogo_tx(session, registro["nome"], origem)
+                await self.conn.execute(
+                    f"UPDATE {tabela} SET {coluna_ref}=? WHERE id=? AND {coluna_ref} IS NULL",
+                    (game_id, int(registro["id"])),
+                )
         await self.conn.executescript(INDICES_POS_MIGRACAO)
         await self.conn.commit()
 
@@ -604,6 +629,102 @@ class Database:
             (actor_id, action, details),
         )
         await self.conn.commit()
+
+    # ---------- identidade central de jogos ----------
+    @staticmethod
+    def normalizar_nome_jogo(nome: str) -> str:
+        """Normalização conservadora: remove acentos/pontuação, preserva palavras e números."""
+        valor = unicodedata.normalize("NFKD", str(nome or "").strip().casefold())
+        valor = "".join(ch for ch in valor if not unicodedata.combining(ch))
+        valor = re.sub(r"[^a-z0-9]+", " ", valor)
+        return re.sub(r"\\s+", " ", valor).strip()
+
+    async def _resolver_jogo_catalogo_tx(self, tx, nome: str, source: str = "registro"):
+        """Resolve apenas nome/alias exato. Similaridade nunca associa automaticamente."""
+        original = str(nome or "").strip()[:160]
+        norm = self.normalizar_nome_jogo(original)
+        if not norm:
+            return None
+        alias = await tx._one(
+            "SELECT game_id FROM game_aliases WHERE alias_norm=? COLLATE NOCASE LIMIT 1",
+            (norm,),
+        )
+        if alias:
+            game = await tx._one("SELECT id FROM games_catalog WHERE id=?", (int(alias["game_id"]),))
+            if game:
+                await tx.conn.execute(
+                    "INSERT OR IGNORE INTO game_aliases(game_id,alias,alias_norm,source) VALUES (?,?,?,?)",
+                    (int(game["id"]), original, norm, str(source)[:40]),
+                )
+                return int(game["id"])
+        slug = norm.replace(" ", "-")
+        game = await tx._one("SELECT id FROM games_catalog WHERE slug=? COLLATE NOCASE", (slug,))
+        if game:
+            game_id = int(game["id"])
+        else:
+            cur = await tx.conn.execute(
+                """INSERT INTO games_catalog(slug,name,name_original,status)
+                   VALUES (?,?,?,'review')""",
+                (slug[:180], original[:120], original),
+            )
+            game_id = int(cur.lastrowid)
+        await tx.conn.execute(
+            "INSERT OR IGNORE INTO game_aliases(game_id,alias,alias_norm,source) VALUES (?,?,?,?)",
+            (game_id, original, norm, str(source)[:40]),
+        )
+        return game_id
+
+    async def resolver_jogo_catalogo(self, nome: str, source: str = "registro"):
+        """Resolve nome exato/alias e cria registro em revisão quando ainda não existe."""
+        async with self.transaction() as tx:
+            return await self._resolver_jogo_catalogo_tx(tx, nome, source)
+
+    async def adicionar_alias_jogo(self, game_id: int, alias: str, source: str = "admin"):
+        original = str(alias or "").strip()[:160]
+        norm = self.normalizar_nome_jogo(original)
+        if not norm:
+            raise ValueError("O alias não pode ficar vazio.")
+        async with self.transaction() as tx:
+            conflito = await tx._one(
+                "SELECT game_id FROM game_aliases WHERE alias_norm=? COLLATE NOCASE",
+                (norm,),
+            )
+            if conflito and int(conflito["game_id"]) != int(game_id):
+                raise ValueError("Esse nome alternativo já pertence a outro jogo. Confirme a identidade antes de associar.")
+            await tx.conn.execute(
+                "INSERT OR IGNORE INTO game_aliases(game_id,alias,alias_norm,source) VALUES (?,?,?,?)",
+                (int(game_id), original, norm, str(source)[:40]),
+            )
+            await tx.conn.execute(
+                "UPDATE games_catalog SET updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                (int(game_id),),
+            )
+
+    async def atualizar_capa_jogo(self, game_id: int, cover_url: str, source: str = ""):
+        url = str(cover_url or "").strip()[:1000]
+        if url and not url.startswith(("https://", "http://")):
+            raise ValueError("A capa precisa usar uma URL HTTP(S).")
+        async with self.transaction() as tx:
+            cur = await tx.conn.execute(
+                """UPDATE games_catalog SET cover_url=?, sources_json=?, updated_at=CURRENT_TIMESTAMP
+                   WHERE id=?""",
+                (url, str(source or "")[:1000], int(game_id)),
+            )
+            return cur.rowcount == 1
+
+    async def buscar_jogos_catalogo(self, termo: str, limite: int = 8):
+        norm = self.normalizar_nome_jogo(termo)
+        if not norm:
+            return []
+        # Sugestões são apenas informativas; não fazem associação automática.
+        rows = await self._all(
+            """SELECT DISTINCT g.id,g.name,g.cover_url,g.status
+               FROM games_catalog g LEFT JOIN game_aliases a ON a.game_id=g.id
+               WHERE lower(g.name) LIKE ? OR a.alias_norm LIKE ?
+               ORDER BY g.name LIMIT ?""",
+            (f"%{norm}%", f"%{norm}%", max(1, min(int(limite), 20))),
+        )
+        return rows
 
     # ---------- usuários ----------
     async def get_user(self, user_id: int):
@@ -752,11 +873,12 @@ class Database:
         return row is not None
 
     async def criar_platina(self, user_id, game, platform, earned_at, proof_url, proof_msg_id=None) -> int:
-        cur = await self.conn.execute(
-            "INSERT INTO platinas(user_id, game, platform, earned_at, proof_url, proof_msg_id) VALUES (?,?,?,?,?,?)",
-            (user_id, game, platform, earned_at, proof_url, proof_msg_id),
-        )
-        await self.conn.commit()
+        async with self.transaction() as tx:
+            catalog_id = await self._resolver_jogo_catalogo_tx(tx, game, "platina")
+            cur = await tx.conn.execute(
+                "INSERT INTO platinas(user_id, game, platform, earned_at, proof_url, proof_msg_id, catalog_game_id) VALUES (?,?,?,?,?,?,?)",
+                (user_id, game, platform, earned_at, proof_url, proof_msg_id, catalog_id),
+            )
         return cur.lastrowid
 
     async def criar_platina_unica(self, user_id, game, platform, earned_at, proof_url, proof_msg_id=None):
@@ -769,9 +891,10 @@ class Database:
             )
             if existente:
                 return None
+            catalog_id = await self._resolver_jogo_catalogo_tx(tx, game, "platina")
             cur = await tx.conn.execute(
-                "INSERT INTO platinas(user_id, game, platform, earned_at, proof_url, proof_msg_id) VALUES (?,?,?,?,?,?)",
-                (user_id, game, platform, earned_at, proof_url, proof_msg_id),
+                "INSERT INTO platinas(user_id, game, platform, earned_at, proof_url, proof_msg_id, catalog_game_id) VALUES (?,?,?,?,?,?,?)",
+                (user_id, game, platform, earned_at, proof_url, proof_msg_id, catalog_id),
             )
             return cur.lastrowid
 
@@ -852,13 +975,14 @@ class Database:
             )
             zerado = None
             if existing is None:
+                catalog_id = await self._resolver_jogo_catalogo_tx(tx, platina["game"], "platina_aprovada")
                 cur_z = await tx.conn.execute(
                     """INSERT INTO zerados(
                            user_id, game, platform, finished_at, comment, status,
-                           reviewer_id, approved_at, source_platina_id
-                       ) VALUES (?,?,?,?,?,'approved',?,CURRENT_TIMESTAMP,?)""",
+                           reviewer_id, approved_at, source_platina_id, catalog_game_id
+                       ) VALUES (?,?,?,?,?,'approved',?,CURRENT_TIMESTAMP,?,?)""",
                     (user_id, platina["game"], platina["platform"], platina["earned_at"],
-                     "Registro automático pela aprovação da platina.", reviewer_id, platina_id),
+                     "Registro automático pela aprovação da platina.", reviewer_id, platina_id, catalog_id),
                 )
                 zerado_id = int(cur_z.lastrowid)
                 deve_premiar_zerado = True
@@ -994,10 +1118,11 @@ class Database:
             )
             if dup:
                 return None
+            catalog_id = await self._resolver_jogo_catalogo_tx(tx, game, "zerado")
             cur = await tx.conn.execute(
-                """INSERT INTO zerados(user_id, game, platform, finished_at, comment, status)
-                   VALUES (?,?,?,?,?,'pending')""",
-                (user_id, game, platform, finished_at, comment),
+                """INSERT INTO zerados(user_id, game, platform, finished_at, comment, status, catalog_game_id)
+                   VALUES (?,?,?,?,?,'pending',?)""",
+                (user_id, game, platform, finished_at, comment, catalog_id),
             )
             return int(cur.lastrowid)
 
@@ -1069,13 +1194,14 @@ class Database:
             return cur.rowcount == 1
 
     async def criar_zerado(self, user_id, game, platform, finished_at, comment="", xp=0, denarios=0) -> int:
-        cur = await self.conn.execute(
-            """INSERT INTO zerados(user_id, game, platform, finished_at, comment, xp_awarded, denarios_awarded)
-               VALUES (?,?,?,?,?,?,?)""",
-            (user_id, game, platform, finished_at, comment, xp, denarios),
-        )
-        await self.conn.commit()
-        return cur.lastrowid
+        async with self.transaction() as tx:
+            catalog_id = await self._resolver_jogo_catalogo_tx(tx, game, "zerado")
+            cur = await tx.conn.execute(
+                """INSERT INTO zerados(user_id, game, platform, finished_at, comment, xp_awarded, denarios_awarded, catalog_game_id)
+                   VALUES (?,?,?,?,?,?,?,?)""",
+                (user_id, game, platform, finished_at, comment, xp, denarios, catalog_id),
+            )
+            return cur.lastrowid
 
     async def registrar_zerado_com_recompensa(
         self, user_id, game, platform, finished_at, comment="",
@@ -1101,10 +1227,11 @@ class Database:
             limite = max(0, int(limite_diario or 0))
             if limite > 0 and total_recent >= limite:
                 xp = denarios = 0
+            catalog_id = await self._resolver_jogo_catalogo_tx(tx, game, "zerado")
             cur = await tx.conn.execute(
-                """INSERT INTO zerados(user_id, game, platform, finished_at, comment, xp_awarded, denarios_awarded, status, approved_at)
-                   VALUES (?,?,?,?,?,?,?,'approved',CURRENT_TIMESTAMP)""",
-                (user_id, game, platform, finished_at, comment, xp, denarios),
+                """INSERT INTO zerados(user_id, game, platform, finished_at, comment, xp_awarded, denarios_awarded, status, approved_at, catalog_game_id)
+                   VALUES (?,?,?,?,?,?,?,'approved',CURRENT_TIMESTAMP,?)""",
+                (user_id, game, platform, finished_at, comment, xp, denarios, catalog_id),
             )
             old_level = new_level = None
             new_xp = None
@@ -1136,10 +1263,11 @@ class Database:
             )
             if dup:
                 return None
+            catalog_id = await self._resolver_jogo_catalogo_tx(tx, game, "zerado")
             cur = await tx.conn.execute(
-                """INSERT INTO zerados(user_id, game, platform, finished_at, comment, xp_awarded, denarios_awarded, status, approved_at)
-                   VALUES (?,?,?,?,?,?,?,'approved',CURRENT_TIMESTAMP)""",
-                (user_id, game, platform, finished_at, comment, xp, denarios),
+                """INSERT INTO zerados(user_id, game, platform, finished_at, comment, xp_awarded, denarios_awarded, status, approved_at, catalog_game_id)
+                   VALUES (?,?,?,?,?,?,?,'approved',CURRENT_TIMESTAMP,?)""",
+                (user_id, game, platform, finished_at, comment, xp, denarios, catalog_id),
             )
             return cur.lastrowid
 
@@ -1685,7 +1813,11 @@ class Database:
                     raise ValueError("O nome do jogo está vazio.")
                 existing = await tx._one("SELECT id FROM sl_games WHERE name=? COLLATE NOCASE", (name,))
                 created = existing is None
-                await tx.conn.execute("INSERT OR IGNORE INTO sl_games(name) VALUES (?)", (name,))
+                catalog_id = await self._resolver_jogo_catalogo_tx(tx, name, "runs")
+                await tx.conn.execute(
+                    "INSERT OR IGNORE INTO sl_games(name,catalog_game_id) VALUES (?,?)",
+                    (name, catalog_id),
+                )
                 row = await tx._one("SELECT id FROM sl_games WHERE name=? COLLATE NOCASE", (name,))
                 target_type = "sl_game"
             elif kind == "challenge":
