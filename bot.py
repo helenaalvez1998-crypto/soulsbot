@@ -9,6 +9,8 @@ import logging
 import os
 import sys
 import threading
+import traceback
+from io import BytesIO
 from typing import Any
 
 import discord
@@ -86,9 +88,9 @@ class RelatorioErroModal(discord.ui.Modal, title="Reportar problema com o NARA")
         label="O que você estava tentando fazer?",
         placeholder="Descreva o que aconteceu e o que você esperava que acontecesse...",
         style=discord.TextStyle.paragraph,
-        min_length=8,
+        min_length=0,
         max_length=1000,
-        required=True,
+        required=False,
     )
 
     def __init__(self, contexto: dict[str, str]):
@@ -112,7 +114,7 @@ class RelatorioErroModal(discord.ui.Modal, title="Reportar problema com o NARA")
 
         embed = discord.Embed(
             title="🐛 Novo relatório de erro",
-            description=str(self.descricao.value)[:1000],
+            description=(str(self.descricao.value).strip() or "Nenhum comentário adicional informado.")[:1000],
             color=0xE67E22,
             timestamp=discord.utils.utcnow(),
         )
@@ -120,10 +122,25 @@ class RelatorioErroModal(discord.ui.Modal, title="Reportar problema com o NARA")
         embed.add_field(name="Servidor", value=f"`{self.contexto.get('guild', 'DM')}`", inline=True)
         embed.add_field(name="Comando/ação", value=f"`{self.contexto.get('acao', 'não identificada')[:200]}`", inline=False)
         embed.add_field(name="Tipo de erro", value=f"`{self.contexto.get('erro', 'não identificado')[:200]}`", inline=True)
+        embed.add_field(name="Mensagem técnica", value=f"```{self.contexto.get('mensagem_erro', 'não disponível')[:900]}```", inline=False)
+        embed.add_field(name="Mensagem exibida no Discord", value=self.contexto.get("mensagem_usuario", "não disponível")[:1000], inline=False)
         embed.add_field(name="Canal", value=f"`{self.contexto.get('canal', 'não identificado')}`", inline=True)
         embed.add_field(name="ID da interação", value=f"`{self.contexto.get('interaction_id', 'não disponível')}`", inline=False)
+
+        # O traceback completo vai em TXT para não estourar os limites dos embeds do Discord.
+        diagnostico = (
+            f"AÇÃO: {self.contexto.get('acao', 'não identificada')}\\n"
+            f"TIPO: {self.contexto.get('erro', 'não identificado')}\\n"
+            f"MENSAGEM TÉCNICA: {self.contexto.get('mensagem_erro', 'não disponível')}\\n"
+            f"MENSAGEM EXIBIDA AO USUÁRIO: {self.contexto.get('mensagem_usuario', 'não disponível')}\\n"
+            f"SERVIDOR: {self.contexto.get('guild', 'DM')}\\n"
+            f"CANAL: {self.contexto.get('canal', 'não identificado')}\\n"
+            f"INTERAÇÃO: {self.contexto.get('interaction_id', 'não disponível')}\\n\\n"
+            f"TRACEBACK COMPLETO:\\n{self.contexto.get('traceback', 'Traceback não disponível')}"
+        )
+        arquivo = discord.File(BytesIO(diagnostico.encode("utf-8")[:900_000]), filename="diagnostico_nara.txt")
         try:
-            await canal.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+            await canal.send(embed=embed, file=arquivo, allowed_mentions=discord.AllowedMentions.none())
         except (discord.HTTPException, discord.Forbidden):
             return await interaction.response.send_message(
                 "Não consegui enviar o relatório à moderação. Tente novamente mais tarde.",
@@ -149,10 +166,22 @@ class RelatorioErroView(discord.ui.View):
         await interaction.response.send_modal(RelatorioErroModal(self.contexto))
 
 
-def _contexto_relatorio(interaction: discord.Interaction, acao: str, error: BaseException) -> dict[str, str]:
+def _contexto_relatorio(
+    interaction: discord.Interaction,
+    acao: str,
+    error: BaseException,
+    mensagem_usuario: str = "",
+) -> dict[str, str]:
+    """Monta o contexto técnico que será anexado ao relatório voluntário."""
+    traceback_text = "".join(
+        traceback.format_exception(type(error), error, error.__traceback__)
+    )
     return {
         "acao": acao,
         "erro": type(error).__name__,
+        "mensagem_erro": str(error) or type(error).__name__,
+        "mensagem_usuario": mensagem_usuario or "Nenhuma mensagem apresentada.",
+        "traceback": traceback_text or "Traceback não disponível.",
         "guild": str(interaction.guild_id or "DM"),
         "canal": str(interaction.channel_id or "desconhecido"),
         "interaction_id": str(interaction.id),
@@ -190,7 +219,12 @@ async def _nara_view_on_error(
     await _responder_erro_interacao(
         interaction,
         "Ocorreu um erro ao executar essa ação. Se quiser, envie um relatório para a equipe de moderação.",
-        _contexto_relatorio(interaction, str(acao), error),
+        _contexto_relatorio(
+            interaction,
+            str(acao),
+            error,
+            "Ocorreu um erro ao executar essa ação. Se quiser, envie um relatório para a equipe de moderação.",
+        ),
     )
 
 
@@ -248,7 +282,7 @@ class NaraCommandTree(app_commands.CommandTree):
         await _responder_erro_interacao(
             interaction,
             mensagem,
-            _contexto_relatorio(interaction, f"/{command_name}", original),
+            _contexto_relatorio(interaction, f"/{command_name}", original, mensagem),
         )
 
 
