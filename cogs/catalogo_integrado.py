@@ -108,7 +108,7 @@ def init_db():
         )
         # migração: bancos criados por versões anteriores ganham as colunas novas
         existentes = {r[1] for r in conn.execute("PRAGMA table_info(jogos)")}
-        for coluna, ddl in (("iso", "TEXT"), ("status", "TEXT NOT NULL DEFAULT 'aprovado'"), ("autor_id", "INTEGER")):
+        for coluna, ddl in (("iso", "TEXT"), ("status", "TEXT NOT NULL DEFAULT 'aprovado'"), ("autor_id", "INTEGER"), ("outros_links", "TEXT")):
             if coluna not in existentes:
                 conn.execute(f"ALTER TABLE jogos ADD COLUMN {coluna} {ddl}")
         conn.execute("CREATE TABLE IF NOT EXISTS config (chave TEXT PRIMARY KEY, valor TEXT)")
@@ -235,6 +235,36 @@ def validar_links(**links):
     return None
 
 
+def analisar_links_complementares(texto):
+    """Primeira linha: URL do tutorial (opcional). Próximas: Nome | URL, até 3."""
+    linhas = [linha.strip() for linha in (texto or "").splitlines() if linha.strip()]
+    tutorial = ""
+    extras = []
+    if linhas and "|" not in linhas[0]:
+        tutorial = linhas.pop(0)
+        if not link_valido(tutorial):
+            return None, None, "❌ A primeira linha deve ser o link https:// do tutorial."
+    for numero, linha in enumerate(linhas, start=1):
+        if "|" not in linha:
+            return None, None, f"❌ Link adicional {numero}: use Nome | https://..."
+        nome, url = (parte.strip() for parte in linha.split("|", 1))
+        if not nome or len(nome) > 80 or not url or len(url) > 500 or not link_valido(url):
+            return None, None, f"❌ Link adicional {numero} inválido. Use Nome | https://..."
+        extras.append({"nome": nome, "url": url})
+    if len(extras) > 3:
+        return None, None, "❌ Você pode adicionar no máximo 3 links opcionais."
+    return tutorial, extras, None
+
+
+def formatar_outros_links(valor):
+    import json
+    try:
+        dados = json.loads(valor or "[]")
+        return dados if isinstance(dados, list) else []
+    except (TypeError, ValueError):
+        return []
+
+
 # ------------------------------------------------------------------ embeds e botões de link
 
 
@@ -269,6 +299,10 @@ def link_buttons(j):
         btns.append(discord.ui.Button(label="ISO", emoji="💿", style=discord.ButtonStyle.link, url=j["iso"]))
     if j["tutorial"]:
         btns.append(discord.ui.Button(label="Tutorial", emoji="📖", style=discord.ButtonStyle.link, url=j["tutorial"]))
+    extras = formatar_outros_links(j["outros_links"] if "outros_links" in j.keys() else None)
+    for item in extras:
+        btns.append(discord.ui.Button(label=item["nome"][:80], emoji="🔗",
+                                      style=discord.ButtonStyle.link, url=item["url"]))
     return btns
 
 
@@ -638,7 +672,10 @@ class AddModal(discord.ui.Modal):
         self.nome = discord.ui.TextInput(label="Nome do port", max_length=100)
         self.link = discord.ui.TextInput(label="Link de download do port", max_length=500, placeholder="https://...")
         self.iso = discord.ui.TextInput(label="Link da ISO original (opcional)", required=False, max_length=500)
-        self.tutorial = discord.ui.TextInput(label="Link do tutorial (opcional)", required=False, max_length=500)
+        self.tutorial = discord.ui.TextInput(
+            label="Tutorial + até 3 links extras (opcional)", required=False,
+            style=discord.TextStyle.paragraph, max_length=2000,
+            placeholder="1ª linha: URL do tutorial (opcional)\nDepois: Nome | https://link (até 3)")
         self.capa = discord.ui.FileUpload(required=True, min_values=1, max_values=1)
         self.add_item(self.nome)
         self.add_item(self.link)
@@ -656,8 +693,9 @@ class AddModal(discord.ui.Modal):
                 f"❌ Você já tem {MAX_PENDENTES_POR_USUARIO} envios aguardando aprovação. "
                 "Espere a moderação analisar antes de enviar mais."), embed=None, view=None)
             return
-        link, iso, tutorial = self.link.value.strip(), self.iso.value.strip(), self.tutorial.value.strip()
-        erro = validar_links(link=link, iso=iso, tutorial=tutorial)
+        link, iso = self.link.value.strip(), self.iso.value.strip()
+        tutorial, extras, erro_extras = analisar_links_complementares(self.tutorial.value)
+        erro = erro_extras or validar_links(link=link, iso=iso, tutorial=tutorial)
         if erro:
             await interaction.edit_original_response(content=erro, embed=None, view=None)
             return
@@ -671,10 +709,10 @@ class AddModal(discord.ui.Modal):
         status = "pendente" if self.publico else "aprovado"
         with db() as conn:
             cur = conn.execute(
-                "INSERT INTO jogos (nome, plataforma, link, iso, tutorial, capa, status, autor_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO jogos (nome, plataforma, link, iso, tutorial, capa, status, autor_id, outros_links) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (self.nome.value.strip(), self.plataforma, link, iso or None, tutorial or None,
-                 path, status, interaction.user.id),
+                 path, status, interaction.user.id, __import__("json").dumps(extras, ensure_ascii=False)),
             )
         jogo = get_jogo(cur.lastrowid)
         emb, file = jogo_embed(jogo)
@@ -955,8 +993,14 @@ class EditModal(discord.ui.Modal):
         self.link = discord.ui.TextInput(label="Link de download do port", max_length=500, default=jogo["link"])
         self.iso = discord.ui.TextInput(label="Link da ISO (vazio = sem ISO)", required=False, max_length=500,
                                         default=jogo["iso"] or "")
-        self.tutorial = discord.ui.TextInput(label="Link do tutorial (vazio = sem tutorial)", required=False,
-                                             max_length=500, default=jogo["tutorial"] or "")
+        extras_atuais = formatar_outros_links(jogo["outros_links"] if "outros_links" in jogo.keys() else None)
+        texto_links = "\\n".join(([jogo["tutorial"]] if jogo["tutorial"] else []) +
+                                  [f'{item["nome"]} | {item["url"]}' for item in extras_atuais])
+        self.tutorial = discord.ui.TextInput(
+            label="Tutorial + até 3 links extras", required=False,
+            style=discord.TextStyle.paragraph, max_length=2000,
+            default=texto_links[:2000],
+            placeholder="1ª linha: URL do tutorial; depois Nome | https://link")
         self.capa = discord.ui.FileUpload(required=False, min_values=0, max_values=1)
         self.add_item(self.nome)
         self.add_item(self.link)
@@ -969,8 +1013,9 @@ class EditModal(discord.ui.Modal):
             await interaction.response.send_message("⛔ Sem permissão.", ephemeral=True)
             return
         await interaction.response.defer(ephemeral=True)
-        link, iso, tutorial = self.link.value.strip(), self.iso.value.strip(), self.tutorial.value.strip()
-        erro = validar_links(link=link, iso=iso, tutorial=tutorial)
+        link, iso = self.link.value.strip(), self.iso.value.strip()
+        tutorial, extras, erro_extras = analisar_links_complementares(self.tutorial.value)
+        erro = erro_extras or validar_links(link=link, iso=iso, tutorial=tutorial)
         if erro:
             await interaction.edit_original_response(content=erro, embed=None, view=None)
             return
@@ -984,8 +1029,9 @@ class EditModal(discord.ui.Modal):
             nova_capa = path
         with db() as conn:
             conn.execute(
-                "UPDATE jogos SET nome = ?, link = ?, iso = ?, tutorial = ?, capa = ? WHERE id = ?",
-                (self.nome.value.strip(), link, iso or None, tutorial or None, nova_capa, self.jogo["id"]),
+                "UPDATE jogos SET nome = ?, link = ?, iso = ?, tutorial = ?, capa = ?, outros_links = ? WHERE id = ?",
+                (self.nome.value.strip(), link, iso or None, tutorial or None, nova_capa,
+                 __import__("json").dumps(extras, ensure_ascii=False), self.jogo["id"]),
             )
         emb, file = jogo_embed(get_jogo(self.jogo["id"]))
         await interaction.edit_original_response(
