@@ -327,7 +327,15 @@ def admin_content():
 
 
 def send_kwargs(emb, file, view):
-    # InteractionResponse.edit_message aceita attachments, não o argumento file.
+    """Argumentos para InteractionResponse.send_message (usa file/files)."""
+    kwargs = {"embed": emb, "view": view}
+    if file:
+        kwargs["file"] = file
+    return kwargs
+
+
+def edit_kwargs(emb, file, view):
+    """Argumentos para InteractionResponse.edit_message (usa attachments)."""
     return {"embed": emb, "view": view, "attachments": [file] if file else []}
 
 
@@ -493,7 +501,7 @@ class JogoCardButton(discord.ui.Button):
             return
         emb, file = jogo_embed(jogo)
         await interaction.response.edit_message(
-            **send_kwargs(emb, file, DetalheView(jogo, self.estado))
+            **edit_kwargs(emb, file, DetalheView(jogo, self.estado))
         )
 
 
