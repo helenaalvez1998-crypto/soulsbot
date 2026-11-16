@@ -18,6 +18,7 @@ Instalação:  pip install -r requirements.txt
 Execução:    python bot.py
 """
 import math
+import json
 import os
 import sqlite3
 import uuid
@@ -301,8 +302,9 @@ def link_buttons(j):
         btns.append(discord.ui.Button(label="Tutorial", emoji="📖", style=discord.ButtonStyle.link, url=j["tutorial"]))
     extras = formatar_outros_links(j["outros_links"] if "outros_links" in j.keys() else None)
     for item in extras:
-        btns.append(discord.ui.Button(label=item["nome"][:80], emoji="🔗",
-                                      style=discord.ButtonStyle.link, url=item["url"]))
+        if item.get("nome") and item.get("url"):
+            btns.append(discord.ui.Button(label=item["nome"][:80], emoji="🔗",
+                                          style=discord.ButtonStyle.link, url=item["url"]))
     return btns
 
 
@@ -665,6 +667,74 @@ class PlataformaPickView(discord.ui.View):
         await interaction.response.edit_message(content=admin_content(), embed=None, view=AdminView())
 
 
+class LinksOpcionaisView(discord.ui.View):
+    """Abre um formulário separado para cada par nome/link opcional."""
+    def __init__(self, jogo_id):
+        super().__init__(timeout=900)
+        self.jogo_id = jogo_id
+        for numero in range(1, 4):
+            botao = discord.ui.Button(
+                label=f"Programa {numero}", emoji="🔗",
+                style=discord.ButtonStyle.secondary, row=(numero - 1) // 2
+            )
+            async def callback(interaction, n=numero):
+                jogo = get_jogo(self.jogo_id)
+                if not jogo:
+                    await interaction.response.send_message("❌ Port não encontrado.", ephemeral=True)
+                    return
+                if interaction.user.id != jogo["autor_id"] and not eh_admin(interaction):
+                    await interaction.response.send_message("⛔ Você não pode alterar estes links.", ephemeral=True)
+                    return
+                await interaction.response.send_modal(LinkOpcionalModal(self.jogo_id, n, jogo))
+            botao.callback = callback
+            self.add_item(botao)
+
+
+class LinkOpcionalModal(discord.ui.Modal):
+    def __init__(self, jogo_id, numero, jogo):
+        super().__init__(title=f"Link opcional • Programa {numero}")
+        self.jogo_id = jogo_id
+        self.numero = numero
+        links = formatar_outros_links(jogo["outros_links"] if "outros_links" in jogo.keys() else None)
+        atual = links[numero - 1] if len(links) >= numero else {}
+        self.nome = discord.ui.TextInput(
+            label="Nome do programa", required=False, max_length=80,
+            default=atual.get("nome", ""), placeholder="Ex.: 7-Zip"
+        )
+        self.url = discord.ui.TextInput(
+            label="Link para baixar", required=False, max_length=500,
+            default=atual.get("url", ""), placeholder="https://..."
+        )
+        self.add_item(self.nome)
+        self.add_item(self.url)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        nome, url = self.nome.value.strip(), self.url.value.strip()
+        if bool(nome) != bool(url):
+            await interaction.response.send_message(
+                "❌ Preencha o nome e o link, ou deixe os dois vazios para remover este programa.", ephemeral=True
+            )
+            return
+        if url and not link_valido(url):
+            await interaction.response.send_message("❌ O link precisa começar com http:// ou https://", ephemeral=True)
+            return
+        jogo = get_jogo(self.jogo_id)
+        if not jogo:
+            await interaction.response.send_message("❌ Port não encontrado.", ephemeral=True)
+            return
+        links = formatar_outros_links(jogo["outros_links"] if "outros_links" in jogo.keys() else None)
+        while len(links) < 3:
+            links.append({})
+        links[self.numero - 1] = ({"nome": nome, "url": url} if nome and url else {})
+        # Mantém os três espaços independentes para que Programa 2 não mude de posição.
+        with db() as conn:
+            conn.execute("UPDATE jogos SET outros_links = ? WHERE id = ?", (json.dumps(links, ensure_ascii=False), self.jogo_id))
+        await interaction.response.send_message(
+            f"✅ Programa {self.numero} salvo." if nome else f"✅ Programa {self.numero} removido.",
+            ephemeral=True, view=LinksOpcionaisView(self.jogo_id)
+        )
+
+
 class AddModal(discord.ui.Modal):
     def __init__(self, plataforma, publico=False):
         super().__init__(title=f"{'Enviar' if publico else 'Novo'} port • {plataforma}"[:45])
@@ -673,9 +743,8 @@ class AddModal(discord.ui.Modal):
         self.link = discord.ui.TextInput(label="Link de download do port", max_length=500, placeholder="https://...")
         self.iso = discord.ui.TextInput(label="Link da ISO original (opcional)", required=False, max_length=500)
         self.tutorial = discord.ui.TextInput(
-            label="Tutorial + até 3 links extras (opcional)", required=False,
-            style=discord.TextStyle.paragraph, max_length=2000,
-            placeholder="1ª linha: URL do tutorial (opcional)\nDepois: Nome | https://link (até 3)")
+            label="Link do tutorial (opcional)", required=False, max_length=500,
+            placeholder="https://...")
         self.capa = discord.ui.FileUpload(required=True, min_values=1, max_values=1)
         self.add_item(self.nome)
         self.add_item(self.link)
@@ -694,8 +763,9 @@ class AddModal(discord.ui.Modal):
                 "Espere a moderação analisar antes de enviar mais."), embed=None, view=None)
             return
         link, iso = self.link.value.strip(), self.iso.value.strip()
-        tutorial, extras, erro_extras = analisar_links_complementares(self.tutorial.value)
-        erro = erro_extras or validar_links(link=link, iso=iso, tutorial=tutorial)
+        tutorial = self.tutorial.value.strip()
+        extras = []
+        erro = validar_links(link=link, iso=iso, tutorial=tutorial)
         if erro:
             await interaction.edit_original_response(content=erro, embed=None, view=None)
             return
@@ -720,11 +790,11 @@ class AddModal(discord.ui.Modal):
             await avisar_moderacao(jogo, interaction.guild_id)
             await interaction.edit_original_response(
                 content="✅ **Port enviado!** Ele aparecerá no catálogo após a aprovação da moderação.\n\nPrévia:",
-                embed=emb, attachments=[file] if file else [], view=None)
+                embed=emb, attachments=[file] if file else [], view=LinksOpcionaisView(jogo["id"]))
         else:
             await interaction.edit_original_response(
                 content="✅ **Port adicionado!** Prévia:", embed=emb,
-                attachments=[file] if file else [], view=AdminView())
+                attachments=[file] if file else [], view=LinksOpcionaisView(jogo["id"]))
 
 
 # ------------------------------------------------------------------ moderação
@@ -993,14 +1063,9 @@ class EditModal(discord.ui.Modal):
         self.link = discord.ui.TextInput(label="Link de download do port", max_length=500, default=jogo["link"])
         self.iso = discord.ui.TextInput(label="Link da ISO (vazio = sem ISO)", required=False, max_length=500,
                                         default=jogo["iso"] or "")
-        extras_atuais = formatar_outros_links(jogo["outros_links"] if "outros_links" in jogo.keys() else None)
-        texto_links = "\\n".join(([jogo["tutorial"]] if jogo["tutorial"] else []) +
-                                  [f'{item["nome"]} | {item["url"]}' for item in extras_atuais])
         self.tutorial = discord.ui.TextInput(
-            label="Tutorial + até 3 links extras", required=False,
-            style=discord.TextStyle.paragraph, max_length=2000,
-            default=texto_links[:2000],
-            placeholder="1ª linha: URL do tutorial; depois Nome | https://link")
+            label="Link do tutorial (opcional)", required=False, max_length=500,
+            default=jogo["tutorial"] or "", placeholder="https://...")
         self.capa = discord.ui.FileUpload(required=False, min_values=0, max_values=1)
         self.add_item(self.nome)
         self.add_item(self.link)
@@ -1014,8 +1079,9 @@ class EditModal(discord.ui.Modal):
             return
         await interaction.response.defer(ephemeral=True)
         link, iso = self.link.value.strip(), self.iso.value.strip()
-        tutorial, extras, erro_extras = analisar_links_complementares(self.tutorial.value)
-        erro = erro_extras or validar_links(link=link, iso=iso, tutorial=tutorial)
+        tutorial = self.tutorial.value.strip()
+        extras = formatar_outros_links(self.jogo["outros_links"] if "outros_links" in self.jogo.keys() else None)
+        erro = validar_links(link=link, iso=iso, tutorial=tutorial)
         if erro:
             await interaction.edit_original_response(content=erro, embed=None, view=None)
             return
@@ -1036,7 +1102,7 @@ class EditModal(discord.ui.Modal):
         emb, file = jogo_embed(get_jogo(self.jogo["id"]))
         await interaction.edit_original_response(
             content="✅ **Port atualizado!** Prévia:", embed=emb,
-            attachments=[file] if file else [], view=AdminView())
+            attachments=[file] if file else [], view=LinksOpcionaisView(self.jogo["id"]))
 
 
 class DescricaoModal(discord.ui.Modal):
