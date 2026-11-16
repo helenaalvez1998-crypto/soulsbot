@@ -155,7 +155,7 @@ def set_config(chave, valor):
         conn.execute("INSERT OR REPLACE INTO config (chave, valor) VALUES (?, ?)", (chave, valor))
 
 
-def listar(plataforma=None, query=None, page=0, status="aprovado"):
+def listar(plataforma=None, query=None, page=0, status="aprovado", page_size=PAGE_SIZE):
     where, params = ["status = ?"], [status]
     if plataforma:
         where.append("plataforma = ?")
@@ -169,7 +169,7 @@ def listar(plataforma=None, query=None, page=0, status="aprovado"):
         rows = conn.execute(
             f"SELECT id, nome, plataforma, capa FROM jogos {clause} "
             "ORDER BY nome COLLATE NOCASE LIMIT ? OFFSET ?",
-            params + [PAGE_SIZE, page * PAGE_SIZE],
+            params + [page_size, page * page_size],
         ).fetchall()
     return rows, total
 
@@ -521,7 +521,10 @@ class CatalogView(discord.ui.View):
 
     def build(self):
         self.clear_items()
-        self.rows, self.total = listar(self.plataforma, self.query, self.page, self.status)
+        self.rows, self.total = listar(
+            self.plataforma, self.query, self.page, self.status,
+            page_size=1 if self.mode == "ver" else PAGE_SIZE,
+        )
         pages = max(1, math.ceil(self.total / PAGE_SIZE))
         self.add_item(PlataformaSelect(self.plataforma))
         if self.rows:
@@ -562,14 +565,23 @@ class CatalogView(discord.ui.View):
         file = None
         if self.mode == "ver":
             if self.rows:
-                desc = "Escolha um dos cinco cartões pelos botões com o nome do jogo ou use o menu por nome. Filtre por plataforma e avance página a página."
-                file = criar_grade_capas(self.rows)
+                # Exibe um único jogo por página usando a imagem grande do Embed.
+                # Isso evita comprimir várias capas em uma única imagem de grade.
+                jogo = get_jogo(self.rows[0]["id"])
+                if jogo:
+                    emb, file = jogo_embed(jogo)
+                    emb.title = f"📚 {jogo['nome']}"
+                    emb.description = (
+                        (jogo["descricao"] or "")[:1200]
+                        or f"**Plataforma:** {PLATAFORMAS.get(jogo['plataforma'], '🎮')} {jogo['plataforma']}"
+                    )
+                else:
+                    emb = discord.Embed(title=titulo, description="Este port não está mais disponível.", color=discord.Color.blurple())
+                    file = None
             else:
-                desc = "Nenhum port encontrado. Tente outra busca ou plataforma."
-            emb = discord.Embed(title=titulo, description=desc, color=discord.Color.blurple())
-            if file:
-                emb.set_image(url="attachment://catalogo.png")
-            emb.set_footer(text=f"Página {self.page + 1}/{pages} • {self.total} port(s)")
+                emb = discord.Embed(title=titulo, description="Nenhum port encontrado. Tente outra busca ou plataforma.", color=discord.Color.blurple())
+                file = None
+            emb.set_footer(text=f"Jogo {self.page + 1}/{self.total} • Use Anterior/Próxima para navegar")
             return emb, file
 
         if self.mode == "pendentes" and not self.rows:
