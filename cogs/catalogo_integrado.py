@@ -473,9 +473,7 @@ class PageButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         v: CatalogView = self.view
-        tamanho_pagina = 1 if v.mode == "ver" else PAGE_SIZE
-        total_paginas = max(1, math.ceil(v.total / tamanho_pagina))
-        v.page = max(0, min(v.page + self.delta, total_paginas - 1))
+        v.page += self.delta
         await v.atualizar(interaction)
 
 
@@ -527,16 +525,18 @@ class CatalogView(discord.ui.View):
             self.plataforma, self.query, self.page, self.status,
             page_size=1 if self.mode == "ver" else PAGE_SIZE,
         )
-        # No modo de visualização, cada página contém exatamente um jogo.
-        # Os modos administrativos continuam usando PAGE_SIZE por página.
-        tamanho_pagina = 1 if self.mode == "ver" else PAGE_SIZE
-        pages = max(1, math.ceil(self.total / tamanho_pagina))
+        pages = max(1, math.ceil(self.total / PAGE_SIZE))
         self.add_item(PlataformaSelect(self.plataforma))
         if self.rows:
             if self.mode == "ver":
                 for index, jogo in enumerate(self.rows):
                     self.add_item(JogoCardButton(jogo, index, self.estado()))
-            self.add_item(JogoSelect(self.rows, self.mode))
+            # O preview mostra um jogo por vez, mas o menu deve listar os ports
+            # da plataforma/filtro atual. Discord limita Select a 25 opções.
+            select_rows, _ = listar(
+                self.plataforma, self.query, 0, self.status, page_size=25
+            )
+            self.add_item(JogoSelect(select_rows, self.mode))
         if self.mode == "ver":
             # A ação permanece disponível mesmo quando há resultados parciais:
             # o membro pode estar procurando um título específico que não apareceu.
@@ -560,8 +560,7 @@ class CatalogView(discord.ui.View):
             self.add_item(PainelButton())
 
     def render(self):
-        tamanho_pagina = 1 if self.mode == "ver" else PAGE_SIZE
-        pages = max(1, math.ceil(self.total / tamanho_pagina))
+        pages = max(1, math.ceil(self.total / PAGE_SIZE))
         titulo = self.TITULOS[self.mode]
         if self.query:
             titulo += f" • busca: {self.query}"
