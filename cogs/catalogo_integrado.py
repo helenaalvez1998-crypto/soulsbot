@@ -473,7 +473,9 @@ class PageButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         v: CatalogView = self.view
-        v.page += self.delta
+        tamanho_pagina = 1 if v.mode == "ver" else PAGE_SIZE
+        total_paginas = max(1, math.ceil(v.total / tamanho_pagina))
+        v.page = max(0, min(v.page + self.delta, total_paginas - 1))
         await v.atualizar(interaction)
 
 
@@ -525,7 +527,10 @@ class CatalogView(discord.ui.View):
             self.plataforma, self.query, self.page, self.status,
             page_size=1 if self.mode == "ver" else PAGE_SIZE,
         )
-        pages = max(1, math.ceil(self.total / PAGE_SIZE))
+        # No modo de visualização, cada página contém exatamente um jogo.
+        # Os modos administrativos continuam usando PAGE_SIZE por página.
+        tamanho_pagina = 1 if self.mode == "ver" else PAGE_SIZE
+        pages = max(1, math.ceil(self.total / tamanho_pagina))
         self.add_item(PlataformaSelect(self.plataforma))
         if self.rows:
             if self.mode == "ver":
@@ -555,7 +560,8 @@ class CatalogView(discord.ui.View):
             self.add_item(PainelButton())
 
     def render(self):
-        pages = max(1, math.ceil(self.total / PAGE_SIZE))
+        tamanho_pagina = 1 if self.mode == "ver" else PAGE_SIZE
+        pages = max(1, math.ceil(self.total / tamanho_pagina))
         titulo = self.TITULOS[self.mode]
         if self.query:
             titulo += f" • busca: {self.query}"
