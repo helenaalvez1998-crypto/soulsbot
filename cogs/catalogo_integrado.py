@@ -327,7 +327,8 @@ def admin_content():
 
 
 def send_kwargs(emb, file, view):
-    return dict(embed=emb, view=view, **({"file": file} if file else {}))
+    # InteractionResponse.edit_message aceita attachments, não o argumento file.
+    return {"embed": emb, "view": view, "attachments": [file] if file else []}
 
 
 def render_kwargs(text_or_embed, file, view):
