@@ -451,7 +451,30 @@ class JogoSelect(discord.ui.Select):
             return
         emb, file = jogo_embed(jogo)
         if v.mode == "ver":
-            view = DetalheView(jogo, v.estado())
+            # No catálogo público, selecionar um port funciona como um salto
+            # direto na navegação: atualiza a mesma mensagem para a posição
+            # daquele jogo, sem abrir a ficha em outra tela.
+            alvo_id = int(self.values[0])
+            paginas = max(1, math.ceil(v.total / PAGE_SIZE))
+            encontrado = False
+            for pagina in range(paginas):
+                lote, _ = listar(
+                    v.plataforma, v.query, pagina, v.status, page_size=PAGE_SIZE
+                )
+                for indice, item in enumerate(lote):
+                    if int(item["id"]) == alvo_id:
+                        v.page = pagina * PAGE_SIZE + indice
+                        encontrado = True
+                        break
+                if encontrado:
+                    break
+            if not encontrado:
+                await interaction.response.send_message(
+                    "Esse port não está mais disponível nesse filtro.", ephemeral=True
+                )
+                return
+            await v.atualizar(interaction)
+            return
         elif v.mode == "editar":
             view = EditarView(jogo, v.estado())
         elif v.mode == "remover":
@@ -525,7 +548,8 @@ class CatalogView(discord.ui.View):
             self.plataforma, self.query, self.page, self.status,
             page_size=1 if self.mode == "ver" else PAGE_SIZE,
         )
-        pages = max(1, math.ceil(self.total / PAGE_SIZE))
+        page_size = 1 if self.mode == "ver" else PAGE_SIZE
+        pages = max(1, math.ceil(self.total / page_size))
         self.add_item(PlataformaSelect(self.plataforma))
         if self.rows:
             if self.mode == "ver":
@@ -560,7 +584,8 @@ class CatalogView(discord.ui.View):
             self.add_item(PainelButton())
 
     def render(self):
-        pages = max(1, math.ceil(self.total / PAGE_SIZE))
+        page_size = 1 if self.mode == "ver" else PAGE_SIZE
+        pages = max(1, math.ceil(self.total / page_size))
         titulo = self.TITULOS[self.mode]
         if self.query:
             titulo += f" • busca: {self.query}"
