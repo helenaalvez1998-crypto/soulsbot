@@ -65,7 +65,7 @@
         "enviar",
         "submeter"
       ],
-      "answer": "Abra `/nara` → **Minha biblioteca** → **Platinas** e clique em **Registrar platina**. Informe o jogo, a plataforma, a data da conquista e anexe o comprovante no formulário. Depois, o pedido segue para a moderação; nada de tentar pular a fila. Quando a platina for aprovada, ela também entra automaticamente em **Jogos Zerados** para o mesmo jogo e plataforma — não precisa cadastrar tudo de novo. As recompensas de platina e zerado continuam seguindo as regras próprias de cada sistema.",
+      "answer": "Abra `/nara` → **Minha biblioteca** → **Platinas** e clique em **Registrar platina**. Informe o jogo, a plataforma, a data da conquista e anexe o comprovante no formulário. dps, o pedido segue pra a moderação; nada de tentar pular a fila. qnd a platina for aprovada, ela tb entra automaticamente em **Jogos Zerados** pra o msm jogo e plataforma — não precisa cadastrar tudo de novo. As recompensas de platina e zerado continuam seguindo as regras próprias de cada sistema. E, por favor, não tente me vender print de outro jogo. Eu olho os detalhes.",
       "category": "Platinas e conquistas",
       "verified_sources": {
         "files": [
@@ -120,7 +120,7 @@
         "finalizei",
         "concluido"
       ],
-      "answer": "Terminou um jogo sem platinar? Abra `/nara` → **Minha biblioteca** → **Zerados** e clique em **Registrar zerado**. Informe jogo, plataforma e data de conclusão; o comprovante é opcional. O pedido vai para a Central de Aprovação e só aparece como registro válido depois da análise da moderação. Se a platina do mesmo jogo e plataforma já foi aprovada, o jogo entra automaticamente nos seus zerados. Uma conquista, um registro — não precisamos fabricar trabalho extra.",
+      "answer": "Terminou um jogo sem platinar? Abra `/nara` → **Minha biblioteca** → **Zerados** e clique em **Registrar zerado**. Informe jogo, plataforma e data de conclusão; o comprovante é opcional. O pedido vai pra a Central de Aprovação e só aparece como registro válido dps da análise da moderação. Se a platina do msm jogo e plataforma já foi aprovada, o jogo entra automaticamente nos seus zerados. Uma conquista, um registro — não precisamos fabricar trabalho extra. Zerar já dá trabalho suficiente. Não vamos inventar dois registros pro mesmo feito.",
       "category": "Jogos zerados",
       "verified_sources": {
         "files": [
@@ -167,7 +167,7 @@
         "tempo",
         "soulslike"
       ],
-      "answer": "Quer colocar sua marca no Hall da Fama? Abra `/nara` → **Minha biblioteca** → **Runs e desafios**, clique em **Registrar run**, escolha o jogo e o desafio e informe tempo e build. Anexe o comprovante quando o formulário solicitar. Revise o tempo antes de confirmar: um dígito errado pode transformar um recorde em uma tragédia estatística. A run fica pendente até a equipe analisar; só depois da aprovação entra no ranking.",
+      "answer": "Quer colocar sua marca no Hall da Fama? Abra `/nara` → **Minha biblioteca** → **Runs e desafios**, clique em **Registrar run**, escolha o jogo e o desafio e informe tempo e build. Anexe o comprovante qnd o formulário solicitar. Revise o tempo antes de confirmar: um dígito errado pode transformar um recorde em uma tragédia estatística. A run fica pendente até a equipe analisar; só dps da aprovação entra no ranking. Se vai disputar o Hall, pelo menos não entregue seu recorde com um tempo digitado no susto.",
       "category": "Runs e desafios",
       "verified_sources": {
         "files": [
@@ -208,7 +208,7 @@
         "zerado",
         "cadastrei errado"
       ],
-      "answer": "Para remover um jogo zerado, abra `/nara` → **Minha biblioteca** → **Remover zerado** e informe o número correspondente ao registro da sua lista. Confira o jogo antes de confirmar. Se o registro já concedeu XP ou Denários, o sistema também retira a recompensa correspondente, respeitando o saldo mínimo disponível. Pense antes de apertar: não existe botão mágico para desfazer arrependimento.",
+      "answer": "pra remover um jogo zerado, abra `/nara` → **Minha biblioteca** → **Remover zerado** e informe o número correspondente ao registro da sua lista. Confira o jogo antes de confirmar. Se o registro já concedeu XP ou Denários, o sistema tb retira a recompensa correspondente, respeitando o saldo mínimo disponível. Pense antes de apertar: não existe botão mágico pra desfazer arrependimento. Eu avisei pra conferir. Depois não venha negociar com o botão como se ele tivesse coração.",
       "category": "Jogos zerados",
       "verified_sources": {
         "files": [
@@ -255,7 +255,7 @@
         "denarios",
         "xp"
       ],
-      "answer": "A recompensa não aparece só porque você apertou **Enviar** — seria conveniente, mas não é assim que a auditoria funciona. Platinas, jogos zerados e runs passam primeiro pela revisão da equipe. Depois da aprovação, o sistema aplica o XP e os Denários previstos para aquele tipo de registro, respeitando as configurações e os limites do servidor. Se ainda estiver pendente, aguarde. Enviar outro pedido igual não acelera a fila; só duplica o trabalho.",
+      "answer": "A recompensa não aparece só porque Vc apertou **Enviar** — seria conveniente, mas não é assim que a auditoria funciona. Platinas, jogos zerados e runs passam primeiro pela revisão da equipe. dps da aprovação, o sistema aplica o XP e os Denários previstos pra aquele tipo de registro, respeitando as configurações e os limites do servidor. Se ainda estiver pendente, aguarde. Enviar outro pedido igual não acelera a fila; só duplica o trabalho. Eu sei, esperar é horrível. Ainda assim, não vou furar a análise só pq vc atualizou a tela 37 vezes.",
       "category": "XP e patentes",
       "verified_sources": {
         "files": [
@@ -295,7 +295,7 @@
         "análise",
         "comprovante"
       ],
-      "answer": "Seus registros não entram direto no ranking. Platinas, runs e jogos zerados passam pela equipe para verificar dados, duplicidades e comprovantes. Depois da análise, o pedido é aprovado ou rejeitado: os aprovados entram nos locais correspondentes e recebem a recompensa aplicável; os rejeitados não entram no ranking nem recebem recompensa. Se o resultado não explicar o que aconteceu, envie uma mensagem à moderação para pedir esclarecimentos. Sem adivinhação, por favor.",
+      "answer": "Seus registros não entram direto no ranking. Platinas, runs e jogos zerados passam pela equipe pra verificar dados, duplicidades e comprovantes. dps da análise, o pedido é aprovado ou rejeitado: os aprovados entram nos locais correspondentes e recebem a recompensa aplicável; os rejeitados não entram no ranking nem recebem recompensa. Se o resultado não explicar o que aconteceu, envie uma msg à moderação pra pedir esclarecimentos. Sem adivinhação, por favor. A equipe confere; eu não carimbo conquista no grito. Integridade do ranking vem primeiro.",
       "category": "Platinas e conquistas",
       "verified_sources": {
         "files": [
@@ -333,7 +333,7 @@
         "histórico",
         "consultar"
       ],
-      "answer": "Para rever suas conquistas, abra `/nara` → **Minha biblioteca** → **Platinas**. Ali ficam as platinas aprovadas que já fazem parte da sua coleção. Também pode escrever **minhas platinas** aqui no chat que eu consulto seus registros. Viu? Até a burocracia pode ser elegante quando me deixam trabalhar.",
+      "answer": "pra rever suas conquistas, abra `/nara` → **Minha biblioteca** → **Platinas**. Ali ficam as platinas aprovadas que já fazem parte da sua coleção. tb pode escrever **minhas platinas** aqui no chat que eu consulto seus registros. Viu? Até a burocracia pode ser elegante qnd me deixam trabalhar. Vai lá conferir sua coleção. Se tiver uma conquista absurda, admito que posso ficar impressionada.",
       "category": "Platinas e conquistas",
       "verified_sources": {
         "files": [
@@ -371,7 +371,7 @@
         "terminei",
         "finalizei"
       ],
-      "answer": "Quer conferir os jogos concluídos? Abra `/nara` → **Minha biblioteca** → **Zerados** (botão **Lista**). O painel permite consultar seus registros e acompanhar o ranking. Se preferir ir direto ao resultado, escreva **meus jogos zerados** e eu verifico sua lista. Só entram como válidos os registros aprovados — a empolgação não substitui a revisão.",
+      "answer": "Quer conferir os jogos que vc concluiu? Abra `/nara` → **Minha biblioteca** → **Zerados** (botão **Lista**). O painel permite consultar seus registros e acompanhar o ranking. Se preferir ir direto ao resultado, escreva **meus jogos zerados** e eu verifico sua lista. Só entram como válidos os registros aprovados — a empolgação não substitui a revisão. Quero ver essa lista crescer — mas jogo abandonado na tela do chefe não conta como zerado, espertinho.",
       "category": "Jogos zerados",
       "verified_sources": {
         "files": [
@@ -403,7 +403,7 @@
         "histórico",
         "desafios"
       ],
-      "answer": "Suas tentativas ficam na Central Soulslike. Abra `/nara` → **Minha biblioteca** → **Runs e desafios** e consulte seu perfil de runs para consultar envios e status. Também pode escrever **minhas runs** que eu informo quantas foram aprovadas. Para tempos, desafios e detalhes de cada submissão, o painel continua sendo o lugar certo.",
+      "answer": "Suas tentativas ficam na Central Soulslike. Abra `/nara` → **Minha biblioteca** → **Runs e desafios** e consulte seu perfil de runs pra consultar envios e status. tb pode escrever **minhas runs** que eu informo quantas foram aprovadas. pra tempos, desafios e detalhes de cada submissão, o painel continua sendo o lugar certo. Agora me mostra se esse treino todo virou tempo bom ou só sofrimento acumulado.",
       "category": "Runs e desafios",
       "verified_sources": {
         "files": [
@@ -444,7 +444,7 @@
         "prova",
         "anexo"
       ],
-      "answer": "O comprovante acompanha o formulário de registro. Para platinas, abra `/nara` → **Minha biblioteca** → **Platinas** → **Registrar platina**; para runs, **Runs e desafios** → **Registrar run**; zerados aceitam comprovante opcional. Um print enviado solto nesta conversa ou em canal não registra a conquista e não entra na fila de análise. Use o caminho oficial para a equipe receber a prova junto dos dados corretos. Eu ainda não desenvolvi clarividência para identificar jogo, plataforma e data olhando um arquivo perdido no chat.",
+      "answer": "O comprovante acompanha o formulário de registro. pra platinas, abra `/nara` → **Minha biblioteca** → **Platinas** → **Registrar platina**; pra runs, **Runs e desafios** → **Registrar run**; zerados aceitam comprovante opcional. Um print enviado solto nesta conversa ou em canal não registra a conquista e não entra na fila de análise. Use o caminho oficial pra a equipe receber a prova junto dos dados corretos. Eu ainda não desenvolvi clarividência pra identificar jogo, plataforma e data olhando um arquivo perdido no chat. Print perdido no chat não é protocolo, criatura. Me entrega a prova pelo formulário certo.",
       "category": "Platinas e conquistas",
       "verified_sources": {
         "files": [
@@ -614,7 +614,7 @@
         "título",
         "inventário"
       ],
-      "answer": "A Loja usa Denários para liberar itens cosméticos, como cores de perfil e títulos. Abra `/nara` → **Meu progresso** → **Loja de recompensas** para consultar catálogo, preços e requisitos de nível; a própria tela mostra o que está disponível para sua conta. Esses itens mudam a aparência do perfil, não aumentam XP, atributos ou posição no ranking. Elegância compra-se. Habilidade, infelizmente, ainda exige jogar.",
+      "answer": "A Loja usa Denários pra liberar itens cosméticos, como cores de perfil e títulos. Abra `/nara` → **Meu progresso** → **Loja de recompensas** pra consultar catálogo, preços e requisitos de nível; a própria tela mostra o que tá disponível pra sua conta. Esses itens mudam a aparência do perfil, não aumentam XP, atributos ou posição no ranking. Elegância compra-se. Habilidade, infelizmente, ainda exige jogar. Pode montar um visual de respeito. Só não confunda skin bonita com habilidade; essa parte ainda é por sua conta.",
       "category": "Loja e Denários",
       "verified_sources": {
         "files": [
@@ -658,7 +658,7 @@
         "nível",
         "rank"
       ],
-      "answer": "Sua patente acompanha seu nível. Conforme acumula XP, você alcança os marcos necessários e desbloqueia novas patentes; quando a configuração do servidor permite, o bot também atualiza seu cargo. Abra `/nara` → **Meu progresso** → **Meu nível e XP** para conferir nível, patente e quanto falta para a próxima. Continue participando: observar a barra de progresso com intensidade não faz ela subir.",
+      "answer": "Sua patente acompanha seu nível. Conforme acumula XP, Vc alcança os marcos necessários e desbloqueia novas patentes; qnd a configuração do servidor permite, o bot tb atualiza seu cargo. Abra `/nara` → **Meu progresso** → **Meu nível e XP** pra conferir nível, patente e quanto falta pra a próxima. Continue participando: observar a barra de progresso com intensidade não faz ela subir. A patente não sobe por osmose. Vai jogar, acumular XP e para de encarar a barrinha como se ela fosse sentir pena.",
       "category": "XP e patentes",
       "verified_sources": {
         "files": [
@@ -694,7 +694,7 @@
         "central",
         "soulslike"
       ],
-      "answer": "O `/nara` é a sua central: um único comando que abre tudo. Por ali você acessa **Ports & Mods**, **Minha biblioteca** (Platinas, Zerados, Runs e desafios), **Meu progresso** (nível, ranking e Loja), **Meu perfil**, **Meu Santuário**, **Preferências**, **Comunidade** e **Ajuda e suporte**. O painel é privado: só você o enxerga e usa. Organização: uma invenção magnífica, especialmente quando alguém realmente a utiliza.",
+      "answer": "O `/nara` é a sua central: um único comando que abre tudo. Por ali Vc acessa **Ports & Mods**, **Minha biblioteca** (Platinas, Zerados, Runs e desafios), **Meu progresso** (nível, ranking e Loja), **Meu perfil**, **Meu Santuário**, **Preferências**, **Comunidade** e **Ajuda e suporte**. O painel é privado: só Vc o enxerga e usa. Organização: uma invenção magnífica, especialmente qnd alguém realmente a utiliza. Um comando, tudo no lugar. Eu gosto de organização — principalmente quando não preciso perseguir ninguém pra usar.",
       "category": "Servidor, cargos e painéis",
       "verified_sources": {
         "files": [
@@ -733,7 +733,7 @@
         "bio",
         "redes"
       ],
-      "answer": "Seu Santuário é seu espaço pessoal na comunidade: uma vitrine das conquistas e da identidade que você quer mostrar como jogador. Nele, você pode apresentar biografia, jogo favorito, plataformas, redes e galeria de platinas aprovadas. Abra `/nara` e clique em **Meu Santuário** para cuidar do seu espaço; para visitar, use **Visitar santuário** em **Minha biblioteca** → **Platinas**, para conhecer o de alguém que liberou acesso. Só o proprietário pode editar o próprio Santuário. A decoração é sua responsabilidade — não me culpe por escolhas duvidosas.",
+      "answer": "Seu Santuário é seu espaço pessoal na comunidade: uma vitrine das conquistas e da identidade que Vc quer mostrar como jogador. Nele, Vc pode apresentar biografia, jogo favorito, plataformas, redes e galeria de platinas aprovadas. Abra `/nara` e clique em **Meu Santuário** pra cuidar do seu espaço; pra visitar, use **Visitar santuário** em **Minha biblioteca** → **Platinas**, pra conhecer o de alguém que liberou acesso. Só o proprietário pode editar o próprio Santuário. A decoração é sua responsabilidade — não me culpe por escolhas duvidosas. É seu espaço. Faça algo que tenha sua cara; eu julgo em silêncio. Talvez.",
       "category": "Perfis e Santuários",
       "verified_sources": {
         "files": [
@@ -772,7 +772,7 @@
         "top",
         "posição"
       ],
-      "answer": "Temos rankings de XP, platinas, jogos zerados e desafios Soulslike. Para XP, abra `/nara` → **Meu progresso** → **Ranking de XP**; os painéis de **Platinas** e **Zerados** (em **Minha biblioteca**) reúnem as classificações de conquistas e jogos concluídos. Nos desafios, o Hall da Fama considera apenas runs aprovadas e usa o melhor tempo de cada jogador por jogo e desafio. Consulte o painel da modalidade que quer acompanhar. E se seu nome ainda não está no topo, a solução costuma envolver jogar, não reclamar para mim.",
+      "answer": "Temos rankings de XP, platinas, jogos zerados e desafios Soulslike. pra XP, abra `/nara` → **Meu progresso** → **Ranking de XP**; os painéis de **Platinas** e **Zerados** (em **Minha biblioteca**) reúnem as classificações de conquistas e jogos concluídos. Nos desafios, o Hall da Fama considera apenas runs aprovadas e usa o melhor tempo de cada jogador por jogo e desafio. Consulte o painel da modalidade que quer acompanhar. E se seu nome ainda não tá no topo, a solução costuma envolver jogar, não reclamar pra mim. O topo não se aluga. Se quer seu nome ali, vai ter que merecer cada posição.",
       "category": "Perfis e rankings",
       "verified_sources": {
         "files": [
@@ -818,7 +818,7 @@
         "aviso",
         "notificação"
       ],
-      "answer": "O servidor acompanha o canal de YouTube configurado e publica avisos quando detecta vídeo novo ou transmissão ao vivo. Para receber uma menção, abra o **painel de cargos** e selecione **Avisos de Vídeo**, **Avisos de Live** ou ambos, caso estejam disponíveis. Sem escolher o cargo, você ainda pode ver a publicação no canal, mas não necessariamente recebe uma notificação direta. Até para acompanhar conteúdo existe uma configuração; extraordinário, eu sei.",
+      "answer": "O servidor acompanha o canal de YouTube configurado e publica avisos qnd detecta vídeo novo ou transmissão ao vivo. pra receber uma menção, abra o **painel de cargos** e selecione **Avisos de Vídeo**, **Avisos de Live** ou ambos, caso estejam disponíveis. Sem escolher o cargo, Vc ainda pode ver a publicação no canal, mas não necessariamente recebe uma notificação direta. Até pra acompanhar conteúdo existe uma configuração; extraordinário, eu sei. Escolhe os avisos que quer receber. Não vou transformar seu Discord numa sirene porque vc marcou tudo sem pensar.",
       "category": "YouTube e ofertas",
       "verified_sources": {
         "files": [
@@ -858,7 +858,7 @@
         "steam",
         "epic"
       ],
-      "answer": "Os canais de ofertas recebem avisos de jogos gratuitos e descontos encontrados nas lojas monitoradas pelo servidor. Nem toda promoção da internet aparece: há filtros e proteção contra anúncios repetidos. Antes de resgatar, confira loja, plataforma, região e prazo. Uma oferta que não funciona na sua região é só uma bela decoração no feed.",
+      "answer": "Os canais de ofertas recebem avisos de jogos gratuitos e descontos encontrados nas lojas monitoradas pelo servidor. Nem toda promoção da internet aparece: há filtros e proteção contra anúncios repetidos. Antes de resgatar, confere loja, plataforma, região e prazo. Uma oferta que não funciona na sua região é só uma bela decoração no feed. Promoção boa é promoção resgatada a tempo. Só confere a região antes de comemorar como se tivesse ganhado na loteria.",
       "category": "YouTube e ofertas",
       "verified_sources": {
         "files": [
@@ -895,7 +895,7 @@
         "normas",
         "servidor"
       ],
-      "answer": "A regra básica é simples: respeite os membros, siga as normas do servidor e não tente fraudar comprovantes, rankings ou registros. Para platinas, runs e jogos zerados, use os formulários oficiais; assim a equipe recebe tudo organizado para analisar. Se discordar de uma decisão ou tiver dúvida sobre uma regra, procure a moderação pelos canais adequados. O chat não precisa virar tribunal improvisado — o Coliseu já tem sua própria arena.",
+      "answer": "A regra básica é simples: respeite os membros, siga as normas do servidor e não tente fraudar comprovantes, rankings ou registros. pra platinas, runs e jogos zerados, use os formulários oficiais; assim a equipe recebe tudo organizado pra analisar. Se discordar de uma decisão ou tiver dúvida sobre uma regra, procure a moderação pelos canais adequados. O chat não precisa virar tribunal improvisado — o Coliseu já tem sua própria arena. Brincadeira tem limite. Quando vira prejuízo pros outros, eu paro de rir e a moderação assume.",
       "category": "Servidor, cargos e painéis",
       "verified_sources": {
         "files": [
@@ -944,7 +944,7 @@
         "dados",
         "público"
       ],
-      "answer": "Nem toda informação do perfil é automaticamente privada. Dependendo da tela e das permissões, o Santuário e algumas áreas do painel podem exibir nível, XP, platinas e até Denários. Já consultas pessoais de inventário pela conversa comigo são direcionadas ao próprio usuário. Antes de liberar alguém para visitar seu Santuário, confira o que o cartão mostra e conceda acesso apenas a quem você escolheu.",
+      "answer": "Nem toda informação do perfil é automaticamente privada. Dependendo da tela e das permissões, o Santuário e algumas áreas do painel podem exibir nível, XP, platinas e até Denários. Já consultas pessoais de inventário pela conversa comigo são direcionadas ao próprio usuário. Antes de liberar alguém pra visitar seu Santuário, confira o que o cartão mostra e conceda acesso apenas a quem Vc escolheu.",
       "category": "Perfis e Santuários",
       "verified_sources": {
         "files": [
@@ -983,7 +983,7 @@
         "conversar",
         "nara"
       ],
-      "answer": "Mencione **@Nara** ou responda a uma das minhas mensagens. Em alguns canais configurados para dúvidas, também reconheço perguntas frequentes sem precisar da menção. Se eu não responder em outro espaço, é provável que aquele canal não esteja liberado para conversa livre. Não é desprezo: eu só falo onde me deixaram falar.",
+      "answer": "Mencione **@Nara** ou responda a uma das minhas mensagens. Em alguns canais configurados pra dúvidas, tb reconheço perguntas frequentes sem precisar da menção. Se eu não responder em outro espaço, é provável que aquele canal não esteja liberado pra conversa livre. Não é desprezo: eu só falo onde me deixaram falar. Pode me chamar. Só não espere que eu adivinhe uma pergunta que vc ainda não escreveu.",
       "category": "Administração e Nara",
       "verified_sources": {
         "files": [
@@ -1021,7 +1021,7 @@
         "membro",
         "pessoa"
       ],
-      "answer": "Abra `/nara` → **Meu perfil** (ou o painel de **Platinas** → **Perfil**) e escolha a pessoa no seletor de membros. O painel pode mostrar patente, nível, XP e platinas aprovadas; algumas telas também exibem Denários. O inventário de outra pessoa não fica disponível nessa consulta. E atenção: a resposta privada do painel não transforma automaticamente todos os dados exibidos em informações privadas para o dono do perfil.",
+      "answer": "Abra `/nara` → **Meu perfil** (ou o painel de **Platinas** → **Perfil**) e escolha a pessoa no seletor de membros. O painel pode mostrar patente, nível, XP e platinas aprovadas; algumas telas tb exibem Denários. O inventário de outra pessoa não fica disponível nessa consulta. E atenção: a resposta privada do painel não transforma automaticamente todos os dados exibidos em informações privadas pra o dono do perfil.",
       "category": "Perfis e rankings",
       "verified_sources": {
         "files": [
@@ -1531,7 +1531,7 @@
         "nara",
         "você"
       ],
-      "answer": "Sou a Nara: quem cuida da comunidade do Júnior e toca o bot por aqui. Confiro registros, tiro dúvida, consulto seus dados quando você pede e acompanho as tragédias e conquistas do servidor. Se a pergunta é se sou gente: sou uma IA, sim — mas é essa IA que olha sua fila, então vamos nos respeitar. Só leio e respondo por texto, e só lembro de você se me autorizar.",
+      "answer": "Sou a Nara: quem cuida da comunidade do Souls e toca o bot por aqui. Confiro registros, tiro dúvida, consulto seus dados qnd Vc pede e acompanho as tragédias e conquistas do servidor. Se a pergunta é se sou gente: sou uma IA, sim — mas é essa IA que olha sua fila, então vamos nos respeitar. Só leio e respondo por texto, e só lembro de Vc se me autorizar. E não, isso não me impede de ter personalidade. Próxima pergunta.",
       "category": "Administração e Nara",
       "verified_sources": {
         "files": [
@@ -1565,7 +1565,7 @@
         "fazer",
         "consultas"
       ],
-      "answer": "Posso consultar seu perfil, XP, patente, Denários, platinas, jogos zerados, runs, rankings e inventário; também oriento sobre Loja, Santuários e painéis do servidor. Algumas ações dependem de ferramentas habilitadas e das suas permissões. Quando uma confirmação for necessária, apresento o que será feito e aguardo seu clique. Não vou alegar que executei algo sem retorno do sistema — teatro, sim; fraude, não.",
+      "answer": "Posso consultar seu perfil, XP, patente, Denários, platinas, jogos zerados, runs, rankings e inventário; tb oriento sobre Loja, Santuários e painéis do servidor. Algumas ações dependem de ferramentas habilitadas e das suas permissões. qnd uma confirmação for necessária, apresento o que será feito e aguardo seu clique. Não vou alegar que executei algo sem retorno do sistema — teatro, sim; fraude, não. Tenho bastante coisa na manga, mas não vendo milagre. Se o sistema não confirmou, eu não digo que fiz.",
       "category": "Administração e Nara",
       "verified_sources": {
         "files": [
@@ -1617,7 +1617,7 @@
         "experiencia",
         "intervalo"
       ],
-      "answer": "Mensagens válidas rendem entre **10 e 20 XP**, com intervalo de **60 segundos por pessoa** entre recompensas. Mensagens de bots, vazias e no canal de moderação não contam; mensagens com anexo podem contar. O objetivo é reconhecer participação real, não uma metralhadora de mensagens repetidas. Escreva normalmente e deixe o XP vir como consequência.",
+      "answer": "Mensagens válidas rendem entre **10 e 20 XP**, com intervalo de **60 segundos por pessoa** entre recompensas. Mensagens de bots, vazias e no canal de moderação não contam; mensagens com anexo podem contar. O objetivo é reconhecer participação real, não uma metralhadora de mensagens repetidas. Escreve normalmente e deixe o XP vir como consequência. Se pintar outra dúvida, me chama por aqui. Conversa válida rende progresso; flood só rende vontade de silenciar a notificação. Escolha com sabedoria.",
       "verified_sources": {
         "files": [
           "cogs/progressao.py",
@@ -1660,7 +1660,7 @@
         "duas pessoas",
         "surdo"
       ],
-      "answer": "Participar de uma conversa em canal de voz rende **5 XP a cada 5 minutos**, desde que haja pelo menos duas pessoas humanas no canal. Ficar sozinho na call não conta; estar ensurdecido por você ou pelo servidor também impede a recompensa. Isso é XP por interação, não por deixar uma cadeira ocupando espaço no canal. Sim, o sistema faz essa distinção.",
+      "answer": "Participar de uma conversa em canal de voz rende **5 XP a cada 5 minutos**, desde que haja pelo menos duas pessoas humanas no canal. Ficar sozinho na call não conta; estar ensurdecido por Vc ou pelo servidor tb impede a recompensa. Isso é XP por interação, não por deixar uma cadeira ocupando espaço no canal. Sim, o sistema faz essa distinção. Participar conta; deixar o Discord aberto enquanto vai fazer outra coisa não transforma ausência em presença.",
       "verified_sources": {
         "files": [
           "cogs/progressao.py",
@@ -1700,7 +1700,7 @@
         "proximo nivel",
         "progressao"
       ],
-      "answer": "Seu nível é calculado pelo XP acumulado, e a quantidade necessária aumenta conforme você progride. Por isso os primeiros níveis chegam mais rápido; os mais altos exigem participação maior. Abra `/nara` → **Meu progresso** → **Meu nível e XP** para consultar nível, barra de progresso e XP que falta para o próximo. A matemática fica comigo. A parte de conquistar XP continua sendo sua.",
+      "answer": "Seu nível é calculado pelo XP acumulado, e a quantidade necessária aumenta conforme Vc progride. Por isso os primeiros níveis chegam mais rápido; os mais altos exigem participação maior. Abra `/nara` → **Meu progresso** → **Meu nível e XP** pra consultar nível, barra de progresso e XP que falta pra o próximo. A matemática fica comigo. A parte de conquistar XP continua sendo sua. A conta é do sistema. A dedicação, infelizmente, ainda é sua.",
       "verified_sources": {
         "files": [
           "cogs/progressao.py",
@@ -1735,7 +1735,7 @@
         "lista",
         "senhor das almas"
       ],
-      "answer": "As patentes são desbloqueadas nestes níveis: **1** Cinzas Novatas; **5** Guerreiro Caído; **10** Caçador de Almas; **15** Cavaleiro do Abismo; **20** Guardião das Cinzas; **30** Arauto da Ruína; **40** Executor Sombrio; **50** Senhor das Almas; **75** Lenda do Coliseu; **100** Sentinela Imortal. Abra `/nara` → **Meu progresso** → **Meu nível e XP** para conferir sua patente atual e a próxima meta. Uma longa escalada — pelo menos os títulos fazem jus ao esforço.",
+      "answer": "As patentes são desbloqueadas nestes níveis: **1** Cinzas Novatas; **5** Guerreiro Caído; **10** Caçador de Almas; **15** Cavaleiro do Abismo; **20** Guardião das Cinzas; **30** Arauto da Ruína; **40** Executor Sombrio; **50** Senhor das Almas; **75** Lenda do Coliseu; **100** Sentinela Imortal. Abra `/nara` → **Meu progresso** → **Meu nível e XP** pra conferir sua patente atual e a próxima meta. Uma longa escalada — pelo menos os títulos fazem jus ao esforço. Dá uma olhada no próximo marco e decide se vai buscar ou continuar admirando de longe.",
       "verified_sources": {
         "files": [
           "cogs/progressao.py",
@@ -1770,7 +1770,7 @@
         "hierarquia",
         "gerenciar cargos"
       ],
-      "answer": "Ao alcançar o nível de uma nova patente, o NARA tenta atribuir o cargo correspondente e retirar a patente anterior. Se o cargo não aparecer, seu XP continua salvo; o problema pode estar na configuração do cargo, nas permissões ou na hierarquia do bot. Nesse caso, envie uma mensagem à moderação para conferência. Repetir mensagens não convence o Discord a conceder permissões — por mais insistente que você seja.",
+      "answer": "Ao alcançar o nível de uma nova patente, o NARA tenta atribuir o cargo correspondente e retirar a patente anterior. Se o cargo não aparecer, seu XP continua salvo; o problema pode estar na configuração do cargo, nas permissões ou na hierarquia do bot. Nesse caso, envie uma msg à moderação pra conferência. Repetir mensagens não convence o Discord a conceder permissões — por mais insistente que Vc seja. Se o cargo não atualizar, não adianta ameaçar a barrinha. A equipe precisa conferir a configuração.",
       "verified_sources": {
         "files": [
           "cogs/progressao.py",
@@ -1814,7 +1814,7 @@
         "40 mb",
         "data"
       ],
-      "answer": "No formulário de platina, informe jogo, plataforma e data da conquista no formato solicitado. A data não pode estar no futuro. Você pode anexar até **10 arquivos**, com limite de **20 MB por arquivo** e **40 MB no total**. Envie provas legíveis e relacionadas ao registro; a equipe analisará o material antes de aprovar. Se a imagem estiver cortada ou não mostrar o necessário, a moderação poderá pedir esclarecimentos ou rejeitar o pedido. Uma prova precisa provar alguma coisa — conceito revolucionário, eu sei.",
+      "answer": "No formulário de platina, informe jogo, plataforma e data da conquista no formato solicitado. A data não pode estar no futuro. Vc pode anexar até **10 arquivos**, com limite de **20 MB por arquivo** e **40 MB no total**. Envie provas legíveis e relacionadas ao registro; a equipe analisará o material antes de aprovar. Se a imagem estiver cortada ou não mostrar o necessário, a moderação poderá pedir esclarecimentos ou rejeitar o pedido. Uma prova precisa provar alguma coisa — conceito revolucionário, eu sei. A prova precisa mostrar o que a equipe tem que validar. Print cortado demais é mistério, não comprovante.",
       "verified_sources": {
         "files": [
           "cogs/platinas.py",
@@ -1848,7 +1848,7 @@
         "plataforma",
         "pendente"
       ],
-      "answer": "O sistema impede que a mesma pessoa envie outra platina para o mesmo jogo e plataforma quando já existe um registro pendente ou aprovado. Confira se escolheu a plataforma correta e se a conquista já está na sua coleção. Se algum dado estiver errado, envie uma mensagem à moderação para avaliar a correção. Não tente contornar o bloqueio inventando variações no nome do jogo; o sistema já viu esse truque antes.",
+      "answer": "O sistema impede que a mesma pessoa envie outra platina pra o msm jogo e plataforma qnd já existe um registro pendente ou aprovado. Confira se escolheu a plataforma correta e se a conquista já tá na sua coleção. Se algum dado estiver errado, envie uma msg à moderação pra avaliar a correção. Não tente contornar o bloqueio inventando variações no nome do jogo; o sistema já viu esse truque antes. A mesma platina não vira duas só pq vc tentou cadastrar de novo. Criatividade, por favor — mas não nesse sentido.",
       "verified_sources": {
         "files": [
           "cogs/platinas.py",
@@ -1887,7 +1887,7 @@
         "rejeitada",
         "moderação"
       ],
-      "answer": "Depois do envio, sua platina fica pendente no canal de revisão da equipe. Enquanto estiver assim, ainda não conta na coleção pública, nos rankings ou nas recompensas. Quando for aprovada, os dados são atualizados; se for rejeitada, o bot tenta avisar você por mensagem privada. Se sua DM estiver fechada ou o aviso não chegar, consulte a moderação com os dados do registro. Pendente significa aguardando análise, não desaparecida em um abismo.",
+      "answer": "dps do envio, sua platina fica pendente no canal de revisão da equipe. Enquanto estiver assim, ainda não conta na coleção pública, nos rankings ou nas recompensas. qnd for aprovada, os dados são atualizados; se for rejeitada, o bot tenta avisar Vc por msg privada. Se sua DM estiver fechada ou o aviso não chegar, consulte a moderação com os dados do registro. Pendente significa aguardando análise, não desaparecida em um abismo. Pendente significa pendente. Não significa rejeitada, esquecida ou que eu esteja escondendo sua platina numa gaveta.",
       "verified_sources": {
         "files": [
           "cogs/platinas.py",
@@ -1929,7 +1929,7 @@
         "video",
         "arquivo"
       ],
-      "answer": "Para registrar um jogo zerado, informe **jogo, plataforma e data de conclusão**. Comentário e comprovante são opcionais, mas podem ajudar a contextualizar o registro. A data não pode ser futura. O formulário aceita até **5 arquivos**, com limite de **20 MB por arquivo** e **40 MB no total**. Depois do envio, aguarde a aprovação para o jogo aparecer no perfil e no ranking. Dados corretos poupam tempo de todo mundo — inclusive o meu.",
+      "answer": "pra registrar um jogo zerado, informe **jogo, plataforma e data de conclusão**. Comentário e comprovante são opcionais, mas podem ajudar a contextualizar o registro. A data não pode ser futura. O formulário aceita até **5 arquivos**, com limite de **20 MB por arquivo** e **40 MB no total**. dps do envio, aguarde a aprovação pra o jogo aparecer no perfil e no ranking. Dados corretos poupam tempo de todo mundo — inclusive o meu. O registro precisa corresponder a um jogo realmente concluído. Não tente transformar “quase terminei” em currículo.",
       "verified_sources": {
         "files": [
           "cogs/zerados.py",
@@ -1966,7 +1966,7 @@
         "moderação",
         "registro imediato"
       ],
-      "answer": "Seu jogo zerado passa pela revisão da equipe antes de entrar no perfil e no ranking. Enquanto estiver pendente, ainda não conta como registro aprovado; a recompensa chega só depois de aprovado. O comprovante é opcional nesse formulário, mas os dados precisam estar corretos. Depois da análise, o sistema atualiza o resultado. Até lá, não envie outro pedido igual: ansiedade não é mecanismo de aprovação.",
+      "answer": "Seu jogo zerado passa pela revisão da equipe antes de entrar no perfil e no ranking. Enquanto estiver pendente, ainda não conta como registro aprovado; a recompensa chega só dps de aprovado. O comprovante é opcional nesse formulário, mas os dados precisam estar corretos. dps da análise, o sistema atualiza o resultado. Até lá, não envie outro pedido igual: ansiedade não é mecanismo de aprovação. Enviado não é aprovado. Eu sei que a diferença parece cruel, mas é justamente assim que o ranking continua confiável.",
       "verified_sources": {
         "files": [
           "cogs/zerados.py",
@@ -2000,7 +2000,7 @@
         "denarios",
         "3 por dia"
       ],
-      "answer": "Por padrão, até **3 jogos zerados aprovados em um período de 24 horas** recebem XP e Denários. Acima desse limite, o registro ainda pode ser aprovado e aparecer no perfil, mas não recebe a recompensa extra. A equipe pode ajustar esse teto nas configurações do servidor. Continue registrando seus jogos; só não espere recompensa em todos quando o limite já foi atingido. A economia também precisa sobreviver às suas maratonas.",
+      "answer": "Por padrão, até **3 jogos zerados aprovados em um período de 24 horas** recebem XP e Denários. Acima desse limite, o registro ainda pode ser aprovado e aparecer no perfil, mas não recebe a recompensa extra. A equipe pode ajustar esse teto nas configurações do servidor. Continue registrando seus jogos; só não espere recompensa em todos qnd o limite já foi atingido. A economia tb precisa sobreviver às suas maratonas. Existe limite por um motivo. Tentar contornar a regra não é estratégia; é só uma forma mais trabalhosa de quebrá-la.",
       "verified_sources": {
         "files": [
           "cogs/zerados.py",
@@ -2037,7 +2037,7 @@
         "xp",
         "denarios"
       ],
-      "answer": "Ao remover um registro de jogo zerado, o sistema também retira o XP e os Denários que ele concedeu, respeitando o saldo mínimo de zero. Abra `/nara` → **Minha biblioteca** → **Remover zerado**, informe o número exibido na lista e confira o jogo antes de confirmar. A remoção atualiza suas estatísticas e pode alterar sua posição nos rankings. Leia antes de clicar; arrependimento não é uma categoria de suporte técnico.",
+      "answer": "Ao remover um registro de jogo zerado, o sistema tb retira o XP e os Denários que ele concedeu, respeitando o saldo mínimo de zero. Abra `/nara` → **Minha biblioteca** → **Remover zerado**, informe o número exibido na lista e confira o jogo antes de confirmar. A remoção atualiza suas estatísticas e pode alterar sua posição nos rankings. Leia antes de clicar; arrependimento não é uma categoria de suporte técnico. Remover o registro também pode remover a recompensa. Não dá pra ficar com o prêmio e apagar o motivo — conveniente demais, né?",
       "verified_sources": {
         "files": [
           "cogs/zerados.py",
@@ -2070,7 +2070,7 @@
         "minuto",
         "segundo"
       ],
-      "answer": "A Central Soulslike aceita tempos como `1:30:45`, `90:15`, `1h30m45s`, `1h30` ou `45m12s`. Informe horas, minutos e segundos de forma consistente e confira o valor antes de enviar. O ranking compara tempos aprovados para cada jogo e desafio; um erro de digitação pode colocar sua run numa posição que não representa seu desempenho. O cronômetro não tem obrigação de assumir a culpa pelos seus dedos.",
+      "answer": "A Central Soulslike aceita tempos como `1:30:45`, `90:15`, `1h30m45s`, `1h30` ou `45m12s`. Informe horas, minutos e segundos de forma consistente e confira o valor antes de enviar. O ranking compara tempos aprovados pra cada jogo e desafio; um erro de digitação pode colocar sua run numa posição que não representa seu desempenho. O cronômetro não tem obrigação de assumir a culpa pelos seus dedos. Confere o formato antes de enviar. Um separador no lugar errado e seu recorde vira ficção científica.",
       "verified_sources": {
         "files": [
           "cogs/soulslike.py",
@@ -2114,7 +2114,7 @@
         "10 minutos",
         "20 mb"
       ],
-      "answer": "Depois de preencher jogo, desafio, tempo e build, a Central Soulslike solicitará o comprovante por mensagem privada do bot. Envie uma imagem ou vídeo de até **20 MB** em até **10 minutos** e depois confirme o resumo apresentado. Se suas DMs estiverem fechadas ou o prazo expirar, o envio não será concluído; você precisará iniciar uma nova submissão. Deixe as mensagens privadas liberadas antes de começar. Evitemos transformar um formulário em uma corrida contra o relógio.",
+      "answer": "dps de preencher jogo, desafio, tempo e build, a Central Soulslike solicitará o comprovante por msg privada do bot. Envie uma imagem ou vídeo de até **20 MB** em até **10 minutos** e dps confirme o resumo apresentado. Se suas DMs estiverem fechadas ou o prazo expirar, o envio não será concluído; Vc precisará iniciar uma nova submissão. Deixe as mensagens privadas liberadas antes de começar. Evitemos transformar um formulário em uma corrida contra o relógio. Manda a prova pelo fluxo indicado. Não vou montar um quebra-cabeça com arquivos espalhados em cinco canais.",
       "verified_sources": {
         "files": [
           "cogs/soulslike.py",
@@ -2152,7 +2152,7 @@
         "status",
         "histórico"
       ],
-      "answer": "Na Central Soulslike, abra **Meu perfil** para consultar suas submissões recentes e verificar se cada run está pendente, aprovada, rejeitada, cancelada ou invalidada. Runs ainda pendentes podem ser canceladas por você pelo próprio painel. Se uma tentativa for rejeitada, leia o motivo no histórico antes de reenviar. Corrigir o problema é uma estratégia melhor do que repetir o mesmo erro esperando um final alternativo.",
+      "answer": "Na Central Soulslike, abra **Meu perfil** pra consultar suas submissões recentes e verificar se cada run tá pendente, aprovada, rejeitada, cancelada ou invalidada. Runs ainda pendentes podem ser canceladas por Vc pelo próprio painel. Se uma tentativa for rejeitada, leia o motivo no histórico antes de reenviar. Corrigir o problema é uma estratégia melhor do que repetir o msm erro esperando um final alternativo. Se quer cancelar, use o fluxo disponível e confira o status. Não confunda “pedi pra cancelar” com “já foi cancelado”.",
       "verified_sources": {
         "files": [
           "cogs/soulslike.py",
@@ -2185,7 +2185,7 @@
         "100",
         "denarios"
       ],
-      "answer": "Uma run aprovada concede **100 XP**. Se ela estabelecer um novo recorde global para a mesma combinação de jogo e desafio, recebe mais **100 XP** de bônus — **200 XP no total**. Runs não concedem Denários. A recompensa só é aplicada depois da aprovação da equipe; uma tentativa enviada ou ainda pendente não libera XP imediatamente. Primeiro a validação, depois a glória.",
+      "answer": "Uma run aprovada concede **100 XP**. Se ela estabelecer um novo recorde global pra a mesma combinação de jogo e desafio, recebe mais **100 XP** de bônus — **200 XP no total**. Runs não concedem Denários. A recompensa só é aplicada dps da aprovação da equipe; uma tentativa enviada ou ainda pendente não libera XP imediatamente. Primeiro a validação, dps a glória. Recorde bom é recorde validado. Primeiro a equipe confere; depois a gente comemora — nessa ordem.",
       "verified_sources": {
         "files": [
           "cogs/soulslike.py",
@@ -2217,7 +2217,7 @@
         "aprovadas",
         "tentativas"
       ],
-      "answer": "O Hall da Fama separa resultados por **jogo e desafio** e considera apenas runs aprovadas. Para cada jogador, vale o melhor tempo naquela combinação; uma tentativa posterior não apaga automaticamente o recorde anterior. O indicador de repetição mostra quantas vezes a pessoa concluiu o desafio. Pode tentar novamente para melhorar sua marca — seu melhor resultado continua valendo até ser superado ou invalidado.",
+      "answer": "O Hall da Fama separa resultados por **jogo e desafio** e considera apenas runs aprovadas. pra cada jogador, vale o melhor tempo naquela combinação; uma tentativa posterior não apaga automaticamente o recorde anterior. O indicador de repetição mostra quantas vezes a pessoa concluiu o desafio. Pode tentar novamente pra melhorar sua marca — seu melhor resultado continua valendo até ser superado ou invalidado. O ranking quer desempenho, não quantidade de tentativas. Traga seu melhor tempo e deixe o cronômetro falar.",
       "verified_sources": {
         "files": [
           "cogs/soulslike.py",
@@ -2252,7 +2252,7 @@
         "moderador",
         "recorde"
       ],
-      "answer": "Uma run aprovada só pode ser retirada do ranking pela equipe de moderação, quando houver motivo para isso. Se acontecer com uma das suas, consulte o histórico ou envie uma mensagem à equipe para entender a decisão. Esse tipo de alteração exige revisão; não é uma opção para apagar um resultado inconveniente.",
+      "answer": "Uma run aprovada só pode ser retirada do ranking pela equipe de moderação, qnd houver motivo pra isso. Se acontecer com uma das suas, consulte o histórico ou envie uma msg à equipe pra entender a decisão. Esse tipo de alteração exige revisão; não é uma opção pra apagar um resultado inconveniente. Se a run foi invalidada, existe um motivo registrado ou uma análise a esclarecer. Reenviar igual não vai ressuscitar o resultado.",
       "verified_sources": {
         "files": [
           "cogs/soulslike.py",
@@ -2284,7 +2284,7 @@
         "moderador",
         "regras"
       ],
-      "answer": "A lista de jogos e desafios da Central Soulslike é organizada pela equipe. Se estiver faltando uma opção, envie uma mensagem à moderação com o nome do jogo ou desafio para que ela avalie o cadastro. A lista não é alterada por sugestões automáticas — alguém precisa validar o que entra no sistema.",
+      "answer": "A lista de jogos e desafios da Central Soulslike é organizada pela equipe. Se estiver faltando uma opção, envie uma msg à moderação com o nome do jogo ou desafio pra que ela avalie o cadastro. A lista não é alterada por sugestões automáticas — alguém precisa validar o que entra no sistema.",
       "verified_sources": {
         "files": [
           "cogs/soulslike.py",
@@ -2316,7 +2316,7 @@
         "visitar",
         "canal de perfis"
       ],
-      "answer": "Para abrir seu espaço, use `/nara` → **Meu Santuário**. Para visitar outra pessoa, use **Visitar santuário** (em **Minha biblioteca** → **Platinas**), selecione o membro e solicite entrada no tópico privado; o acesso só é liberado quando você for adicionado. Ao terminar, use **Sair do tópico** no menu do Discord. Visitar permite conhecer o espaço, não editar o que pertence a outra pessoa. Curiosidade liberada; invasão, não.",
+      "answer": "pra abrir seu espaço, use `/nara` → **Meu Santuário**. pra visitar outra pessoa, use **Visitar santuário** (em **Minha biblioteca** → **Platinas**), selecione o membro e solicite entrada no tópico privado; o acesso só é liberado qnd Vc for adicionado. Ao terminar, use **Sair do tópico** no menu do Discord. Visitar permite conhecer o espaço, não editar o que pertence a outra pessoa. Curiosidade liberada; invasão, não. Convide quem merece acesso. Seu Santuário não é praça pública só pq tem uma decoração bonita.",
       "verified_sources": {
         "files": [
           "cogs/santuario.py",
@@ -2350,7 +2350,7 @@
         "jogo favorito",
         "dono"
       ],
-      "answer": "Dentro do seu Santuário, clique em **Personalizar** para editar frase, biografia, jogo favorito e tema visual. As opções de tema são Ouro, Prata, Sangue, Safira, Esmeralda e Violeta. Só o proprietário pode alterar essas informações; visitantes podem conhecer o espaço, mas não modificá-lo. Capriche na apresentação: é sua sala de troféus, não um depósito onde você despeja tudo sem critério.",
+      "answer": "Dentro do seu Santuário, clique em **Personalizar** pra editar frase, biografia, jogo favorito e tema visual. As opções de tema são Ouro, Prata, Sangue, Safira, Esmeralda e Violeta. Só o proprietário pode alterar essas informações; visitantes podem conhecer o espaço, mas não modificá-lo. Capriche na apresentação: é sua sala de troféus, não um depósito onde Vc despeja tudo sem critério. Pode personalizar sem medo — só confira antes de salvar. Até eu tenho limite pra consertar gosto duvidoso.",
       "verified_sources": {
         "files": [
           "cogs/santuario.py",
@@ -2393,7 +2393,7 @@
         "link",
         "arroba"
       ],
-      "answer": "No seu Santuário, abra **Redes** e escolha a plataforma que deseja adicionar ou alterar. Informe o link do perfil no domínio correto ou seu `@`, quando o formulário aceitar esse formato. Para remover uma conta, use a opção correspondente ou deixe o campo vazio quando solicitado. Algumas redes podem não aparecer publicamente em todos os Santuários nesta versão; se o cadastro for aceito mas o link não aparecer, envie à equipe o nome da rede e o endereço cadastrado para conferência.",
+      "answer": "No seu Santuário, abra **Redes** e escolha a plataforma que deseja adicionar ou alterar. Informe o link do perfil no domínio correto ou seu `@`, qnd o formulário aceitar esse formato. pra remover uma conta, use a opção correspondente ou deixe o campo vazio qnd solicitado. Algumas redes podem não aparecer publicamente em todos os Santuários nesta versão; se o cadastro for aceito mas o link não aparecer, envie à equipe o nome da rede e o endereço cadastrado pra conferência. Coloque só as contas que quer exibir. Privacidade não é detalhe decorativo.",
       "verified_sources": {
         "files": [
           "cogs/santuario.py",
@@ -2424,7 +2424,7 @@
         "platinas aprovadas",
         "captura"
       ],
-      "answer": "A opção **Ver galeria** reúne platinas aprovadas e comprovantes que continuam disponíveis. Escolha o jogo para navegar pelas conquistas e abra o comprovante que deseja conferir. Registros pendentes ou rejeitados não entram na galeria. A visualização do arquivo é privada para quem solicitou; ela não vira publicação no tópico. Uma coleção de conquistas, não um mural público de comprovantes.",
+      "answer": "A opção **Ver galeria** reúne platinas aprovadas e comprovantes que continuam disponíveis. Escolha o jogo pra navegar pelas conquistas e abra o comprovante que deseja conferir. Registros pendentes ou rejeitados não entram na galeria. A visualização do arquivo é privada pra quem solicitou; ela não vira publicação no tópico. Uma coleção de conquistas, não um mural público de comprovantes. A galeria é pra mostrar conquistas aprovadas, não pendências que ainda estão na fila. Eu não antecipo resultado.",
       "verified_sources": {
         "files": [
           "cogs/santuario.py",
@@ -2464,7 +2464,7 @@
         "cosmético",
         "loja"
       ],
-      "answer": "A Loja oferece itens cosméticos para personalizar seu perfil. As cores custam **100 Denários** cada; os títulos comuns custam **150 Denários**; e **Eterno Renascido** custa **300 Denários** e exige nível 20. Abra `/nara` → **Meu progresso** → **Loja de recompensas** para conferir catálogo e requisitos antes de comprar: os valores mostrados no painel são os que valem no momento. Nenhum desses itens aumenta XP ou melhora sua posição no ranking. Estilo é ótimo; vantagem competitiva comprada, não.",
+      "answer": "A Loja oferece itens cosméticos pra personalizar seu perfil. As cores custam **100 Denários** cada; os títulos comuns custam **150 Denários**; e **Eterno Renascido** custa **300 Denários** e exige nível 20. Abra `/nara` → **Meu progresso** → **Loja de recompensas** pra conferir catálogo e requisitos antes de comprar: os valores mostrados no painel são os que valem no momento. Nenhum desses itens aumenta XP ou melhora sua posição no ranking. Estilo é ótimo; vantagem competitiva comprada, não. Olhe preço e requisito antes de se apaixonar pelo item. Eu não aceito drama depois da compra.",
       "verified_sources": {
         "files": [
           "cogs/loja.py",
@@ -2496,7 +2496,7 @@
         "cosmético",
         "loja"
       ],
-      "answer": "Abra `/nara` → **Meu progresso** → **Loja de recompensas**, escolha o item e clique em **Comprar**. A compra só é concluída se você tiver Denários suficientes e cumprir o nível mínimo. Depois, use **Equipar** para exibir o item ou **Desequipar** para removê-lo do perfil; comprar não significa que ele já estará equipado. São itens cosméticos: não alteram XP, patente nem atributos. A aparência muda. O chefe continua igualmente mal-educado.",
+      "answer": "Abra `/nara` → **Meu progresso** → **Loja de recompensas**, escolha o item e clique em **Comprar**. A compra só é concluída se Vc tiver Denários suficientes e cumprir o nível mínimo. dps, use **Equipar** pra exibir o item ou **Desequipar** pra removê-lo do perfil; comprar não significa que ele já estará equipado. São itens cosméticos: não alteram XP, patente nem atributos. A aparência muda. O chefe continua igualmente mal-educado. Escolhe, confere e confirma. Não vou gastar seus Denários por impulso — alguém nessa relação precisa ter juízo.",
       "verified_sources": {
         "files": [
           "cogs/loja.py",
@@ -2527,7 +2527,7 @@
         "servidor simplificado",
         "acesso"
       ],
-      "answer": "No painel de entrada, clique em **Verificar-me** para receber o cargo de acesso à comunidade. Se funcionar, os canais liberados estarão disponíveis para sua conta. Se nada acontecer ou surgir um erro, envie uma mensagem à moderação para conferir o cargo e as permissões do bot. Clicar vinte vezes não corrige uma configuração ausente. Insistência é uma virtude; nesse caso, só produz vinte cliques.",
+      "answer": "No painel de entrada, clique em **Verificar-me** pra receber o cargo de acesso à comunidade. Se funcionar, os canais liberados estarão disponíveis pra sua conta. Se nada acontecer ou surgir um erro, envie uma msg à moderação pra conferir o cargo e as permissões do bot. Clicar vinte vezes não corrige uma configuração ausente. Insistência é uma virtude; nesse caso, só produz vinte cliques. Se travou na entrada, me diga o que apareceu. Clicar 40 vezes não desbloqueia uma porta que o Discord manteve fechada.",
       "verified_sources": {
         "files": [
           "cogs/cargos.py",
@@ -2565,7 +2565,7 @@
         "toggle",
         "avisos"
       ],
-      "answer": "Abra o **painel de cargos** e escolha os jogos, avisos ou interesses que combinam com você. Ao clicar em uma opção, o cargo é adicionado; ao clicar novamente, é removido. Você só pode selecionar opções publicadas pela equipe, e os cargos precisam estar configurados no servidor. Escolha o que realmente quer acompanhar. Notificações demais são só outra forma de caos — e esse eu prefiro administrar, não receber.",
+      "answer": "Abra o **painel de cargos** e escolha os jogos, avisos ou interesses que combinam com Vc. Ao clicar em uma opção, o cargo é adicionado; ao clicar novamente, é removido. Vc só pode selecionar opções publicadas pela equipe, e os cargos precisam estar configurados no servidor. Escolha o que realmente quer acompanhar. Notificações demais são só outra forma de caos — e esse eu prefiro administrar, não receber. Escolha os cargos que fazem sentido pra vc. Colecionar todos não é personalidade, é inventário cheio.",
       "verified_sources": {
         "files": [
           "cogs/cargos.py",
@@ -2599,7 +2599,7 @@
         "platinas",
         "central"
       ],
-      "answer": "Os painéis públicos de platinas, jogos zerados, Loja e Santuários são publicados pela equipe para manter os acessos organizados nos canais. Como membro, você não precisa publicar nada: use `/nara` para platinas, zerados, runs, perfil, Santuário, nível e Loja. Se algum painel estiver ausente ou desatualizado, avise a moderação. Não tente reconstruir a infraestrutura no braço.",
+      "answer": "Os painéis públicos de platinas, jogos zerados, Loja e Santuários são publicados pela equipe pra manter os acessos organizados nos canais. Como membro, Vc não precisa publicar nada: use `/nara` pra platinas, zerados, runs, perfil, Santuário, nível e Loja. Se algum painel estiver ausente ou desatualizado, avise a moderação. Não tente reconstruir a infraestrutura no braço. Abrir o painel é tarefa de membro; publicar painel é tarefa da equipe. Não misture os papéis e tudo fica menos caótico.",
       "verified_sources": {
         "files": [
           "cogs/cargos.py",
@@ -2632,7 +2632,7 @@
         "platinas",
         "zerados"
       ],
-      "answer": "Os painéis de platinas e jogos zerados podem ser atualizados automaticamente nos canais definidos pela equipe. Se uma publicação estiver ausente ou desatualizada, informe a moderação para que ela confira a configuração e a atualização. Não é necessário abrir vários pedidos iguais; um aviso com o canal e o painel afetado basta.",
+      "answer": "Os painéis de platinas e jogos zerados podem ser atualizados automaticamente nos canais definidos pela equipe. Se uma publicação estiver ausente ou desatualizada, informe a moderação pra que ela confira a configuração e a atualização. Não é necessário abrir vários pedidos iguais; um aviso com o canal e o painel afetado basta. O painel muda sozinho conforme a configuração. Se algo estiver fora do lugar, me traga o detalhe — não uma teoria conspiratória.",
       "verified_sources": {
         "files": [
           "cogs/cargos.py",
@@ -2666,7 +2666,7 @@
         "top 3",
         "ranking"
       ],
-      "answer": "O Hall do Coliseu é uma publicação automática com destaques da comunidade e é atualizado periodicamente. Para consultar seus próprios dados ou rankings detalhados, abra `/nara`. O painel mostra os destaques; não substitui as consultas individuais. Uma vitrine não é um banco de dados, por mais que pareça conveniente.",
+      "answer": "O Hall do Coliseu é uma publicação automática com destaques da comunidade e é atualizado periodicamente. pra consultar seus próprios dados ou rankings detalhados, abra `/nara`. O painel mostra os destaques; não substitui as consultas individuais. Uma vitrine não é um banco de dados, por mais que pareça conveniente. O Hall se atualiza pelo sistema. Se o resultado parecer errado, a gente confere os dados antes de acusar o cronômetro.",
       "verified_sources": {
         "files": [
           "cogs/cargos.py",
@@ -2707,7 +2707,7 @@
         "recompensa",
         "padrão"
       ],
-      "answer": "As configurações deste servidor ficam sob responsabilidade da administração. Se um canal, cargo ou recompensa parecer incorreto, envie os detalhes à equipe para conferência. Não altere configurações por tentativa e erro: uma mudança mal aplicada pode afetar o funcionamento de todo o servidor.",
+      "answer": "As configurações deste servidor ficam sob responsabilidade da administração. Se um canal, cargo ou recompensa parecer incorreto, envie os detalhes à equipe pra conferência. Não altere configurações por tentativa e erro: uma mudança mal aplicada pode afetar o funcionamento de todo o servidor. Configuração administrativa não é brinquedo de apertar até algo acontecer. Confira cada opção antes de salvar.",
       "verified_sources": {
         "files": [
           "cogs/admin.py",
@@ -2743,7 +2743,7 @@
         "xp",
         "platinas"
       ],
-      "answer": "Restaurar configurações é uma ação administrativa e não deve ser executada por jogadores. Se algo estiver configurado incorretamente, informe a equipe com o nome do painel ou recurso afetado. A restauração pode alterar várias opções de uma vez; não é um botão de limpeza para curiosos.",
+      "answer": "Restaurar configurações é uma ação administrativa e não deve ser executada por jogadores. Se algo estiver configurado incorretamente, informe a equipe com o nome do painel ou recurso afetado. A restauração pode alterar várias opções de uma vez; não é um botão de limpeza pra curiosos. Restaurar configuração pode desfazer ajustes. Leia o que será redefinido antes de confirmar; depois não diga que o botão te enganou.",
       "verified_sources": {
         "files": [
           "cogs/admin.py",
@@ -2781,7 +2781,7 @@
         "grátis",
         "fontes"
       ],
-      "answer": "O canal de ofertas reúne jogos gratuitos e descontos encontrados nas lojas digitais configuradas pelo servidor. Nem toda promoção da internet será publicada: existem filtros para evitar anúncios repetidos ou ofertas fora dos critérios da comunidade. Antes de resgatar, confira loja, plataforma, região e prazo. Grátis é excelente; descobrir que não se aplica à sua conta é uma experiência menos elegante.",
+      "answer": "O canal de ofertas reúne jogos gratuitos e descontos encontrados nas lojas digitais configuradas pelo servidor. Nem toda promoção da internet será publicada: existem filtros pra evitar anúncios repetidos ou ofertas fora dos critérios da comunidade. Antes de resgatar, confira loja, plataforma, região e prazo. Grátis é excelente; descobrir que não se aplica à sua conta é uma experiência menos elegante. Eu prefiro anunciar menos e acertar do que encher o canal com promoção duvidosa. Milagre de marketing não é comigo.",
       "verified_sources": {
         "files": [
           "cogs/youtube.py",
@@ -2812,7 +2812,7 @@
         "ofertas",
         "limite por rodada"
       ],
-      "answer": "O sistema verifica ofertas em intervalos regulares e registra o que já publicou para evitar mensagens repetidas. Uma promoção vista em outro site pode não aparecer aqui porque não passou pelos filtros, já foi anunciada ou veio de uma fonte que não monitoramos. Encontrou algo relevante? Envie o link à equipe para conferência. Um endereço basta; não precisa convocar uma assembleia.",
+      "answer": "O sistema verifica ofertas em intervalos regulares e registra o que já publicou pra evitar mensagens repetidas. Uma promoção vista em outro site pode não aparecer aqui porque não passou pelos filtros, já foi anunciada ou veio de uma fonte que não monitoramos. Encontrou algo relevante? Envie o link à equipe pra conferência. Um endereço basta; não precisa convocar uma assembleia. Se já foi anunciada, não precisa aparecer 18 vezes. O canal agradece; eu também.",
       "verified_sources": {
         "files": [
           "cogs/youtube.py",
@@ -2846,7 +2846,7 @@
         "api",
         "horário"
       ],
-      "answer": "O bot acompanha o canal de YouTube configurado e publica avisos quando detecta vídeos novos ou transmissões ao vivo. Para receber uma menção, abra o **painel de cargos** e escolha **Avisos de Vídeo**, **Avisos de Live** ou ambos, se estiverem disponíveis. Sem selecionar o cargo, você ainda pode ver a publicação no canal, mas talvez não receba notificação direta. Ajuste isso uma vez e deixe o sistema trabalhar.",
+      "answer": "O bot acompanha o canal de YouTube configurado e publica avisos qnd detecta vídeos novos ou transmissões ao vivo. pra receber uma menção, abra o **painel de cargos** e escolha **Avisos de Vídeo**, **Avisos de Live** ou ambos, se estiverem disponíveis. Sem selecionar o cargo, Vc ainda pode ver a publicação no canal, mas talvez não receba notificação direta. Ajuste isso uma vez e deixe o sistema trabalhar. Escolha os avisos que quer. Eu respeito seu foco — mesmo que vc claramente não respeite o meu quando marca tudo.",
       "verified_sources": {
         "files": [
           "cogs/youtube.py",
@@ -2882,7 +2882,7 @@
         "configuração",
         "aviso"
       ],
-      "answer": "Os testes e diagnósticos da integração com o YouTube ficam com a equipe de moderação. Se avisos de vídeos ou lives deixarem de aparecer, envie uma mensagem à equipe com o canal e o tipo de aviso afetado. A verificação técnica exige acesso às configurações; não vou fingir que consigo validar isso apenas olhando o chat.",
+      "answer": "Os testes e diagnósticos da integração com o YouTube ficam com a equipe de moderação. Se avisos de vídeos ou lives deixarem de aparecer, envie uma msg à equipe com o canal e o tipo de aviso afetado. A verificação técnica exige acesso às configurações; não vou fingir que consigo validar isso apenas olhando o chat. Se o teste falhar, traga o resultado pra equipe. Adivinhação técnica é um esporte que eu não pratico.",
       "verified_sources": {
         "files": [
           "cogs/youtube.py",
@@ -2919,7 +2919,7 @@
         "api",
         "resposta local"
       ],
-      "answer": "Muita coisa eu resolvo na hora: sistemas da comunidade, seus dados, registros e rankings. O papo livre e as perguntas mais abertas pedem mais fôlego e têm limite por dia. Se eu não tiver informação suficiente, digo que não sei. Prefiro admitir um limite a entregar uma resposta bonita e errada.",
+      "answer": "Mta coisa eu resolvo na hora: sistemas da comunidade, seus dados, registros e rankings. O papo livre e as perguntas mais abertas pedem mais fôlego e têm limite por dia. Se eu não tiver informação suficiente, digo que não sei. Prefiro admitir um limite a entregar uma resposta bonita e errada. Se pintar outra dúvida, me chama por aqui. Resposta local é rápida e econômica; IA entra quando a conversa exige mais interpretação. Nem toda pergunta precisa convocar a inteligência pesada.",
       "verified_sources": {
         "files": [
           "cogs/admin.py",
@@ -2957,7 +2957,7 @@
         "central de ajuda",
         "repetir"
       ],
-      "answer": "Não reconheci sua pergunta. Reescreva com um pouco mais de contexto: diga qual sistema, jogo, desafio ou painel está usando e o que tentou fazer. Isso me dá elementos para localizar a resposta correta. Se o assunto estiver fora do território da comunidade, talvez eu não consiga ajudar. Minha bola de cristal continua em manutenção; mande dados, não enigmas.",
+      "answer": "Não reconheci sua pergunta. Reescreva com um pouco mais de contexto: diga qual sistema, jogo, desafio ou painel tá usando e o que tentou fazer. Isso me dá elementos pra localizar a resposta correta. Se o assunto estiver fora do território da comunidade, talvez eu não consiga ajudar. Minha bola de cristal continua em manutenção; mande dados, não enigmas. Se eu não reconhecer, reformula ou me dá contexto. Não vou fingir que entendi só pra manter a pose.",
       "verified_sources": {
         "files": [
           "cogs/admin.py",
@@ -2994,7 +2994,7 @@
         "perguntas prontas",
         "selecionar"
       ],
-      "answer": "Use `/nara` → **Ajuda e suporte** → **Abrir central de ajuda**, escolha uma categoria e depois selecione a pergunta que corresponde à sua dúvida. A resposta aparece de forma privada para você, sem lotar o canal com mensagens. Se não encontrar o que procura, volte às categorias ou me mencione no canal de dúvidas. Até pedir ajuda pode ser organizado. Eu exijo um mínimo de estética operacional.",
+      "answer": "Use `/nara` → **Ajuda e suporte** → **Abrir central de ajuda**, escolha uma categoria e dps selecione a pergunta que corresponde à sua dúvida. A resposta aparece de forma privada pra Vc, sem lotar o canal com mensagens. Se não encontrar o que procura, volte às categorias ou me mencione no canal de dúvidas. Até pedir ajuda pode ser organizado. Eu exijo um mínimo de estética operacional. Abre a categoria certa e segue o caminho. A ajuda existe justamente pra ninguém precisar invocar três moderadores por um botão.",
       "verified_sources": {
         "files": [
           "cogs/admin.py",
@@ -3032,7 +3032,7 @@
         "gerenciar servidor",
         "cargo de moderação"
       ],
-      "answer": "A aprovação de platinas, runs e outros registros é feita por membros da equipe que possuem as permissões de moderação configuradas no servidor. Como jogador, sua parte é preencher o formulário corretamente e aguardar a análise; os botões de aprovar e rejeitar não estão disponíveis para todos. Se seu registro estiver parado ou houver dúvida sobre a decisão, procure a moderação. Não tente acionar controles que não pertencem à sua conta.",
+      "answer": "A aprovação de platinas, runs e outros registros é feita por membros da equipe que possuem as permissões de moderação configuradas no servidor. Como jogador, sua parte é preencher o formulário corretamente e aguardar a análise; os botões de aprovar e rejeitar não tão disponíveis pra todos. Se seu registro estiver parado ou houver dúvida sobre a decisão, procure a moderação. Não tente acionar controles que não pertencem à sua conta. Permissão não se presume. Se vc não tem acesso, a equipe precisa avaliar — insistência não vira cargo.",
       "verified_sources": {
         "files": [
           "cogs/cargos.py",
@@ -3065,7 +3065,7 @@
         "conversa",
         "ferramentas"
       ],
-      "answer": "Eu converso com você sobre a comunidade e, quando o recurso está ligado, procuro informação específica de jogo. Você não precisa saber como funciona por trás: escreve o que precisa e eu vejo o caminho. Só não confunda conversa com pesquisa externa; cada uma tem seus limites.",
+      "answer": "Eu converso com Vc sobre a comunidade e, qnd o recurso tá ligado, procuro informação específica de jogo. Vc não precisa saber como funciona por trás: escreve o que precisa e eu vejo o caminho. Só não confunda conversa com pesquisa externa; cada uma tem seus limites. Pra conversa, eu respondo direto. Pra pesquisa externa, preciso acionar a ferramenta apropriada. Não vou fingir que consultei a internet quando não consultei.",
       "verified_sources": {
         "files": [
           "cogs/nara_ia.py",
@@ -3102,7 +3102,7 @@
         "250 por servidor",
         "6 segundos"
       ],
-      "answer": "Se eu pedir pra você esperar, bateu o limite de conversa pra manter o papo justo pra todo mundo. Espera um pouco e tenta de novo. Mandar a mesma pergunta em sequência só atrapalha. Paciência é uma habilidade subestimada.",
+      "answer": "Se eu pedir pra Vc esperar, bateu o limite de conversa pra manter o papo justo pra todo mundo. Espera um pouco e tenta de novo. Mandar a mesma pergunta em sequência só atrapalha. Paciência é uma habilidade subestimada. Se houver intervalo ou limite, respeite a janela indicada. Até eu preciso de um segundo entre uma confusão e outra.",
       "verified_sources": {
         "files": [
           "cogs/nara_ia.py",
@@ -3137,7 +3137,7 @@
         "3 por dia",
         "cooldown"
       ],
-      "answer": "Pesquisa mais pesada tem limite por dia. Se eu avisar que acabou, tenta amanhã ou usa os painéis da comunidade. Não vou inventar resultado pra driblar isso. Até a curiosidade precisa respeitar orçamento.",
+      "answer": "Pesquisa mais pesada tem limite por dia. Se eu avisar que acabou, tenta amanhã ou usa os painéis da comunidade. Não vou inventar resultado pra driblar isso. Até a curiosidade precisa respeitar orçamento. Pesquisa avançada tem limite próprio. Use quando precisar de fonte externa; não gaste consulta só pra perguntar se eu gosto de café.",
       "verified_sources": {
         "files": [
           "cogs/nara_ia.py",
@@ -3174,7 +3174,7 @@
         "terceira",
         "quota"
       ],
-      "answer": "Se meu lado conversador falhar, eu tento outro caminho antes de desistir. Se nada funcionar, painéis e consultas seguem normais; só o papo livre e as pesquisas ficam de molho. Quando der problema, eu aviso em vez de fingir que está tudo bem.",
+      "answer": "Se meu lado conversador falhar, eu tento outro caminho antes de desistir. Se nada funcionar, painéis e consultas seguem normais; só o papo livre e as pesquisas ficam de molho. qnd der problema, eu aviso em vez de fingir que tá tudo bem. Se um provedor falhar, o sistema pode tentar outro conforme a configuração. É redundância, não magia — às vezes todos resolvem tirar folga juntos.",
       "verified_sources": {
         "files": [
           "cogs/nara_ia.py",
@@ -3213,7 +3213,7 @@
         "quota",
         "admin"
       ],
-      "answer": "O estado das conexões de IA é uma informação de diagnóstico reservada à equipe. Se você notar que uma função da NARA parou de responder, envie uma mensagem à moderação com o que tentou fazer e o erro recebido. A equipe consegue verificar a integração; não exponho detalhes internos de configuração no chat público.",
+      "answer": "O estado das conexões de IA é uma informação de diagnóstico reservada à equipe. Se Vc notar que uma função da NARA parou de responder, envie uma msg à moderação com o que tentou fazer e o erro recebido. A equipe consegue verificar a integração; não exponho detalhes internos de configuração no chat público. O painel mostra o estado disponível dos provedores. Se houver falha, a equipe pode investigar; eu não vou declarar tudo perfeito por otimismo.",
       "verified_sources": {
         "files": [
           "cogs/nara_ia.py",
@@ -3248,7 +3248,7 @@
         "conversa",
         "cache"
       ],
-      "answer": "Não registro automaticamente cada mensagem do servidor como se estivesse escrevendo um diário sobre todos. A memória pessoal é opcional e fica sob seu controle em `/nara` → **Preferências** → **Memória da Nara**: ali você pode ativar, desativar, consultar o status ou apagar seu histórico. Com a memória desligada, não devo tratar conversas antigas como lembranças permanentes. Privacidade primeiro; curiosidade depois.",
+      "answer": "Não registro automaticamente cada msg do servidor como se estivesse escrevendo um diário sobre todos. A memória pessoal é opcional e fica sob seu controle em `/nara` → **Preferências** → **Memória da Nara**: ali Vc pode ativar, desativar, consultar o status ou apagar seu histórico. Com a memória desligada, não devo tratar conversas antigas como lembranças permanentes. Privacidade primeiro; curiosidade dps. Eu uso o contexto disponível, não uma gravação infinita de cada conversa. Se algo importante ficou pra trás, me relembra — sem drama, ainda.",
       "verified_sources": {
         "files": [
           "cogs/nara_ia.py",
@@ -3283,7 +3283,7 @@
         "marcar",
         "sem arroba"
       ],
-      "answer": "Em alguns canais configurados para dúvidas, você pode me escrever sem menção e eu tento reconhecer perguntas sobre a comunidade. Nos demais, mencione **@Nara** ou responda a uma mensagem minha para chamar minha atenção. Se eu não responder sem menção, provavelmente aquele canal não está liberado para conversa livre. Não é desprezo; é controle de acesso. Uma ideia adorável, aliás.",
+      "answer": "Em alguns canais configurados pra dúvidas, Vc pode me escrever sem menção e eu tento reconhecer perguntas sobre a comunidade. Nos demais, mencione **@Nara** ou responda a uma msg minha pra chamar minha atenção. Se eu não responder sem menção, provavelmente aquele canal não tá liberado pra conversa livre. Não é desprezo; é controle de acesso. Uma ideia adorável, aliás. Cada canal tem sua regra. Se eu não responder, confira se aquele espaço permite conversa livre antes de me chamar de antissocial.",
       "verified_sources": {
         "files": [
           "cogs/nara_ia.py",
@@ -3318,7 +3318,7 @@
         "sqlite",
         "contingência"
       ],
-      "answer": "Mesmo quando meu papo livre dá uma travada, os painéis e as consultas continuam comigo: perfil, saldo, inventário, rankings, tudo no `/nara`. O que depende de conversa mais elaborada pode esperar até eu voltar ao normal. Se eu não conseguir consultar algo, falo na lata em vez de inventar. Não sou milagreira; tenho reputação a preservar.",
+      "answer": "msm qnd meu papo livre dá uma travada, os painéis e as consultas continuam comigo: perfil, saldo, inventário, rankings, tudo no `/nara`. O que depende de conversa mais elaborada pode esperar até eu voltar ao normal. Se eu não conseguir consultar algo, falo na lata em vez de inventar. Não sou milagreira; tenho reputação a preservar. Mesmo sem Gemini, os comandos e respostas locais compatíveis continuam funcionando. Posso perder a parte mais elaborada, mas não viro enfeite tão fácil.",
       "verified_sources": {
         "files": [
           "cogs/nara_ia.py",
@@ -3360,7 +3360,7 @@
         "visibilidade",
         "santuário"
       ],
-      "answer": "Existe uma limitação de exibição nesta versão: algumas contas de plataformas de jogos aparecem normalmente, mas Twitch, YouTube, Instagram, TikTok e X podem não aparecer nos Santuários de todos os membros. O formulário aceitar o link não garante que ele será exibido no cartão. Se isso acontecer, envie à equipe o nome da rede e o link cadastrado para verificarem a configuração. O cadastro e a exibição são etapas diferentes — irritante, mas real.",
+      "answer": "Existe uma limitação de exibição nesta versão: algumas contas de plataformas de jogos aparecem normalmente, mas Twitch, YouTube, Instagram, TikTok e X podem não aparecer nos Santuários de todos os membros. O formulário aceitar o link não garante que ele será exibido no cartão. Se isso acontecer, envie à equipe o nome da rede e o link cadastrado pra verificarem a configuração. O cadastro e a exibição são etapas diferentes — irritante, mas real. Se a rede não aparece, confira se foi salva e se o campo está configurado pra exibição. Não adianta culpar o algoritmo antes de olhar o cadastro.",
       "verified_sources": {
         "files": [
           "cogs/santuario.py",
@@ -3390,7 +3390,7 @@
         "mês atual",
         "conquistas"
       ],
-      "answer": "Abra `/nara` → **Minha biblioteca** → **Platinas** → **Ranking** e escolha **Platinas do mês**. A lista considera platinas aprovadas cuja data de conquista pertence ao mês atual, no horário de Brasília, e mostra até 10 posições. Se sua platina ainda estiver pendente, ela não entra na classificação até ser aprovada. Primeiro a revisão, depois o lugar na vitrine. Eu não negocio com o calendário.",
+      "answer": "Abra `/nara` → **Minha biblioteca** → **Platinas** → **Ranking** e escolha **Platinas do mês**. A lista considera platinas aprovadas cuja data de conquista pertence ao mês atual, no horário de Brasília, e mostra até 10 posições. Se sua platina ainda estiver pendente, ela não entra na classificação até ser aprovada. Primeiro a revisão, dps o lugar na vitrine. Eu não negocio com o calendário. Ranking mensal é outra disputa: vale o período indicado, não a história inteira da sua conta. Ainda dá tempo de correr atrás — talvez.",
       "verified_sources": {
         "files": [
           "cogs/ranking.py",
@@ -3422,7 +3422,7 @@
         "jogos concluídos",
         "mês atual"
       ],
-      "answer": "Abra `/nara` → **Minha biblioteca** → **Zerados** → **Ranking** e escolha **Zerados do mês** para ver quem registrou mais jogos concluídos no período. O painel também oferece o ranking geral, que considera registros de todos os períodos. Os registros precisam estar aprovados para contar. Agora você já sabe onde encontrar seus concorrentes — use a informação com sabedoria.",
+      "answer": "Abra `/nara` → **Minha biblioteca** → **Zerados** → **Ranking** e escolha **Zerados do mês** pra ver quem registrou mais jogos concluídos no período. O painel tb oferece o ranking geral, que considera registros de todos os períodos. Os registros precisam estar aprovados pra contar. agr Vc já sabe onde encontrar seus concorrentes — use a informação com sabedoria. O recorte mensal mostra os jogos concluídos no período. Se quer subir, escolhe o próximo jogo em vez de negociar com o placar.",
       "verified_sources": {
         "files": [
           "cogs/ranking.py",
@@ -3456,7 +3456,7 @@
         "zerado",
         "plataforma"
       ],
-      "answer": "O sistema evita cadastrar mais de uma vez a mesma combinação de **pessoa + jogo + plataforma**. Confira se já existe um registro pendente ou aprovado e se escolheu a plataforma correta. Para corrigir um jogo zerado lançado errado, use `/nara` → **Minha biblioteca** → **Remover zerado**; para platina, envie uma mensagem à moderação. Criar outro pedido igual não substitui o anterior nem acelera a análise. Repetição não é estratégia.",
+      "answer": "O sistema evita cadastrar mais de uma vez a mesma combinação de **pessoa + jogo + plataforma**. Confira se já existe um registro pendente ou aprovado e se escolheu a plataforma correta. pra corrigir um jogo zerado lançado errado, use `/nara` → **Minha biblioteca** → **Remover zerado**; pra platina, envie uma msg à moderação. Criar outro pedido igual não substitui o anterior nem acelera a análise. Repetição não é estratégia. Se o sistema identificou duplicidade, confira jogo e plataforma antes de insistir. Não existe conquista extra por apertar Enviar duas vezes.",
       "verified_sources": {
         "files": [
           "nara_local.py",
@@ -3491,7 +3491,7 @@
         "analisar",
         "visão"
       ],
-      "answer": "Não. Eu não olho print nem imagem mandada no chat. Pra registrar platina, run ou jogo zerado, anexe o arquivo no formulário da própria atividade (em `/nara` → **Minha biblioteca**): assim ele fica ligado ao jogo, à plataforma e aos dados que a equipe precisa revisar. Eu oriento o caminho; quem aprova é a moderação.",
+      "answer": "Não. Eu não olho print nem imagem mandada no chat. Pra registrar platina, run ou jogo zerado, anexe o arquivo no formulário da própria atividade (em `/nara` → **Minha biblioteca**): assim ele fica ligado ao jogo, à plataforma e aos dados que a equipe precisa revisar. Eu oriento o caminho; quem aprova é a moderação. Eu não consigo analisar o conteúdo visual de um print enviado aqui nesta conversa. Descreva o que aparece ou use o formulário oficial de comprovante; não vou inventar que vi algo que não vi.",
       "verified_sources": {
         "files": [
           "nara_local.py",
@@ -3529,7 +3529,7 @@
         "configurações",
         "servidor"
       ],
-      "answer": "O `/adm` é exclusivo da administração do servidor. Se você precisa alterar uma configuração, procure um administrador ou moderador autorizado. Não vou orientar a contornar permissões; segurança não é decoração de painel.",
+      "answer": "O `/adm` é exclusivo da administração do servidor. Se Vc precisa alterar uma configuração, procure um administrador ou moderador autorizado. Não vou orientar a contornar permissões; segurança não é decoração de painel. O `/adm` é área administrativa. Se vc não tem a permissão necessária, o comando não vai abrir — e não, tentar com mais convicção não ajuda.",
       "verified_sources": {
         "files": [
           "cogs/admin.py",
@@ -3563,7 +3563,7 @@
         "status",
         "personalização"
       ],
-      "answer": "O painel `/adm` reúne configurações do servidor, como canais, cargos, recompensas e sistemas. O acesso é destinado à administração. Se encontrar algo incorreto, informe a equipe com os detalhes em vez de tentar alterar por conta própria. Controle administrativo exige permissão — conceito simples, embora alguns insistam em testar.",
+      "answer": "O painel `/adm` reúne configurações do servidor, como canais, cargos, recompensas e sistemas. O acesso é destinado à administração. Se vc encontrar algo incorreto, informe a equipe com os detalhes em vez de tentar alterar por conta própria. Controle administrativo exige permissão — conceito simples, embora alguns insistam em testar. Cada seção controla uma parte do servidor. Leia o nome e o efeito antes de alterar; configuração no impulso é como lutar contra boss sem olhar a barra de vida.",
       "verified_sources": {
         "files": [
           "cogs/admin.py",
@@ -3602,7 +3602,7 @@
         "perfis",
         "promoções"
       ],
-      "answer": "A escolha dos canais de anúncios, moderação, Santuários e promoções é feita pela administração no `/adm`. Se algum aviso estiver sendo publicado no lugar errado, envie à equipe o nome do canal e o tipo de aviso afetado. A correção depende de acesso administrativo.",
+      "answer": "A escolha dos canais de anúncios, moderação, Santuários e promoções é feita pela administração no `/adm`. Se algum aviso tiver sendo publicado no lugar errado, envie à equipe o nome do canal e o tipo de aviso afetado. A correção depende de acesso administrativo. Se pintar outra dúvida, me chama por aqui. Escolha os canais corretos e confira as permissões do bot. Canal errado costuma gerar silêncio, duplicidade ou um belo caos operacional.",
       "verified_sources": {
         "files": [
           "cogs/admin.py",
@@ -3639,7 +3639,7 @@
         "denarios_zerado",
         "limite diário"
       ],
-      "answer": "Os valores de XP e Denários são definidos pela administração. Se uma recompensa parecer incorreta, envie à moderação o tipo de registro, o resultado da aprovação e o valor recebido para conferência. Não altere nem tente compensar o saldo por conta própria; primeiro identificamos a causa.",
+      "answer": "Os valores de XP e Denários são definidos pela administração. Se uma recompensa parecer incorreta, envie à moderação o tipo de registro, o resultado da aprovação e o valor recebido pra conferência. Não altere nem tente compensar o saldo por conta própria; primeiro identificamos a causa. Recompensas e limites afetam a economia do servidor. Faça alterações com critério e confira os valores antes de salvar; não estamos brincando de banco imobiliário.",
       "verified_sources": {
         "files": [
           "cogs/admin.py",
@@ -3671,7 +3671,7 @@
         "personalizado",
         "override"
       ],
-      "answer": "As configurações são independentes em cada servidor. Uma mudança feita aqui não altera os demais espaços em que o bot esteja instalado. Cada comunidade mantém seus próprios canais, cargos e parâmetros. Uma fronteira administrativa muito útil; recomendo respeitá-la.",
+      "answer": "As configurações são independentes em cada servidor. Uma mudança feita aqui não altera os demais espaços em que o bot esteja instalado. Cada comunidade mantém seus próprios canais, cargos e parâmetros. Uma fronteira administrativa mto útil; recomendo respeitá-la. As configurações são isoladas por servidor. O que vc muda aqui não deve alterar os outros — cada comunidade com seu próprio caos.",
       "verified_sources": {
         "files": [
           "cogs/admin.py",
@@ -3702,7 +3702,7 @@
         "prefixo",
         "config.py"
       ],
-      "answer": "A aparência geral do bot é definida pela administração e não pode ser alterada por jogadores no `/adm`. Você pode personalizar o tema do seu próprio Santuário entre as opções disponíveis. Seu espaço, suas escolhas; a identidade visual do sistema é outra responsabilidade.",
+      "answer": "A aparência geral do bot é definida pela administração e não pode ser alterada por jogadores no `/adm`. Vc pode personalizar o tema do seu próprio Santuário entre as opções disponíveis. Seu espaço, suas escolhas; a identidade visual do sistema é outra responsabilidade. O visual global é decisão administrativa. Seu Santuário é seu território; a identidade do bot não é um mural de votação.",
       "verified_sources": {
         "files": [
           "cogs/admin.py",
@@ -3736,7 +3736,7 @@
         "emoji",
         "role"
       ],
-      "answer": "A criação e a edição dos botões de cargos são tarefas da moderação. Se estiver faltando uma opção — como um jogo ou tipo de aviso — envie uma solicitação à equipe para que ela avalie e cadastre, se fizer sentido. O painel mostra o que foi configurado; não inventa cargos sozinho.",
+      "answer": "A criação e a edição dos botões de cargos são tarefas da moderação. Se estiver faltando uma opção — como um jogo ou tipo de aviso — envie uma solicitação à equipe pra que ela avalie e cadastre, se fizer sentido. O painel mostra o que foi configurado; não inventa cargos sozinho. A equipe cadastra e organiza os botões. Se falta uma opção, peça; não tente fazer o painel materializar um cargo por força de vontade.",
       "verified_sources": {
         "files": [
           "cogs/cargos.py",
@@ -3774,7 +3774,7 @@
         "co-op",
         "criar cargos"
       ],
-      "answer": "Entre as opções que a equipe pode disponibilizar estão cargos de jogos como Elden Ring, Dark Souls, Bloodborne e Sekiro, além de avisos de vídeos, lives e procura por co-op. A lista válida é a que aparece no painel publicado agora; sugestões não significam que todos esses cargos estejam ativos. Escolha apenas os que realmente quer. Não precisamos transformar seu perfil numa coleção de etiquetas.",
+      "answer": "Entre as opções que a equipe pode disponibilizar tão cargos de jogos como Elden Ring, Dark Souls, Bloodborne e Sekiro, além de avisos de vídeos, lives e procura por co-op. A lista válida é a que aparece no painel publicado agr; sugestões não significam que todos esses cargos estejam ativos. Escolha apenas os que realmente quer. Não precisamos transformar seu perfil numa coleção de etiquetas. Escolha com intenção. Seu perfil não precisa parecer uma árvore de Natal de cargos.",
       "verified_sources": {
         "files": [
           "cogs/cargos.py",
@@ -3811,7 +3811,7 @@
         "hierarquia",
         "permissão"
       ],
-      "answer": "Se o botão **Verificar-me** não liberar seu acesso, envie uma mensagem à moderação e descreva o que apareceu. A equipe precisa conferir se o cargo de entrada existe e se o bot tem permissão e posição suficientes para atribuí-lo. Clicar repetidamente não corrige cargo ausente nem hierarquia incorreta. A insistência não é uma permissão do Discord.",
+      "answer": "Se o botão **Verificar-me** não liberar seu acesso, envie uma msg à moderação e descreva o que apareceu. A equipe precisa conferir se o cargo de entrada existe e se o bot tem permissão e posição suficientes pra atribuí-lo. Clicar repetidamente não corrige cargo ausente nem hierarquia incorreta. A insistência não é uma permissão do Discord. Se falhou, precisamos do erro e da configuração. Spam de clique só produz mais cliques — uma descoberta revolucionária.",
       "verified_sources": {
         "files": [
           "cogs/cargos.py",
@@ -3844,7 +3844,7 @@
         "painel privado",
         "platinas"
       ],
-      "answer": "Abra `/nara` → **Meu perfil** e use o seletor de membros para escolher quem deseja consultar. O painel pode mostrar nível, patente, XP, platinas e outros dados disponibilizados naquela tela. A resposta do painel é privada para quem abriu, mas algumas informações também podem estar visíveis em outros espaços, como o Santuário. Privado é o envio do painel; não significa que cada dado exibido seja invisível para todos os demais.",
+      "answer": "Abra `/nara` → **Meu perfil** e use o seletor de membros pra escolher quem deseja consultar. O painel pode mostrar nível, patente, XP, platinas e outros dados disponibilizados naquela tela. A resposta do painel é privada pra quem abriu, mas algumas informações tb podem estar visíveis em outros espaços, como o Santuário. Privado é o envio do painel; não significa que cada dado exibido seja invisível pra todos os demais. A consulta é privada pra quem abriu, mas isso não torna cada dado invisível em todos os lugares. Leia a tela inteira antes de tirar conclusão.",
       "verified_sources": {
         "files": [
           "cogs/platinas.py",
@@ -3881,7 +3881,7 @@
         "denários",
         "privacidade"
       ],
-      "answer": "Seu Santuário é um tópico privado: você e as pessoas que receberam acesso conseguem entrar nele. Quem visita pode ver as informações exibidas no cartão, como nível, XP, platinas e Denários, mas não pode editar seu espaço. Conceda acesso apenas a quem você aceita que veja esses dados. Pessoal significa que você escolhe quem entra — não que o conteúdo fique invisível para quem recebeu permissão.",
+      "answer": "Seu Santuário é um tópico privado: Vc e as pessoas que receberam acesso conseguem entrar nele. Quem visita pode ver as informações exibidas no cartão, como nível, XP, platinas e Denários, mas não pode editar seu espaço. Conceda acesso apenas a quem Vc aceita que veja esses dados. Pessoal significa que Vc escolhe quem entra — não que o conteúdo fique invisível pra quem recebeu permissão. Dê acesso só a quem vc confia. Visitante pode ver os dados exibidos, mas não editar seu espaço; não confunda convite com chave da casa.",
       "verified_sources": {
         "files": [
           "cogs/santuario.py",
@@ -3912,7 +3912,7 @@
         "consulta",
         "privacidade"
       ],
-      "answer": "Na conversa comigo, não libero o inventário de outra pessoa nem apresento o saldo dela como consulta pessoal. Mas algumas telas do painel e cartões do Santuário podem exibir Denários para quem tem acesso. Portanto, o saldo não fica oculto em todas as áreas do servidor. Confira as permissões e o conteúdo exibido no seu Santuário antes de liberar visitantes.",
+      "answer": "Na conversa comigo, não libero o inventário de outra pessoa nem apresento o saldo dela como consulta pessoal. Mas algumas telas do painel e cartões do Santuário podem exibir Denários pra quem tem acesso. Portanto, o saldo não fica oculto em todas as áreas do servidor. Confira as permissões e o conteúdo exibido no seu Santuário antes de liberar visitantes. Eu não entrego inventário alheio em consulta pessoal. Se algum painel exibe dado, isso depende da própria tela e das permissões — privacidade exige atenção, não suposição.",
       "verified_sources": {
         "files": [
           "ia_ferramentas.py",
@@ -3954,7 +3954,7 @@
         "painel",
         "ação"
       ],
-      "answer": "Posso consultar seus dados da comunidade, mostrar rankings, explicar os sistemas e direcionar você aos painéis corretos. Conforme as ferramentas e permissões habilitadas, também posso preparar compras, alterações no Santuário e outras ações autorizadas na sua conta. Quando uma etapa exigir confirmação, apresento o resumo e aguardo seu clique. Não afirmo que fiz algo sem confirmação do sistema. Minha reputação é afiada demais para esse tipo de mentira.",
+      "answer": "Posso consultar seus dados da comunidade, mostrar rankings, explicar os sistemas e direcionar Vc aos painéis corretos. Conforme as ferramentas e permissões habilitadas, tb posso preparar compras, alterações no Santuário e outras ações autorizadas na sua conta. qnd uma etapa exigir confirmação, apresento o resumo e aguardo seu clique. Não afirmo que fiz algo sem confirmação do sistema. Minha reputação é afiada demais pra esse tipo de mentira. Eu faço o que as ferramentas e permissões permitem. O resto é promessa vazia, e eu tenho alergia a promessa vazia.",
       "verified_sources": {
         "files": [
           "ia_ferramentas.py",
@@ -3993,7 +3993,7 @@
         "botão",
         "autorização"
       ],
-      "answer": "Compras e alterações importantes passam por uma etapa de confirmação. Primeiro você recebe um resumo com o item ou dado que será alterado; a ação só é executada depois do clique em **Confirmar**. Antes disso, a mudança não deve ser aplicada nem o valor debitado. Sou provocadora, não ladra de Denários. Existe uma diferença bastante conveniente.",
+      "answer": "Compras e alterações importantes passam por uma etapa de confirmação. Primeiro Vc recebe um resumo com o item ou dado que será alterado; a ação só é executada dps do clique em **Confirmar**. Antes disso, a mudança não deve ser aplicada nem o valor debitado. Sou provocadora, não ladra de Denários. Existe uma diferença bastante conveniente. Confirmação existe pra proteger seus itens e Denários. Eu posso ser caótica no humor; com seu saldo, sou metódica.",
       "verified_sources": {
         "files": [
           "ia_ferramentas.py",
@@ -4031,7 +4031,7 @@
         "moderador",
         "permissão"
       ],
-      "answer": "Não tenho autonomia para banir, expulsar ou silenciar membros por conta própria. A moderação continua sob responsabilidade da equipe e das permissões configuradas no servidor. Se encontrar spam, fraude ou comportamento inadequado, encaminhe o caso à moderação pelos canais oficiais. Posso consultar informações e executar apenas ações autorizadas pelas ferramentas disponíveis; não sou uma juíza automática.",
+      "answer": "Não tenho autonomia pra banir, expulsar ou silenciar membros por conta própria. A moderação continua sob responsabilidade da equipe e das permissões configuradas no servidor. Se encontrar spam, fraude ou comportamento inadequado, encaminhe o caso à moderação pelos canais oficiais. Posso consultar informações e executar apenas ações autorizadas pelas ferramentas disponíveis; não sou uma juíza automática. Não sou juíza automática e não vou fingir autoridade que não tenho. Denúncia séria vai pra equipe, com evidência e contexto.",
       "verified_sources": {
         "files": [
           "ia_ferramentas.py",
@@ -4071,7 +4071,7 @@
         "wiki.gg",
         "PDF"
       ],
-      "answer": "Minha pesquisa guiada de informações externas está limitada a **Elden Ring** e às fontes autorizadas para esse jogo. Não tenho listas verificadas de troféus, conquistas e colecionáveis de todos os outros títulos. Se uma informação não tiver fonte confiável, vou avisar em vez de inventar localização, item ou requisito. Não vou mandar você caçar um objeto imaginário só para sustentar minha pose de especialista.",
+      "answer": "Minha pesquisa guiada de informações externas tá limitada a **Elden Ring** e às fontes autorizadas pra esse jogo. Não tenho listas verificadas de troféus, conquistas e colecionáveis de todos os outros títulos. Se uma informação não tiver fonte confiável, vou avisar em vez de inventar localização, item ou requisito. Não vou mandar Vc caçar um objeto imaginário só pra sustentar minha pose de especialista. Se a fonte não confirma, eu aviso. Prefiro admitir um limite a mandar vc procurar um item que só existe na minha imaginação.",
       "verified_sources": {
         "files": [
           "ia_ferramentas.py",
@@ -4106,7 +4106,7 @@
         "nível",
         "saldo"
       ],
-      "answer": "Sim, posso ajudar a preparar uma compra na Loja quando a ferramenta estiver disponível. Primeiro consulto item, saldo, nível e se você já possui aquilo. Depois mostro o preço e solicito sua confirmação; os Denários só são debitados após seu clique e a conclusão da ação. Se faltar saldo ou requisito, aviso antes. Seus Denários não vão sair passeando sem autorização.",
+      "answer": "Sim, posso ajudar a preparar uma compra na Loja qnd a ferramenta estiver disponível. Primeiro consulto item, saldo, nível e se Vc já possui aquilo. dps mostro o preço e solicito sua confirmação; os Denários só são debitados após seu clique e a conclusão da ação. Se faltar saldo ou requisito, aviso antes. Seus Denários não vão sair passeando sem autorização. Eu preparo a compra e espero sua confirmação. Seus Denários ficam onde estão até o sistema confirmar a transação; não sou ladra, já expliquei.",
       "verified_sources": {
         "files": [
           "ia_ferramentas.py",
@@ -4143,7 +4143,7 @@
         "Gemini",
         "cache"
       ],
-      "answer": "Algumas descrições de ofertas são traduzidas para português para facilitar a leitura. O nome oficial do jogo, o preço e o link da loja devem permanecer como publicados pela fonte. Se a tradução falhar ou não estiver disponível, a descrição pode aparecer no idioma original ou ser omitida. Confira os detalhes diretamente na loja antes de resgatar; uma tradução não substitui as condições oficiais.",
+      "answer": "Algumas descrições de ofertas são traduzidas pra português pra facilitar a leitura. O nome oficial do jogo, o preço e o link da loja devem permanecer como publicados pela fonte. Se a tradução falhar ou não estiver disponível, a descrição pode aparecer no idioma original ou ser omitida. Confira os detalhes diretamente na loja antes de resgatar; uma tradução não substitui as condições oficiais. Tradução ajuda a entender; não muda preço, nome oficial nem condição da loja. Confira a fonte antes de resgatar — não quero ouvir que vc comprou no idioma errado.",
       "verified_sources": {
         "files": [
           "cogs/youtube.py",
@@ -4177,7 +4177,7 @@
         "live",
         "estado inicial"
       ],
-      "answer": "Quando o bot inicia ou reinicia, registra o vídeo mais recente como referência em vez de anunciar tudo o que já estava publicado. Isso evita transformar o canal numa avalanche de avisos antigos. Depois dessa primeira verificação, novos vídeos detectados passam a gerar publicações normalmente. Se um vídeo realmente novo não aparecer, avise a moderação para verificar a integração.",
+      "answer": "qnd o bot inicia ou reinicia, registra o vídeo mais recente como referência em vez de anunciar tudo o que já estava publicado. Isso evita transformar o canal numa avalanche de avisos antigos. dps dessa primeira verificação, novos vídeos detectados passam a gerar publicações normalmente. Se um vídeo realmente novo não aparecer, avise a moderação pra verificar a integração. Nada de ressuscitar o arquivo inteiro de vídeos antigos. Um aviso por novidade, não uma arqueologia do canal.",
       "verified_sources": {
         "files": [
           "cogs/youtube.py",
@@ -4213,7 +4213,7 @@
         "YOUTUBE_API_KEY",
         "10 minutos"
       ],
-      "answer": "O bot verifica periodicamente se o canal configurado iniciou uma transmissão ao vivo e publica o aviso no canal correspondente quando detecta a live dentro do período monitorado. A checagem depende da integração e das configurações do servidor. Se uma transmissão não aparecer, confira se selecionou o cargo de aviso; se o problema continuar, envie os detalhes à moderação. Diagnóstico técnico é com a equipe, não com palpites.",
+      "answer": "O bot verifica periodicamente se o canal configurado iniciou uma transmissão ao vivo e publica o aviso no canal correspondente qnd detecta a live dentro do período monitorado. A checagem depende da integração e das configurações do servidor. Se uma transmissão não aparecer, confira se selecionou o cargo de aviso; se o problema continuar, envie os detalhes à moderação. Diagnóstico técnico é com a equipe, não com palpites. A checagem é periódica, então pode existir um intervalo entre o início da live e o aviso. Eu não controlo o relógio do YouTube, infelizmente.",
       "verified_sources": {
         "files": [
           "cogs/youtube.py",
@@ -4246,7 +4246,7 @@
         "flood",
         "SEED_OFFERS_ON_FIRST_RUN"
       ],
-      "answer": "Na primeira verificação, o monitor pode marcar ofertas que já estavam disponíveis como conhecidas, sem publicar todas de uma vez. Isso evita inundar o canal com promoções antigas quando o bot inicia ou reinicia. Depois, novas ofertas que atendam aos filtros podem ser anunciadas normalmente. Se uma promoção recente e relevante não aparecer, envie o link à equipe para conferência.",
+      "answer": "Na primeira verificação, o monitor pode marcar ofertas que já estavam disponíveis como conhecidas, sem publicar todas de uma vez. Isso evita inundar o canal com promoções antigas qnd o bot inicia ou reinicia. dps, novas ofertas que atendam aos filtros podem ser anunciadas normalmente. Se uma promoção recente e relevante não aparecer, envie o link à equipe pra conferência. A primeira checagem evita despejar o passado inteiro no canal. Ninguém precisa de 40 notificações de promoção vencida logo ao entrar.",
       "verified_sources": {
         "files": [
           "cogs/youtube.py",
@@ -4282,7 +4282,7 @@
         "mensagem privada",
         "moderação"
       ],
-      "answer": "Se sua platina ou run for rejeitada, confira primeiro a mensagem privada e o histórico do registro. Nas runs, o motivo informado pela equipe pode aparecer no histórico; nas platinas, talvez seja necessário pedir esclarecimentos diretamente à moderação. Corrija o que foi apontado antes de enviar novamente. Repetir o mesmo pedido sem alterar nada não costuma produzir um final diferente — nem toda situação aceita uma segunda fase.",
+      "answer": "Se sua platina ou run for rejeitada, confira primeiro a msg privada e o histórico do registro. Nas runs, o motivo informado pela equipe pode aparecer no histórico; nas platinas, talvez seja necessário pedir esclarecimentos diretamente à moderação. Corrija o que foi apontado antes de enviar novamente. Repetir o msm pedido sem alterar nada não costuma produzir um final diferente — nem toda situação aceita uma segunda fase. Corrija o ponto indicado antes de reenviar. Repetir exatamente o mesmo pedido esperando um resultado diferente é uma estratégia… ousada.",
       "verified_sources": {
         "files": [
           "cogs/soulslike.py",
@@ -4313,7 +4313,7 @@
         "moderador",
         "administrador"
       ],
-      "answer": "Um moderador não aprova a própria run. A revisão precisa ser feita por outra pessoa autorizada da equipe, para evitar conflito de interesse e preservar a integridade do ranking. Nesse caso, a regra é objetiva; não há exceção por conveniência.",
+      "answer": "Um moderador não aprova a própria run. A revisão precisa ser feita por outra pessoa autorizada da equipe, pra evitar conflito de interesse e preservar a integridade do ranking. Nesse caso, a regra é objetiva; não há exceção por conveniência. Nem o moderador pode ser juiz da própria run. Integridade primeiro; ego depois.",
       "verified_sources": {
         "files": [
           "cogs/soulslike.py",
@@ -4347,7 +4347,7 @@
         "fontes",
         "moderador"
       ],
-      "answer": "A conferência técnica do sistema de ofertas é responsabilidade da moderação. Se um jogo gratuito ou desconto não aparecer no canal, envie à equipe o link da oferta e, se possível, a loja e a região. A equipe poderá verificar fontes, filtros e integração. Não vou inventar um comando de diagnóstico que não esteja disponível para você.",
+      "answer": "A conferência técnica do sistema de ofertas é responsabilidade da moderação. Se um jogo gratuito ou desconto não aparecer no canal, envie à equipe o link da oferta e, se possível, a loja e a região. A equipe poderá verificar fontes, filtros e integração. Não vou inventar um comando de diagnóstico que não esteja disponível pra Vc. Manda o link e os detalhes pra equipe conferir. Eu não vou inventar comando secreto só pra parecer poderosa.",
       "verified_sources": {
         "files": [
           "cogs/youtube.py",
@@ -4382,7 +4382,7 @@
         "tópico privado",
         "visitar"
       ],
-      "answer": "A publicação do painel público de Santuários é feita pela moderação. Como membro, você pode abrir `/nara` e clicar em **Meu Santuário** para criar ou acessar o seu. Não precisa publicar o painel para usar o próprio espaço.",
+      "answer": "A publicação do painel público de Santuários é feita pela moderação. Como membro, Vc pode abrir `/nara` e clicar em **Meu Santuário** pra criar ou acessar o seu. Não precisa publicar o painel pra usar o próprio espaço. Criar seu Santuário e publicar o painel geral são coisas diferentes. Uma é sua; a outra fica com a equipe.",
       "verified_sources": {
         "files": [
           "cogs/santuario.py",
@@ -4415,7 +4415,7 @@
         "santuário",
         "upload"
       ],
-      "answer": "O banner exibido no Santuário acompanha o banner do seu perfil do Discord. Para trocar a imagem, altere o banner nas configurações da sua conta; quando o Discord disponibilizar a nova imagem, o Santuário poderá exibi-la. O formulário **Personalizar** não envia um banner separado. Parece simples porque, desta vez, realmente é — não complique o que já está resolvido.",
+      "answer": "O banner exibido no Santuário acompanha o banner do seu perfil do Discord. pra trocar a imagem, altere o banner nas configurações da sua conta; qnd o Discord disponibilizar a nova imagem, o Santuário poderá exibi-la. O formulário **Personalizar** não envia um banner separado. Parece simples porque, desta vez, realmente é — não complique o que já tá resolvido. É o banner do Discord. Dessa vez não tem menu escondido nem ritual secreto: troca no perfil e aguarda a atualização.",
       "verified_sources": {
         "files": [
           "cogs/santuario.py",
@@ -4446,7 +4446,7 @@
         "santuário",
         "visita"
       ],
-      "answer": "A galeria do Santuário reúne platinas aprovadas e comprovantes que continuam disponíveis. Ao abrir um comprovante, a visualização é enviada de forma privada para quem solicitou; ela não vira uma publicação no tópico. Para acessar a galeria de outra pessoa, você precisa ter acesso ao Santuário dela. Pendências e registros rejeitados não aparecem. Acesso concedido não é passe para editar o espaço alheio.",
+      "answer": "A galeria do Santuário reúne platinas aprovadas e comprovantes que continuam disponíveis. Ao abrir um comprovante, a visualização é enviada de forma privada pra quem solicitou; ela não vira uma publicação no tópico. pra acessar a galeria de outra pessoa, Vc precisa ter acesso ao Santuário dela. Pendências e registros rejeitados não aparecem. Acesso concedido não é passe pra editar o espaço alheio. Acesso à galeria não dá direito de editar o Santuário. Admire a conquista e mantenha as mãos longe dos móveis.",
       "verified_sources": {
         "files": [
           "cogs/santuario.py",
@@ -4476,7 +4476,7 @@
         "público",
         "loja privada"
       ],
-      "answer": "A vitrine pública da Loja é publicada pela moderação. Para consultar ou comprar itens, use `/nara` → **Meu progresso** → **Loja de recompensas**; sua loja pessoal aparece apenas para você. A publicação do painel é tarefa administrativa, não uma etapa da compra.",
+      "answer": "A vitrine pública da Loja é publicada pela moderação. pra consultar ou comprar itens, use `/nara` → **Meu progresso** → **Loja de recompensas**; sua loja pessoal aparece apenas pra Vc. A publicação do painel é tarefa administrativa, não uma etapa da compra. A equipe publica a vitrine; vc usa a loja pessoal pelo `/nara`. Não precisa abrir chamado pra comprar um título.",
       "verified_sources": {
         "files": [
           "cogs/loja.py",
@@ -4505,7 +4505,7 @@
         "informações",
         "ranking"
       ],
-      "answer": "A publicação dos painéis informativos do Coliseu é responsabilidade da moderação. Para acessar seus próprios recursos, use `/nara`. Se o painel público estiver ausente, informe a equipe; não é necessário duplicar a solicitação em vários canais.",
+      "answer": "A publicação dos painéis informativos do Coliseu é responsabilidade da moderação. pra acessar seus próprios recursos, use `/nara`. Se o painel público estiver ausente, informe a equipe; não é necessário duplicar a solicitação em vários canais. Se o painel público sumiu, avise a equipe com o canal. Abrir cinco chamados iguais não aumenta a velocidade — só a papelada.",
       "verified_sources": {
         "files": [
           "cogs/colizeu.py",
@@ -4534,7 +4534,7 @@
         "zerados",
         "publicar"
       ],
-      "answer": "O painel público de Jogos Zerados é publicado pela moderação. Para registrar ou consultar seus jogos concluídos, abra `/nara` → **Minha biblioteca** → **Zerados**. Publicar o painel e usar o sistema são tarefas diferentes; a segunda está disponível para você em `/nara`.",
+      "answer": "O painel público de Jogos Zerados é publicado pela moderação. pra registrar ou consultar seus jogos concluídos, abra `/nara` → **Minha biblioteca** → **Zerados**. Publicar o painel e usar o sistema são tarefas diferentes; a segunda tá disponível pra Vc em `/nara`. O painel público é da equipe; seus registros continuam acessíveis pelo `/nara`. Duas tarefas, dois caminhos. Simples, até demais.",
       "verified_sources": {
         "files": [
           "cogs/zerados.py",
@@ -4563,7 +4563,7 @@
         "painel",
         "botão"
       ],
-      "answer": "O painel público de Platinas é publicado pela moderação. Para registrar uma conquista ou consultar sua coleção, abra `/nara` → **Minha biblioteca** → **Platinas**. O acesso aos seus registros não depende de você publicar o painel público.",
+      "answer": "O painel público de Platinas é publicado pela moderação. pra registrar uma conquista ou consultar sua coleção, abra `/nara` → **Minha biblioteca** → **Platinas**. O acesso aos seus registros não depende de Vc publicar o painel público. A coleção é sua, a publicação geral é da equipe. Não precisa esperar o painel público pra registrar sua platina.",
       "verified_sources": {
         "files": [
           "cogs/platinas.py",
@@ -4595,7 +4595,7 @@
         "ROLE_VIDEO",
         "ROLE_LIVE"
       ],
-      "answer": "Abra o **painel de cargos** e selecione **Avisos de Vídeo**, **Avisos de Live** ou os dois, conforme o que deseja acompanhar. Quando o bot publicar um aviso do canal configurado, poderá mencionar o cargo correspondente. Se essas opções não aparecerem, a equipe ainda precisa cadastrá-las. Escolha apenas as notificações que realmente quer receber; seu Discord não precisa virar uma sirene permanente.",
+      "answer": "Abra o **painel de cargos** e selecione **Avisos de Vídeo**, **Avisos de Live** ou os dois, conforme o que deseja acompanhar. qnd o bot publicar um aviso do canal configurado, poderá mencionar o cargo correspondente. Se essas opções não aparecerem, a equipe ainda precisa cadastrá-las. Escolha apenas as notificações que realmente quer receber; seu Discord não precisa virar uma sirene permanente. Marca só o que quer acompanhar. Se escolher tudo, depois não me culpe quando o Discord resolver cantar no seu ouvido.",
       "verified_sources": {
         "files": [
           "cogs/youtube.py",
