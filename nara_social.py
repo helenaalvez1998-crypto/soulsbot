@@ -41,12 +41,12 @@ SAUDACOES = (
     "tudo bem", "como voce esta", "como vai", "de boa", "suave", "tudo certo", "valeu",
     "obrigado", "obrigada", "obg", "tmj", "tchau", "falou", "ate mais", "fui",
     "voce e chata", "voce e burra", "nara", "ta ai", "esta ai", "sentiu minha falta",
+    "calma ai gatinha", "calma ai nara", "calma ai", "gatinha",
 )
 
 RESPOSTA_FORA_ESCOPO = (
-    "Aham, e eu aqui achando que você ia perguntar algo do nosso caos. Esse assunto está fora do meu território. "
-    "Sou a NARA desta comunidade: servidor, membros, jogos, Soulslikes, troféus e nossas atividades. "
-    "Tenta de novo, mas dentro do nosso universo."
+    "Isso foge um pouco do meu universo kkk. Eu cuido da comunidade, do servidor, dos jogos e dos sistemas do NARA. "
+    "Se tiver alguma ligação com isso, me dá o contexto."
 )
 
 @dataclass(frozen=True)

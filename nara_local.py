@@ -387,8 +387,8 @@ def resposta_local_fallback(mensagem: str) -> str:
             "Não vou inventar requisito só pra bancar a especialista; até eu tenho padrões."
         )
     return (
-        "Isso aí tá fora do meu território. Eu cuido da comunidade: servidor, membros, Soulslikes, platinas, runs, zerados, rankings, XP, Denários e painéis. "
-        "Traz a pergunta pra esse universo que eu resolvo, e talvez com um comentário atravessado."
+        "Isso já foge do meu território kkk. Eu cuido da comunidade, do servidor, dos jogos, das conquistas e dos sistemas do NARA. "
+        "Se tiver relação com esse universo, me dá o contexto."
     )
 
 

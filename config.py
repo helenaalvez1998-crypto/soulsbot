@@ -81,6 +81,8 @@ if LOG_LEVEL not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
 
 TOKEN = os.getenv("DISCORD_TOKEN", "").strip()
 BOT_OWNER_ID = _env_int("BOT_OWNER_ID", 0)
+# Conta do criador no Discord; o apelido público pode mudar, a identidade não.
+SOULS_USER_ID = 1300117955236991046
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "").strip()
 YOUTUBE_CHANNEL_ID = os.getenv("YOUTUBE_CHANNEL_ID", "").strip()
 

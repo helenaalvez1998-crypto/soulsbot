@@ -1,45 +1,37 @@
-# Revisão completa da base de respostas da NARA
+# Revisão da base de respostas locais da NARA
 
-## Escopo revisado
+## Escopo desta revisão
 
 A base `dados/nara_faq.json` contém 125 intenções:
 
-- **108 respostas estáticas** (`answer`): todas foram reescritas nesta revisão. A comparação com a versão textual anterior confirma que as 108 respostas preenchidas foram alteradas.
-- **17 respostas dinâmicas** (`handler`): permanecem sem texto estático no JSON por desenho. O conteúdo é montado em tempo real pelo código a partir de configurações do servidor, consultas ao banco, comandos disponíveis e dados do membro. Os textos desses caminhos também foram revisados.
-
-As respostas restritas (`staff_only`) continuam marcadas como restritas. Os exemplos de perguntas, palavras-chave, categorias, fontes verificadas, identificadores de intenção e parâmetros de correspondência foram preservados.
+- **108 respostas estáticas** (`answer`): revisadas para refletir a personalidade da NARA no Discord e incorporar abreviações brasileiras naturais. 106 textos foram modificados nesta rodada; 2 já estavam alinhados ao padrão.
+- **17 respostas dinâmicas** (`handler`): continuam sendo montadas pelos handlers do código, com dados do servidor e do usuário. Esta revisão preserva seus identificadores e fluxos; a redação dinâmica deve ser validada em execução no Discord.
 
 ## Critérios editoriais
 
-1. A NARA se comunica por texto no Discord. Ela lê mensagens e responde por mensagens; não possui fala, voz ou envio de áudio.
-2. A personalidade aparece na escolha das palavras, na autoconfiança, na ironia contextual e em comentários teatrais pontuais.
-3. O sarcasmo não é aplicado mecanicamente. Dúvidas legítimas recebem instruções claras; privacidade, permissões, falhas técnicas e moderação mantêm tom objetivo.
-4. Nenhum texto deve prometer uma ação que dependa de ferramenta, permissão, confirmação ou aprovação ainda não concluída.
-5. Comandos, nomes de painéis, requisitos, valores, prazos, limites, condições de aprovação e regras foram mantidos conforme a base e as implementações citadas em `verified_sources`.
+1. Abreviações como `vc`, `tb`, `pra`, `tá`, `dps`, `agr`, `msm`, `mto`, `qnd` e `msg` aparecem com moderação, sem transformar cada frase em uma sequência de siglas.
+2. A personalidade é confiante, espontânea e levemente provocadora quando o contexto permite.
+3. Privacidade, moderação, segurança, falhas e instruções técnicas mantêm clareza e objetividade.
+4. Comandos, nomes de painéis, requisitos, valores, prazos, limites e condições de aprovação foram preservados.
+5. A NARA responde por texto no Discord; não deve afirmar que ouviu áudio ou analisou imagens que não consegue processar.
 
-## Caminhos dinâmicos também revisados
+## Arquivos atualizados
 
-Os handlers cobertos incluem XP, Denários, recompensas configuráveis, saldo, perfil, platinas, jogos zerados, runs, inventário, rankings, ajuda, canais visíveis, cargos, sistemas ativos e tutorial de transmissão no Discord.
+- `dados/nara_faq.json` — revisão das respostas estáticas.
+- `prompts/nara_conversa.md` — reforço das regras de conversa e do tratamento de prints como não oficiais.
 
-Os dados variáveis continuam sendo obtidos pelo fluxo original. A revisão alterou a redação, não as consultas SQL, os critérios de classificação, as permissões, a lógica de confirmação ou as fórmulas de economia.
-
-## Arquivos alterados
-
-- `dados/nara_faq.json` — reescrita das 108 respostas fixas e atualização da descrição da base.
-- `cogs/nara_ia.py` — redação das respostas dinâmicas e mensagens locais relacionadas.
-- `nara_estilo_textual.py` — aberturas contextuais das consultas pessoais e rankings.
-- `nara_conhecimento.py` — texto de ajuda, canais e sistemas ativos.
-- `nara_local.py` — fallback textual.
-- `tests/test_nara_estilo_textual.py` — expectativas atualizadas para a nova redação.
-- `tests/test_faq_personalidade.py` — verificações de cobertura, textualidade e preservação de dados operacionais.
+Os módulos de roteamento e os handlers dinâmicos foram mantidos para não alterar a lógica de negócio nesta rodada.
 
 ## Validação
 
-- JSON válido: aprovado.
-- Compilação Python: aprovada.
-- Suíte automatizada: **143 testes aprovados**.
-- Intenções: 125.
-- Respostas estáticas reescritas: 108 de 108.
-- Caminhos dinâmicos: 17 de 17 mantidos e revisados.
+- JSON da FAQ: válido.
+- Compilação Python (`compileall`): aprovada.
+- Testes focados de FAQ, base, estilo textual, conversa e conhecimento: **61 aprovados**.
+- Suíte completa: **149 aprovados, 2 ignorados e 4 falhas preexistentes/fora do escopo textual**, relacionadas a mapeamento de comandos, ausência de `.env.example` e uma expectativa de teste de prompt. Essas falhas precisam ser corrigidas separadamente antes de considerar a suíte integralmente verde.
 
-A revisão não altera a lógica de negócio do bot. Os testes automatizados não substituem uma validação manual em um servidor Discord real, especialmente para permissões e integrações externas.
+A revisão textual não altera consultas SQL, permissões, critérios de classificação, recompensas ou confirmações. Ainda é necessária validação manual no servidor Discord/Fatehost.
+
+
+## Segunda passada de personalidade
+
+As respostas estáticas receberam uma camada adicional de voz contextual, inspirada no perfil canônico da NARA: provocação inteligente, teatralidade em jogos, competitividade e primeira pessoa quando natural. Mensagens sensíveis e operacionais permanecem objetivas. Foram acrescentadas falas específicas por intenção, evitando um bordão único repetido.
