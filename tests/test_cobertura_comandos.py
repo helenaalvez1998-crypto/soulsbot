@@ -1,6 +1,6 @@
 """Garante que todo comando continua acessível por botão em /nara (membros) ou /adm (admin).
 
-Só /nara e /adm são publicados no Discord. Os demais comandos existem nos cogs, mas só
+Os comandos principais publicados são /nara, /adm e /nara_relacionamento. Os demais comandos existem nos cogs, mas só
 podem ser usados se houver um botão/ação em algum painel. Se este teste falhar após você
 adicionar um comando, inclua-o em COBERTURA apontando para a ação do painel que o abre.
 """
@@ -11,7 +11,7 @@ from tests.test_ux_navigation import _category_actions
 
 ROOT = Path(__file__).resolve().parents[1]
 
-PUBLICADOS = {"nara", "adm"}
+PUBLICADOS = {"nara", "adm", "nara_relacionamento"}
 
 # comando -> (painel, ação). Painel "membros" = /nara; "admin" = /adm.
 COBERTURA = {

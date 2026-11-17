@@ -8,7 +8,7 @@ def test_catalog_and_news_modules_are_loaded_by_nara():
     source = (ROOT / "bot.py").read_text(encoding="utf-8")
     assert '"cogs.catalogo_integrado"' in source
     assert '"cogs.game_news"' in source
-    assert "COMANDOS_PRINCIPAIS = frozenset({\"nara\", \"adm\"})" in source
+    assert "COMANDOS_PRINCIPAIS = frozenset({\"nara\", \"adm\", \"nara_relacionamento\"})" in source
 
 
 def test_catalog_module_does_not_create_or_run_a_second_bot():

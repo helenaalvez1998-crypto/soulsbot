@@ -5,7 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BOT_SOURCE = (ROOT / "bot.py").read_text(encoding="utf-8")
 
 
-def test_only_nara_and_adm_are_allowed_primary_slash_commands():
+def test_only_approved_primary_slash_commands_are_allowed():
     tree = ast.parse(BOT_SOURCE)
     assignment = next(
         node for node in tree.body
@@ -14,7 +14,7 @@ def test_only_nara_and_adm_are_allowed_primary_slash_commands():
     )
     assert isinstance(assignment.value, ast.Call)
     allowed = ast.literal_eval(assignment.value.args[0])
-    assert set(allowed) == {"nara", "adm"}
+    assert set(allowed) == {"nara", "adm", "nara_relacionamento"}
 
 
 def test_startup_filters_commands_before_remote_sync():

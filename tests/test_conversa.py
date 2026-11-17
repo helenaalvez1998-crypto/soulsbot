@@ -245,12 +245,25 @@ def _carregar_cog():
         def listener(*a, **k):
             return lambda f: f
 
+    class Group:
+        def __init__(self, **kwargs):
+            self.name = kwargs.get("name")
+            self.description = kwargs.get("description")
+
+        @staticmethod
+        def command(**kwargs):
+            return lambda f: f
+
+    identidade = lambda **kwargs: (lambda f: f)
+
     discord = types.ModuleType("discord")
     discord.Message = Message
+    discord.Member = type("Member", (), {})
     discord.Interaction = object
     discord.AllowedMentions = SimpleNamespace(none=lambda: None)
     discord.app_commands = SimpleNamespace(
-        command=lambda **k: (lambda f: f), default_permissions=lambda **k: (lambda f: f))
+        command=identidade, default_permissions=identidade, Group=Group,
+        guild_only=lambda: (lambda f: f), describe=identidade)
     ext = types.ModuleType("discord.ext")
     commands = types.ModuleType("discord.ext.commands")
     commands.Cog = Cog
