@@ -2919,7 +2919,7 @@
         "api",
         "resposta local"
       ],
-      "answer": "Resolvo localmente muitas dúvidas sobre os sistemas da comunidade e posso consultar seus dados quando você pede: perfil, conquistas, registros e rankings, por exemplo. Perguntas mais específicas podem depender de outros recursos, e nem tudo passa pela mesma função. Se eu não tiver informação suficiente ou não conseguir consultar algo, vou deixar isso claro. Prefiro admitir um limite a entregar uma resposta elegante e errada — tenho padrões.",
+      "answer": "Muita coisa eu resolvo na hora: sistemas da comunidade, seus dados, registros e rankings. O papo livre e as perguntas mais abertas pedem mais fôlego e têm limite por dia. Se eu não tiver informação suficiente, digo que não sei. Prefiro admitir um limite a entregar uma resposta bonita e errada.",
       "verified_sources": {
         "files": [
           "cogs/admin.py",
@@ -3065,7 +3065,7 @@
         "conversa",
         "ferramentas"
       ],
-      "answer": "Posso responder dúvidas da comunidade por mensagens e, quando o recurso estiver habilitado, consultar informações específicas sobre jogos. Você não precisa conhecer a arquitetura por trás disso: escreva o que precisa e eu identifico o caminho disponível. Só não confunda conversa com pesquisa externa; são funções diferentes e têm limites próprios.",
+      "answer": "Eu converso com você sobre a comunidade e, quando o recurso está ligado, procuro informação específica de jogo. Você não precisa saber como funciona por trás: escreve o que precisa e eu vejo o caminho. Só não confunda conversa com pesquisa externa; cada uma tem seus limites.",
       "verified_sources": {
         "files": [
           "cogs/nara_ia.py",
@@ -3102,7 +3102,7 @@
         "250 por servidor",
         "6 segundos"
       ],
-      "answer": "Se eu pedir que aguarde, você atingiu um limite de uso aplicado para manter o serviço disponível para todos. Espere um pouco e tente novamente. Enviar a mesma pergunta em sequência não remove o limite; só cria mais tentativas para a fila administrar. Paciência é uma habilidade subestimada.",
+      "answer": "Se eu pedir pra você esperar, bateu o limite de conversa pra manter o papo justo pra todo mundo. Espera um pouco e tenta de novo. Mandar a mesma pergunta em sequência só atrapalha. Paciência é uma habilidade subestimada.",
       "verified_sources": {
         "files": [
           "cogs/nara_ia.py",
@@ -3137,7 +3137,7 @@
         "3 por dia",
         "cooldown"
       ],
-      "answer": "Pesquisas mais completas podem ter um limite diário. Se eu avisar que você atingiu esse limite, tente novamente no dia seguinte ou use o painel específico da comunidade, quando houver. Não vou inventar um resultado para contornar uma restrição técnica. Até a curiosidade precisa respeitar orçamento.",
+      "answer": "Pesquisa mais pesada tem limite por dia. Se eu avisar que acabou, tenta amanhã ou usa os painéis da comunidade. Não vou inventar resultado pra driblar isso. Até a curiosidade precisa respeitar orçamento.",
       "verified_sources": {
         "files": [
           "cogs/nara_ia.py",
@@ -3174,7 +3174,7 @@
         "terceira",
         "quota"
       ],
-      "answer": "Se um serviço de IA ficar indisponível, tento usar outra conexão configurada. Se todas falharem, alguns recursos locais continuam funcionando, mas posso perder acesso a respostas que dependem de conversa avançada ou pesquisa. Os painéis e consultas locais não dependem necessariamente dessas conexões. Quando houver uma falha, vou sinalizar em vez de fingir normalidade.",
+      "answer": "Se meu lado conversador falhar, eu tento outro caminho antes de desistir. Se nada funcionar, painéis e consultas seguem normais; só o papo livre e as pesquisas ficam de molho. Quando der problema, eu aviso em vez de fingir que está tudo bem.",
       "verified_sources": {
         "files": [
           "cogs/nara_ia.py",
@@ -3318,7 +3318,7 @@
         "sqlite",
         "contingência"
       ],
-      "answer": "Mesmo que a conversa avançada fique indisponível, os recursos locais do NARA continuam funcionando: painéis, consultas de perfil, saldo, inventário e rankings. Perguntas que dependem da IA podem ficar sem resposta até o serviço voltar. Se eu não conseguir consultar algo, vou dizer isso claramente em vez de inventar. Não sou milagreira; tenho uma reputação a preservar.",
+      "answer": "Mesmo quando meu papo livre dá uma travada, os painéis e as consultas continuam comigo: perfil, saldo, inventário, rankings, tudo no `/nara`. O que depende de conversa mais elaborada pode esperar até eu voltar ao normal. Se eu não conseguir consultar algo, falo na lata em vez de inventar. Não sou milagreira; tenho reputação a preservar.",
       "verified_sources": {
         "files": [
           "cogs/nara_ia.py",
@@ -3491,7 +3491,7 @@
         "analisar",
         "visão"
       ],
-      "answer": "Não. Nesta conversa, a NARA não recebe nem analisa prints ou imagens enviados no chat. Para registrar platina, run ou jogo zerado, anexe a imagem ou o vídeo no formulário específico da atividade. Assim, o arquivo fica associado ao jogo, à plataforma e aos dados que a equipe precisa revisar. Eu posso orientar o processo; a aprovação continua sendo responsabilidade da moderação.",
+      "answer": "Não. Eu não olho print nem imagem mandada no chat. Pra registrar platina, run ou jogo zerado, anexe o arquivo no formulário da própria atividade (em `/nara` → **Minha biblioteca**): assim ele fica ligado ao jogo, à plataforma e aos dados que a equipe precisa revisar. Eu oriento o caminho; quem aprova é a moderação.",
       "verified_sources": {
         "files": [
           "nara_local.py",
