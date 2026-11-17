@@ -54,7 +54,7 @@ def test_perguntas_de_assunto_externo_nao_sao_absorvidas_pelo_faq():
 
 def test_respostas_prontas_sao_mensagens_finais_e_nao_prompts():
     texto = faq_base.resposta_pronta("como_registrar_platina")
-    assert texto and "`/coliseu`" in texto
+    assert texto and "`/nara`" in texto and "Registrar platina" in texto
     assert "Você é" not in texto and "instrução" not in texto.lower()
 
 
