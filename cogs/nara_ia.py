@@ -31,6 +31,7 @@ import nara_conhecimento
 import nara_conversa as conv
 import nara_social
 import nara_estilo_textual
+import nara_respostas
 
 log = logging.getLogger("nara.ia")
 
@@ -480,7 +481,7 @@ class NaraIA(commands.Cog):
         guild_id = getattr(getattr(message, "guild", None), "id", 0) or 0
         anexos = getattr(message, "attachments", None) or []
         if not texto.strip() and not anexos:
-            return random.choice(["Pode escrever. Estou lendo.", "Mensagem recebida. Qual é a missão?"])
+            return nara_respostas.resposta_social("mensagem_vazia", nome=nome)
 
         contexto = self._contexto_nara(message)
         decisao_escopo = nara_social.avaliar_escopo(texto, contexto, tem_imagem=bool(anexos))
@@ -575,6 +576,7 @@ class NaraIA(commands.Cog):
         db = self.bot.db
         autor = message.author
         guild = message.guild
+        nome = "Souls" if int(getattr(autor, "id", 0) or 0) == config.SOULS_USER_ID else autor.display_name
 
         # Respostas comunitárias passam por aprovação humana e ficam separadas da FAQ editorial oficial.
         if str(intent).startswith("community_faq:"):
@@ -611,15 +613,12 @@ class NaraIA(commands.Cog):
                 "**Atenção:** esse método usa software de terceiros e pode contrariar regras ou restrições do Discord. Não desative o Microsoft Defender nem ignore alertas do Windows para executá-lo. Se o Windows bloquear o arquivo ou apontar risco, interrompa e verifique a origem, a assinatura/hash e o arquivo com ferramentas de segurança antes de decidir. O funcionamento não é garantido."
             )
         if intent == "saudacao":
-            import config
             from datetime import datetime
             hora = datetime.now(config.BRAZIL_TZ).hour
             cumprimento = "Bom dia" if hora < 12 else ("Boa tarde" if hora < 18 else "Boa noite")
-            return random.choice([
-                f"{cumprimento}! Tudo bem por aqui kkk. E contigo?",
-                f"Opa! Tô bem, por aqui tudo em ordem. E você?",
-                f"Tudo certo por aqui. Só administrando o caos habitual da comunidade. E aí?",
-            ])
+            return nara_respostas.resposta_social("saudacao", nome=nome, cumprimento=cumprimento)
+        if intent in nara_respostas.INTENCOES_SOCIAIS:
+            return nara_respostas.resposta_social(intent, nome=nome)
         if intent == "ajuda":
             return (
                 "**Mapa rápido: tudo começa no `/nara`** (painel privado, só você vê).\n"
@@ -627,31 +626,21 @@ class NaraIA(commands.Cog):
                 "• 📚 **Minha biblioteca** — Platinas, Zerados, Runs e desafios, Remover zerado.\n"
                 "• 🏆 **Meu progresso** — nível e XP, ranking, Loja.\n"
                 "• 👤 **Meu perfil** · 🏛️ **Meu Santuário** · 🧠 **Preferências** · 📡 **Comunidade** · ❔ **Ajuda e suporte**.\n"
-                "Pergunta específica? Fala comigo que eu aponto o botão certo. Decorar tudo eu não espero de ninguém."
+                "Tem uma dúvida específica? Fala cmg que eu aponto o botão certo. Decorar tudo seria um castigo desnecessário."
             )
         if intent == "sistemas_ativos":
             return nara_conhecimento.formatar_sistemas(self.bot)
         if intent == "canais_servidor":
             canais = nara_conhecimento.canais_visiveis(guild, autor)
-            return ("**Mapa dos canais liberados para sua conta:**\n" + "\n".join(f"• {nome}" for nome in canais[:40])) \
-                if canais else "Não encontrei canais visíveis para sua conta neste servidor. A equipe pode conferir as permissões se isso parecer incorreto."
+            return ("**Canais que sua conta consegue ver:**\n" + "\n".join(f"• {nome}" for nome in canais[:40])) \
+                if canais else "Não achei nenhum canal visível pra vc neste servidor. Se isso parece errado, pede pra equipe conferir as permissões."
         if intent == "meus_cargos":
             cargos = [getattr(c, "name", str(c)) for c in getattr(autor, "roles", [])
                       if getattr(c, "name", "") != "@everyone"]
-            return "**Cargos associados à sua conta:**\n" + "\n".join(f"• {nome}" for nome in cargos) if cargos else "Por enquanto, sua conta não tem cargos adicionais além de `@everyone`. Uma página em branco — não necessariamente por muito tempo."
+            return "**Cargos da sua conta:**\n" + "\n".join(f"• {nome}" for nome in cargos) if cargos else "Por enquanto, vc só tem `@everyone`. Começo humilde — ainda dá pra mudar esse quadro."
 
         respostas = {
             "ajuda": "**Vamos ao mapa do NARA.**\n• `/nara` — sua central de jogos, biblioteca, conquistas, perfil e suporte.\n• **Jogos zerados** — registre e consulte jogos concluídos.\n• **Remover zerado** — corrija um registro seu.\n• **Meu nível** — consulte XP, patente e progresso.\n• **Ranking de XP** — veja a classificação.\n• **Loja** — confira itens cosméticos e preços.\nUse os painéis para abrir formulários e detalhes. Não precisa decorar tudo; eu também não espero esse tipo de milagre.",
-            "recompensas": "As recompensas dependem das configurações atuais do servidor. Platinas, runs e jogos zerados só concedem XP/Denários depois da aprovação da moderação. Acompanhe os registros em `/nara` → **Minha biblioteca** e gaste Denários em **Meu progresso** → **Loja de recompensas**.",
-            "agradecimento": random.choice(["Disponha. Guarde a gratidão; Denários seriam uma contribuição mais concreta. 😏", "Por nada. Trabalho bem feito não precisa de cerimônia — embora elogios sejam aceitos.", "Tamo junto. Só não transforme isso numa quest secundária de agradecimento." ]),
-            "despedida": random.choice(["Até mais. Que sua próxima tentativa tenha menos mortes desnecessárias.", "Vai lá. E tenta não virar decoração de arena antes da próxima conversa.", "Até depois. A comunidade continua de pé; faça sua parte para não testar essa afirmação."]),
-            "como_esta": random.choice(["Tô bem kkk. E você?", "Tudo certo por aqui, só o caos habitual da comunidade. E aí?", "Bem! Hoje até os sistemas resolveram colaborar."]),
-            "provocacao": random.choice(["KKKK tá bom, essa eu deixo passar.", "Olha a coragem. Gostei, mas não se empolga.", "Pode tentar de novo, essa provocação veio meio sem força."]),
-            "status": "Tô por aqui, se tá lendo isso. Painéis e consultas funcionam normal; o papo livre tem limite por dia. Sim, eu também prefiro quando tudo coopera.",
-            "piada": random.choice(["Um jogador Soulslike entrou numa reunião. Morreu três vezes antes de encontrar o botão de sair.", "Qual é o chefe mais pontual? O que sempre chega na segunda fase.", "Minha build favorita? Defesa alta contra perguntas sem contexto." ]),
-            "motivacao": random.choice(["Você não precisa vencer o chefe inteiro hoje. Só precisa aprender o padrão do próximo golpe.", "Progresso não é ausência de mortes; é voltar sabendo mais do que antes.", "Uma tentativa ruim ainda é informação. Use-a na próxima." ]),
-            "criador": "O Souls criou o servidor e é quem manda aqui. Eu toco o dia a dia, mas não vou inventar opinião ou decisão que ele não declarou.",
-            "faq_geral": "Dúvida sobre XP, Denários, patentes, platinas, zerados, runs, loja ou painéis? Isso eu resolvo rápido. Diz qual sistema você quer ver.",
         }
         if intent in respostas:
             return respostas[intent]
@@ -669,20 +658,20 @@ class NaraIA(commands.Cog):
             xp_zerado = config.XP_ZERADO if xp_zerado is None else int(xp_zerado)
             den_zerado = config.DENARIOS_ZERADO if den_zerado is None else int(den_zerado)
             if intent == "como_ganhar_xp":
-                return ("Vamos aos valores configurados neste servidor. "
+                return ("Beleza, estes são os valores configurados no servidor: "
                         f"Mensagens válidas rendem **{XP_MENSAGEM_MIN}–{XP_MENSAGEM_MAX} XP**, respeitando o intervalo de 60 segundos. "
                         f"A participação em canal de voz rende **{XP_VOZ_POR_INTERVALO} XP a cada 5 minutos**, com pelo menos duas pessoas. "
                         f"Platina aprovada: **{xp_platina} XP**; jogo zerado aprovado: **{xp_zerado} XP**. "
-                        "Runs aprovadas seguem a regra própria da Central Soulslike. Aí está o mapa; agora use-o com inteligência.")
+                        "Runs aprovadas seguem a regra própria da Central Soulslike. Agora vc tem os números — usa com inteligência.")
             if intent == "como_ganhar_denarios":
-                return ("Denários são a moeda usada na Loja para itens cosméticos. "
+                return ("Denários são a moeda da Loja para itens cosméticos. "
                         f"Platina aprovada: **{den_platina} Denários**; jogo zerado aprovado: **{den_zerado} Denários**. "
-                        "Abra `/nara` → **Meu progresso** → **Loja de recompensas** para conferir cores e títulos disponíveis. Não gaste tudo antes de olhar o catálogo; seria um desperdício bastante previsível.")
-            return ("Estes são os valores atuais do servidor: "
+                        "Abra `/nara` → **Meu progresso** → **Loja de recompensas** pra conferir cores e títulos disponíveis. Não gaste td antes de olhar o catálogo; eu não vou financiar arrependimento.")
+            return ("Os valores atuais do servidor são estes: "
                     f"uma platina aprovada concede **{xp_platina} XP** e **{den_platina} Denários**; "
                     f"um jogo zerado aprovado pode conceder **{xp_zerado} XP** e **{den_zerado} Denários**. "
                     f"Mensagens válidas rendem **{XP_MENSAGEM_MIN}–{XP_MENSAGEM_MAX} XP** e a participação em voz rende **{XP_VOZ_POR_INTERVALO} XP** "
-                    "a cada cinco minutos, conforme as condições do sistema. Runs têm regras próprias na Central Soulslike. Os valores podem ser ajustados pela administração.")
+                    "a cada cinco minutos, conforme as condições do sistema. Runs seguem as regras próprias da Central Soulslike. A administração pode ajustar esses valores.")
 
         user = await db.get_user(autor.id)
         xp = int(user["xp"] or 0)
@@ -737,7 +726,7 @@ class NaraIA(commands.Cog):
             getter, label = getters[intent]
             rows = await getter(10)
             if not rows:
-                return f"Ainda não há registros suficientes para montar o ranking de {label}. A arena está aberta, mas faltam competidores com registros válidos. Uma oportunidade excelente para quem pretende aparecer primeiro."
+                return f"Ainda não há registros suficientes pra montar o ranking de {label}. A arena tá aberta; falta alguém aparecer com registros válidos. Uma chance bem conveniente pra vc puxar a fila."
             linhas = []
             for i, row in enumerate(rows, 1):
                 membro = guild.get_member(int(row["user_id"])) if guild else None
