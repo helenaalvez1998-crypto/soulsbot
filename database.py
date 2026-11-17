@@ -500,6 +500,10 @@ class Database:
         # SQLite :memory: usa uma única conexão compartilhada. Serializar transações
         # evita que duas corrotinas intercalem BEGIN/COMMIT na mesma conexão.
         self._memory_lock = asyncio.Lock()
+        # Cache em memória da tabela kv (configurações por servidor). GuildConfig.get() é
+        # chamado a cada mensagem e a cada botão; sem cache, cada chamada entra na fila
+        # da única conexão SQLite e atrasa as respostas das interações.
+        self._kv_cache: dict[str, str | None] = {}
 
     async def connect(self):
         os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
@@ -510,6 +514,8 @@ class Database:
         if self.path != ":memory:":
             await self.conn.execute("PRAGMA journal_mode = WAL")
             await self.conn.execute("PRAGMA synchronous = NORMAL")
+        await self.conn.execute("PRAGMA temp_store = MEMORY")
+        await self.conn.execute("PRAGMA cache_size = -20000")  # ~20 MB de cache de páginas
         await self.conn.executescript(SCHEMA)
         # Migrações incrementais para bancos já existentes.
         cols = [r["name"] for r in await self._all("PRAGMA table_info(platinas)")]
@@ -1271,8 +1277,12 @@ class Database:
         )
 
     async def get_kv(self, key: str):
+        if key in self._kv_cache:
+            return self._kv_cache[key]
         row = await self._one("SELECT value FROM kv WHERE key=?", (key,))
-        return row["value"] if row else None
+        valor = row["value"] if row else None
+        self._kv_cache[key] = valor
+        return valor
 
     async def set_kv(self, key: str, value: str):
         await self.conn.execute(
@@ -1280,6 +1290,7 @@ class Database:
             (key, value),
         )
         await self.conn.commit()
+        self._kv_cache[key] = value
 
     async def ranking_runs(self, limite: int = 10):
         return await self._all(
