@@ -74,7 +74,7 @@ class PedidoTests(unittest.TestCase):
         txt = conv.carregar_prompt()
         self.assertIn("Nara", txt)
         self.assertNotIn("/jogo_buscar", txt)  # comando removido
-        self.assertLess(len(txt), 6000)  # personalidade compacta para conter custo por chamada
+        self.assertLess(len(txt), 8500)  # personalidade compacta (inclui a persona humana) para conter custo por chamada
         self.assertIn("apenas por texto no Discord", txt)
         self.assertIn("não fala nem envia áudio", txt)
 
