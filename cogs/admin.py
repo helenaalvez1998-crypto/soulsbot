@@ -261,7 +261,7 @@ class ModeracaoPainelView(discord.ui.View):
             row = dict(row)
             if tipo == "ports":
                 embed, arquivo = catalogo.jogo_embed(row)
-                view = catalogo.PendenteView(row, {"pagina": 0})
+                view = catalogo.PendenteView(row, {"mode": "pendentes", "plataforma": None, "query": None, "page": 0})
                 kwargs = {"embed": embed, "view": view}
                 if arquivo:
                     kwargs["file"] = arquivo
@@ -1072,8 +1072,35 @@ ADMIN_CATEGORIAS = {
 }
 
 
+# ── Controle de acesso ──────────────────────────────────────────
+# Moderadores (cargo de equipe) só enxergam/usam o que estiver fora destes conjuntos.
+# Para liberar algo ao moderador, remova a categoria/ação daqui; para restringir, adicione.
+CATEGORIAS_SO_ADMIN = {
+    "servidor", "sistemas", "runs", "economia", "diagnostico",
+    "paineis", "radar", "cargos", "inteligencia",
+}
+ACOES_SO_ADMIN = {
+    acao
+    for cat in CATEGORIAS_SO_ADMIN
+    for acao, *_ in ADMIN_CATEGORIAS[cat]["acoes"]
+} | {"community_config", "community_publish", "community_guides_publish"}
+
+MSG_SO_ADMIN = "🔒 Esta função é exclusiva do **administrador** do servidor."
+
+
+def eh_administrador(user) -> bool:
+    """Administrador de verdade: permissão Administrador ou dono do servidor."""
+    guild = getattr(user, "guild", None)
+    if guild is not None and guild.owner_id == user.id:
+        return True
+    perms = getattr(user, "guild_permissions", None)
+    return bool(perms and perms.administrator)
+
+
 def _retorno_categoria_admin(bot, categoria: str, user_id: int):
     async def voltar(interaction: discord.Interaction):
+        if categoria in CATEGORIAS_SO_ADMIN and not eh_administrador(interaction.user):
+            return await interaction.response.send_message(MSG_SO_ADMIN, ephemeral=True)
         dados = ADMIN_CATEGORIAS[categoria]
         embed = discord.Embed(
             title=dados["titulo"],
@@ -1081,12 +1108,15 @@ def _retorno_categoria_admin(bot, categoria: str, user_id: int):
             color=COR_PAINEL,
         )
         embed.set_footer(text="NARA • Painel administrativo • Volte ao início para trocar de categoria")
-        await interaction.response.edit_message(embed=embed, view=AdminCategoriaView(bot, categoria, user_id))
+        await interaction.response.edit_message(
+            embed=embed, view=AdminCategoriaView(bot, categoria, user_id, eh_administrador(interaction.user)))
     return voltar
 
 
 async def _executar_acao_admin(interaction: discord.Interaction, bot, action: str, *, categoria: str | None = None, user_id: int | None = None):
     """Encaminha ações da navegação administrativa aos handlers já existentes."""
+    if action in ACOES_SO_ADMIN and not eh_administrador(interaction.user):
+        return await interaction.response.send_message(MSG_SO_ADMIN, ephemeral=True)
     voltar = _retorno_categoria_admin(bot, categoria, user_id or interaction.user.id) if categoria in ADMIN_CATEGORIAS else None
     def com_voltar(view):
         return adicionar_botao_voltar(view, voltar)
@@ -1360,13 +1390,14 @@ class AdminVoltarButton(discord.ui.Button):
 
 
 class AdminCategoriaView(discord.ui.View):
-    def __init__(self, bot, categoria: str, user_id: int):
+    def __init__(self, bot, categoria: str, user_id: int, is_admin: bool = True):
         super().__init__(timeout=600)
         self.bot = bot
         self.categoria = categoria
         self.user_id = user_id
         dados = ADMIN_CATEGORIAS[categoria]
-        for index, (action, label, emoji) in enumerate(dados["acoes"]):
+        acoes = [a for a in dados["acoes"] if is_admin or a[0] not in ACOES_SO_ADMIN]
+        for index, (action, label, emoji) in enumerate(acoes):
             self.add_item(AdminAcaoButton(action, label, emoji, row=index // 2, categoria=categoria, user_id=user_id))
         self.add_item(AdminVoltarButton(bot))
 
@@ -1389,6 +1420,9 @@ class AdminCategoriaButton(discord.ui.Button):
         self.user_id = user_id
 
     async def callback(self, interaction: discord.Interaction):
+        admin = eh_administrador(interaction.user)
+        if self.categoria in CATEGORIAS_SO_ADMIN and not admin:
+            return await interaction.response.send_message(MSG_SO_ADMIN, ephemeral=True)
         dados = ADMIN_CATEGORIAS[self.categoria]
         embed = discord.Embed(
             title=dados["titulo"],
@@ -1396,13 +1430,13 @@ class AdminCategoriaButton(discord.ui.Button):
             color=COR_PAINEL,
         )
         embed.set_footer(text="NARA • Painel administrativo • Volte ao início para trocar de categoria")
-        await interaction.response.edit_message(embed=embed, view=AdminCategoriaView(self.bot, self.categoria, self.user_id or interaction.user.id))
+        await interaction.response.edit_message(embed=embed, view=AdminCategoriaView(self.bot, self.categoria, self.user_id or interaction.user.id, admin))
 
 
 class AdminMainView(discord.ui.View):
     """Painel administrativo organizado por categorias de trabalho."""
 
-    def __init__(self, bot, user_id: int | None = None):
+    def __init__(self, bot, user_id: int | None = None, is_admin: bool = True):
         super().__init__(timeout=None)
         self.bot = bot
         self.user_id = user_id
@@ -1420,6 +1454,8 @@ class AdminMainView(discord.ui.View):
             ("cargos", "Cargos e acesso", "🎭"),
             ("inteligencia", "NARA IA", "🤖"),
         ]
+        if not is_admin:  # moderador: esconde as categorias exclusivas do administrador
+            categorias = [c for c in categorias if c[0] not in CATEGORIAS_SO_ADMIN]
         for index, (key, label, emoji) in enumerate(categorias):
             self.add_item(AdminCategoriaButton(bot, key, label, emoji, row=index // 3, user_id=user_id))
 
@@ -1698,7 +1734,7 @@ async def _mostrar_painel_principal(interaction: discord.Interaction, bot):
         color=COR_PAINEL,
     )
     embed.set_footer(text="NARA • Escolha uma categoria • Valores não personalizados usam os padrões do bot")
-    view = AdminMainView(bot, interaction.user.id)
+    view = AdminMainView(bot, interaction.user.id, eh_administrador(interaction.user))
     if interaction.response.is_done():
         await interaction.edit_original_response(embed=embed, view=view)
     else:
