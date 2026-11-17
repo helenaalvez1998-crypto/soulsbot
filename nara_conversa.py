@@ -23,8 +23,9 @@ from nara_local import normalizar
 PROMPT_PATH = Path(__file__).resolve().parent / "prompts" / "nara_conversa.md"
 PROMPT_IDENTIDADE_PATH = Path(__file__).resolve().parent / "prompts" / "nara.md"
 PROMPT_PERSONALIDADE_PATH = Path(__file__).resolve().parent / "prompts" / "nara_personalidade_runtime.md"
+PROMPT_PERSONA_PATH = Path(__file__).resolve().parent / "prompts" / "nara_persona.md"
 PROMPT_MINIMO = (
-    "Você é Nara, a personalidade própria da comunidade: confiante, perspicaz, teatral, provocadora e tecnicamente competente. "
+    "Você é Nara, a pessoa que toca a comunidade e o bot (nunca fale de si como IA ou assistente virtual; se perguntarem sério, admita em uma frase que é IA): confiante, perspicaz, teatral, provocadora e tecnicamente competente. "
     "Responda em português brasileiro, adaptando o humor ao contexto e à familiaridade real com o membro. "
     "Com novatos, seja cordial e use ironia leve; com membros conhecidos, permita brincadeiras moderadas; "
     "com membros próximos, use provocações afetuosas sem presumir intimidade. Em dúvidas técnicas, seja precisa; "
@@ -69,10 +70,15 @@ def extrair_identidade(texto: str) -> str:
 
 def carregar_personalidade() -> str:
     """Carrega a personalidade adaptativa oficial compartilhada por todas as rotas de IA."""
-    try:
-        return PROMPT_PERSONALIDADE_PATH.read_text(encoding="utf-8").strip()
-    except (OSError, UnicodeError):
-        return ""
+    blocos = []
+    for caminho in (PROMPT_PERSONA_PATH, PROMPT_PERSONALIDADE_PATH):
+        try:
+            texto = caminho.read_text(encoding="utf-8").strip()
+        except (OSError, UnicodeError):
+            continue
+        if texto:
+            blocos.append(texto)
+    return "\n\n---\n\n".join(blocos)
 
 
 def carregar_prompt() -> str:
@@ -174,14 +180,14 @@ class Cooldown:
 
 # Respostas locais escritas com personalidade para quando a IA não pode (ou não deve) responder.
 RESPOSTAS_SEM_IA = (
-    "Hm. Minha conversa avançada atingiu o limite por enquanto. Não é abandono dramático — os painéis e consultas locais continuam funcionando. Tente **meu perfil**, **meu saldo** ou **ajuda**.",
-    "Pausa técnica no meu lado tagarela. Ainda consigo consultar **perfil**, **saldo**, **platinas** e orientar pelos painéis. A conversa livre volta quando a cota permitir.",
-    "O espetáculo foi colocado em intervalo por limite de uso. Para não deixar você na mão, os recursos locais seguem disponíveis em `/nara`.",
+    "Fiquei sem fôlego pra papo livre por agora. Mas os painéis e as consultas continuam comigo: tenta **meu perfil**, **meu saldo** ou **ajuda**.",
+    "Hoje já falei demais e o papo livre vai ter que esperar. Perfil, saldo, platinas e os painéis do `/nara` seguem funcionando normal.",
+    "Pausa no meu lado tagarela. Pra não te deixar na mão, o que é consulta e painel continua aberto em `/nara`.",
 )
 RESPOSTA_LIMITE_USUARIO = (
-    "Sua cota de conversa comigo por hoje terminou, {nome}. Dramático? Um pouco. As consultas locais de perfil, saldo e FAQ continuam liberadas."
+    "Sua cota de papo comigo por hoje acabou, {nome}. Dramático? Um pouco. As consultas de perfil, saldo e FAQ continuam liberadas."
 )
-RESPOSTA_COOLDOWN = "Calma, {nome}, uma pergunta por vez. Até eu preciso de um intervalo entre perguntas; já respondo."
+RESPOSTA_COOLDOWN = "Calma, {nome}, uma pergunta por vez. Já te respondo."
 
 
 def resposta_sem_ia() -> str:
