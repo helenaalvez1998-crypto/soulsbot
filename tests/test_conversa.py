@@ -311,7 +311,8 @@ def test_prompt_carrega_personalidade_canonica_completa_e_regras_da_conversa():
     assert personalidade in txt
     assert "Administradora implacável" in personalidade
     assert "Especialista técnica" in personalidade
-    assert "Júnior" in personalidade and "criador" in personalidade
+    assert "Souls" in personalidade and "criador" in personalidade
+    assert "1300117955236991046" in personalidade
     assert "ESCOPO DESTA ROTA: CONVERSA TEXTUAL" in txt
     assert "Não invente fatos" in txt
 
