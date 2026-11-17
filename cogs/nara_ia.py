@@ -25,6 +25,7 @@ from levels import nivel_por_xp, patente_por_nivel
 from gemini_resilience import GeminiUnavailableError, all_gemini_status
 from ia_provedores import pesquisa_status
 from nara_local import aplicar_politica_de_quota, decidir_rota, resposta_local_fallback, tem_anexo_visual
+import faq_base
 import nara_conhecimento
 import nara_conversa as conv
 import nara_social
@@ -97,6 +98,12 @@ class NaraIA(commands.Cog):
             self.prompt_identidade = (Path(__file__).resolve().parent.parent / "prompts" / "nara.md").read_text(encoding="utf-8").strip()
         except (OSError, UnicodeError):
             log.exception("Não foi possível carregar o prompt principal prompts/nara.md.")
+        # Manual oficial do bot: o que a Nara usa para ENSINAR a navegação real (/nara, botões, fluxos).
+        self.prompt_manual = ""
+        try:
+            self.prompt_manual = (Path(__file__).resolve().parent.parent / "prompts" / "nara_manual.md").read_text(encoding="utf-8").strip()
+        except (OSError, UnicodeError):
+            log.exception("Não foi possível carregar prompts/nara_manual.md; a Nara ensinará sem o manual oficial.")
         self.conv_cache = conv.CacheConversa()
         self.conv_cooldown = conv.Cooldown()
         try:
@@ -513,7 +520,20 @@ class NaraIA(commands.Cog):
             "coliseu", "loja", "soulslike", "ranking", "perfil", "cargo", "canal",
             "configuracao", "permissao", "modulo", "evento", "recurso", "administracao",
         )
-        if any(termo in norm for termo in termos_bot):
+        termos_duvida = ("como", "onde", "qual", "quais", "botao", "botão", "comando", "funciona",
+                         "usar", "usa", "fazer", "faco", "faço", "registr", "enviar", "mandar", "ensina")
+        if any(termo in norm for termo in termos_bot) or any(t in norm for t in termos_duvida):
+            if self.prompt_manual:
+                prompt += "\n\n" + self.prompt_manual
+            try:
+                relacionadas = faq_base.buscar_relacionadas(texto, limite=3)
+            except Exception:
+                log.exception("Falha ao buscar FAQ relacionada para a conversa.")
+                relacionadas = []
+            if relacionadas:
+                prompt += "\n\nFAQ RELACIONADA (respostas oficiais; prevalecem sobre qualquer suposição sua):\n" + "\n".join(
+                    f"- {resp[:900]}" for _i, resp, _s in relacionadas
+                )
             prompt += "\n\n" + nara_conhecimento.inventario_runtime(self.bot, autor, limite=35)
         try:
             bruto = (await self.ia.conversar(prompt, pedido, conv.MAX_TOKENS, imagens=imagens)
@@ -671,7 +691,7 @@ class NaraIA(commands.Cog):
             if intent == "como_ganhar_denarios":
                 return ("Denários são a moeda usada na Loja para itens cosméticos. "
                         f"Platina aprovada: **{den_platina} Denários**; jogo zerado aprovado: **{den_zerado} Denários**. "
-                        "Abra `/loja` para conferir cores e títulos disponíveis. Não gaste tudo antes de olhar o catálogo; seria um desperdício bastante previsível.")
+                        "Abra `/nara` → **Meu progresso** → **Loja de recompensas** para conferir cores e títulos disponíveis. Não gaste tudo antes de olhar o catálogo; seria um desperdício bastante previsível.")
             return ("Estes são os valores atuais do servidor: "
                     f"uma platina aprovada concede **{xp_platina} XP** e **{den_platina} Denários**; "
                     f"um jogo zerado aprovado pode conceder **{xp_zerado} XP** e **{den_zerado} Denários**. "
@@ -687,7 +707,7 @@ class NaraIA(commands.Cog):
             runs_row = await db._one("SELECT COUNT(*) AS total FROM sl_runs WHERE user_id=? AND status='approved'", (autor.id,))
             runs = int(runs_row["total"] if runs_row else 0)
             if intent == "meu_saldo":
-                texto = f"Seu saldo atual é **{int(user['denarios'] or 0)} Denários**. Consulte `/loja` para ver o que está disponível para compra. Vamos torcer para que seus planos sejam maiores que seu saldo."
+                texto = f"Seu saldo atual é **{int(user['denarios'] or 0)} Denários**. Abra `/nara` → **Meu progresso** → **Loja de recompensas** para ver o que está disponível para compra. Vamos torcer para que seus planos sejam maiores que seu saldo."
                 return nara_estilo_textual.enquadrar(texto, "saldo")
             if intent == "minhas_platinas":
                 rows = await db.platinas_do_usuario(autor.id)
@@ -698,13 +718,13 @@ class NaraIA(commands.Cog):
                 lista = "\n".join(f"• {r['game']} ({r['platform']})" for r in rows[:10]) or "Nenhum jogo zerado registrado ainda. O backlog continua em vantagem."
                 return nara_estilo_textual.enquadrar(f"Você tem **{zerados} jogo(s) zerado(s)** registrado(s).\n{lista}", "zerados")
             if intent == "minhas_runs":
-                texto = f"Você tem **{runs} run(s) aprovada(s)** na Central Soulslike. Abra `/coliseu` e entre em **Runs** para consultar registros, tempos e desafios. O cronômetro está esperando sua próxima tentativa."
+                texto = f"Você tem **{runs} run(s) aprovada(s)** na Central Soulslike. Abra `/nara` → **Minha biblioteca** → **Runs e desafios** para consultar registros, tempos e desafios. O cronômetro está esperando sua próxima tentativa."
                 return nara_estilo_textual.enquadrar(texto, "runs")
             if intent == "meu_inventario":
                 import loja
                 rows = await db.inventario_do_usuario(autor.id)
                 if not rows:
-                    return nara_estilo_textual.enquadrar("Seu inventário cosmético está vazio. Abra `/loja` para conferir cores e títulos disponíveis. Um começo humilde; até os grandes arsenais começam com uma peça.", "inventario")
+                    return nara_estilo_textual.enquadrar("Seu inventário cosmético está vazio. Abra `/nara` → **Meu progresso** → **Loja de recompensas** para conferir cores e títulos disponíveis. Um começo humilde; até os grandes arsenais começam com uma peça.", "inventario")
                 itens = []
                 for row in rows[:15]:
                     item = loja.POR_ID.get(row["item"])
@@ -780,7 +800,7 @@ class NaraIA(commands.Cog):
               "devem aguardar o botão Confirmar do autor."
         )
         system = "\n\n---\n\n".join(
-            bloco for bloco in (self.prompt_personalidade, self.prompt_identidade, inventario) if bloco
+            bloco for bloco in (self.prompt_personalidade, self.prompt_identidade, self.prompt_manual, inventario) if bloco
         )
         gerar = self.ia.criar_gerador(system, registro)
         texto = await rodar_agente(gerar, self.ia, pedido, registro, ctx)
