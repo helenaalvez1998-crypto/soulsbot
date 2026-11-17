@@ -1,8 +1,8 @@
-"""Nara integrada ao NARA com roteamento local-first.
+"""Nara integrada ao NARA com roteamento por tipo de interação.
 
-Respostas locais/SQLite precedem ferramentas e Gemini. Conversa livre usa o prompt de
-identidade existente; pedidos de ação só usam ferramentas registradas e as guardas do
-núcleo Python. Pesquisa factual usa ferramentas de leitura compatíveis. A conversa pode enviar imagens comuns ao Gemini quando o membro marca a Nara ou usa o canal configurado; anexos não são persistidos.
+Menção real à Nara direciona a conversa à IA; perguntas com dados locais usam o código
+como contexto factual. O nome escrito sem menção ativa somente respostas locais. Pedidos
+de ação mantêm as ferramentas registradas e as guardas do núcleo Python.
 """
 import asyncio
 import logging
@@ -25,7 +25,10 @@ from ia_nucleo import Ctx, Registro, Risco, rodar_agente
 from levels import nivel_por_xp, patente_por_nivel
 from gemini_resilience import GeminiUnavailableError, all_gemini_status
 from ia_provedores import pesquisa_status
-from nara_local import aplicar_politica_de_quota, decidir_rota, resposta_local_fallback, tem_anexo_visual
+from nara_local import (
+    aplicar_politica_de_quota, decidir_interacao_nara,
+    resposta_local_fallback, tem_anexo_visual,
+)
 import faq_base
 import nara_conhecimento
 import nara_conversa as conv
@@ -472,7 +475,7 @@ class NaraIA(commands.Cog):
             total += len(dados)
         return imagens
 
-    async def _conversar(self, message: discord.Message, texto: str) -> str:
+    async def _conversar(self, message: discord.Message, texto: str, *, contexto_local: str = "") -> str:
         """Papo livre com a personalidade da Nara. Sempre devolve texto; nunca derruba o bot."""
         autor = message.author
         # No Discord, o ID é a identidade estável: mesmo com display_name "Quase Pro",
@@ -481,31 +484,31 @@ class NaraIA(commands.Cog):
         guild_id = getattr(getattr(message, "guild", None), "id", 0) or 0
         anexos = getattr(message, "attachments", None) or []
         if not texto.strip() and not anexos:
-            return nara_respostas.resposta_social("mensagem_vazia", nome=nome)
+            return contexto_local or nara_respostas.resposta_social("mensagem_vazia", nome=nome)
 
         contexto = self._contexto_nara(message)
         decisao_escopo = nara_social.avaliar_escopo(texto, contexto, tem_imagem=bool(anexos))
-        if not decisao_escopo.permitido:
+        if not decisao_escopo.permitido and not contexto_local:
             log.info("Nara bloqueou conversa fora do escopo: guild=%s user=%s motivo=%s",
                      guild_id, autor.id, decisao_escopo.motivo)
             return nara_social.RESPOSTA_FORA_ESCOPO
         if self.ia is None:
-            return conv.resposta_sem_ia()
+            return contexto_local or conv.resposta_sem_ia()
 
         memoria_ativa = await self._memoria_ativa(guild_id, autor.id)
         chave = conv.chave_cache(texto)
-        if not contexto and not memoria_ativa and not anexos:
+        if not contexto and not memoria_ativa and not anexos and not contexto_local:
             em_cache = self.conv_cache.obter(chave)
             if em_cache:
                 return em_cache
 
         if not self.conv_cooldown.liberar(autor.id):
-            return conv.RESPOSTA_COOLDOWN.format(nome=nome)
+            return contexto_local or conv.RESPOSTA_COOLDOWN.format(nome=nome)
         if conv.LIMITE_USUARIO_DIA and await self._gasto_conversa(autor.id) >= conv.LIMITE_USUARIO_DIA:
-            return conv.RESPOSTA_LIMITE_USUARIO.format(nome=nome)
+            return contexto_local or conv.RESPOSTA_LIMITE_USUARIO.format(nome=nome)
         if conv.LIMITE_GLOBAL_DIA and await self._gasto_conversa(0) >= conv.LIMITE_GLOBAL_DIA:
             log.warning("Teto diário global da conversa da Nara atingido (%s).", conv.LIMITE_GLOBAL_DIA)
-            return conv.resposta_sem_ia()
+            return contexto_local or conv.resposta_sem_ia()
 
         pedido = conv.montar_pedido(nome, texto or "Analise a imagem anexada e responda ao contexto.", contexto)
         memoria = await self._carregar_memoria(guild_id, autor.id)
@@ -515,6 +518,13 @@ class NaraIA(commands.Cog):
         if anexos and not imagens and tem_anexo_visual(anexos):
             return "Não consegui ler esse formato ou arquivo. Envie PNG, JPG ou WEBP com até 5 MiB por imagem."
         prompt = self.prompt_conversa + nara_social.contexto_especialista(texto)
+        if contexto_local:
+            prompt += (
+                "\n\nCONTEXTO FACTUAL VERIFICADO PELO CÓDIGO — fonte de verdade para esta resposta:\n"
+                + contexto_local[:1800]
+                + "\nUse esses dados como referência obrigatória. Preserve valores, nomes, estados e limites exatamente. "
+                  "Você pode adaptar a linguagem à sua personalidade, mas não invente, complete ou altere informações."
+            )
         relacao = await self._carregar_relacao_social(guild_id, autor.id)
         if relacao:
             prompt += "\n\n" + relacao
@@ -544,17 +554,17 @@ class NaraIA(commands.Cog):
                      if imagens else await self.ia.conversar(prompt, pedido, conv.MAX_TOKENS))
         except GeminiUnavailableError as exc:
             log.warning("Conversa da Nara: provedor indisponível: %s", getattr(exc, "admin_message", str(exc)))
-            return conv.resposta_sem_ia()
+            return contexto_local or conv.resposta_sem_ia()
         except TodosProvedoresIndisponiveis as exc:
             log.error("Conversa da Nara: todos os provedores indisponíveis: %s", exc.admin_message)
-            return conv.resposta_sem_ia()
+            return contexto_local or conv.resposta_sem_ia()
         except Exception:
             log.exception("Falha na conversa da Nara")
-            return conv.resposta_sem_ia()
+            return contexto_local or conv.resposta_sem_ia()
 
         resposta = conv.limpar_resposta(bruto)
         if not resposta:
-            return conv.resposta_sem_ia()
+            return contexto_local or conv.resposta_sem_ia()
         try:
             await self._salvar_memoria(guild_id, autor.id, texto, resposta)
         except Exception:
@@ -567,7 +577,7 @@ class NaraIA(commands.Cog):
             await self._registrar_conversa(autor.id)
         except Exception:
             log.exception("Não foi possível registrar o uso da conversa da Nara.")
-        if not contexto and not memoria_ativa and not imagens and nome.lower() not in resposta.lower():
+        if not contexto and not memoria_ativa and not imagens and not contexto_local and nome.lower() not in resposta.lower():
             self.conv_cache.guardar(chave, resposta)
         return resposta
 
@@ -579,6 +589,9 @@ class NaraIA(commands.Cog):
         nome = "Souls" if int(getattr(autor, "id", 0) or 0) == config.SOULS_USER_ID else autor.display_name
 
         # Respostas comunitárias passam por aprovação humana e ficam separadas da FAQ editorial oficial.
+        if intent == "fallback_local":
+            return resposta_local_fallback(message.clean_content or "")
+
         if str(intent).startswith("community_faq:"):
             try:
                 entry_id = int(str(intent).split(":", 1)[1])
@@ -645,7 +658,6 @@ class NaraIA(commands.Cog):
         if intent in respostas:
             return respostas[intent]
         if intent in {"como_ganhar_xp", "como_ganhar_denarios", "recompensas"}:
-            import config
             from admin_config import GuildConfig
             from cogs.progressao import XP_MENSAGEM_MIN, XP_MENSAGEM_MAX, XP_VOZ_POR_INTERVALO
             guild_id = guild.id if guild else 0
@@ -841,6 +853,8 @@ class NaraIA(commands.Cog):
         conteudo_usuario = (message.clean_content or "").strip()
         if self.bot.user:
             conteudo_usuario = conteudo_usuario.replace(f"@{self.bot.user.display_name}", "").strip()
+            # clean_content pode variar conforme apelido; remove a menção real pelo ID também.
+            conteudo_usuario = re.sub(rf"<@!?{self.bot.user.id}>", "", conteudo_usuario).strip()
         tem_imagem = tem_anexo_visual(message.attachments)
         texto_prova = conteudo_usuario.casefold()
         termos_prova = ("comprovante", "prova da platina", "prova da run", "print da platina",
@@ -851,11 +865,11 @@ class NaraIA(commands.Cog):
                 allowed_mentions=sem_mencao,
             )
 
-        rota, intent = decidir_rota(
-            conteudo_usuario,
-            direcionada=foi_marcado,
-            canal_livre=canal_livre,
-            tem_imagem=tem_imagem,
+        # Menção Discord real => IA; nome escrito sem @ => somente respostas locais.
+        # Canais livres não iniciam conversa com IA sem uma interação direta.
+        rota, intent, chamada_por_nome = decidir_interacao_nara(
+            conteudo_usuario, foi_marcado=foi_marcado,
+            canal_livre=canal_livre, tem_imagem=tem_imagem,
         )
         # FAQ da comunidade só responde quando a conversa já foi dirigida à NARA
         # ou está em um canal livre configurado; a busca exige correspondência forte.
@@ -866,9 +880,13 @@ class NaraIA(commands.Cog):
                     rota, intent = "local", f"community_faq:{int(faq_comunitaria['id'])}"
             except Exception:
                 log.exception("Falha ao consultar FAQ comunitária aprovada.")
+        if chamada_por_nome and rota == "fallback":
+            # A chamada pelo nome é sempre local; sem FAQ correspondente, usa o fallback determinístico.
+            rota, intent = "local", "fallback_local"
         rota = aplicar_politica_de_quota(rota, chat_ia_ativa=NARA_CHAT_IA_ENABLED)
-        log.info("Roteamento Nara: intent=%s route=%s local=%s guild=%s user=%s",
-                 intent or "não_classificada", rota, rota == "local", message.guild.id, message.author.id)
+        log.info("Roteamento Nara: intent=%s route=%s ai=%s local=%s chamada_nome=%s guild=%s user=%s",
+                 intent or "não_classificada", rota, foi_marcado and conv.CONVERSA_ATIVA,
+                 rota == "local" and not foi_marcado, chamada_por_nome, message.guild.id, message.author.id)
 
         if rota == "ignorar":
             return
@@ -878,6 +896,28 @@ class NaraIA(commands.Cog):
             except Exception:
                 log.exception("Falha em uma resposta local da Nara (intenção=%s)", intent)
                 texto = "A consulta local falhou desta vez. Tente novamente; prefiro reconhecer o erro a inventar seus dados."
+            if foi_marcado:
+                # A resposta determinística fornece os fatos; a IA produz a resposta conversacional.
+                texto_local = texto
+                if conv.CONVERSA_ATIVA:
+                    async with message.channel.typing():
+                        texto = await self._conversar(
+                            message, conteudo_usuario, contexto_local=texto_local
+                        )
+                if tem_imagem:
+                    texto += "\n\n_Não abri nem analisei o anexo; respondi apenas ao texto._"
+                if intent == "como_transmitir_discord":
+                    try:
+                        from cogs.transmissoes import VideoTransmissaoView
+                        modulo = self.bot.get_cog("Transmissoes")
+                        video_url = await modulo.obter_video(message.guild.id) if modulo else None
+                        view = VideoTransmissaoView(video_url) if video_url else None
+                        if not video_url:
+                            texto += "\n\n_O vídeo demonstrativo ainda não foi cadastrado pela administração._"
+                        return await message.reply(texto[:1900], allowed_mentions=sem_mencao, view=view)
+                    except Exception:
+                        log.exception("Falha ao anexar o vídeo tutorial de transmissões.")
+                return await message.reply(texto[:1900], allowed_mentions=sem_mencao)
             if tem_imagem:
                 texto += "\n\n_Não abri nem analisei o anexo; respondi apenas ao texto._"
             if intent == "como_transmitir_discord":
@@ -945,7 +985,7 @@ class NaraIA(commands.Cog):
                 texto, view=AjudaAtalhoView(self.bot), allowed_mentions=sem_mencao
             )
 
-        if rota in {"fallback", "pesquisa_chat_desativada", "pesquisa_nao_suportada"} and conv.CONVERSA_ATIVA:
+        if foi_marcado and rota in {"fallback", "pesquisa_chat_desativada", "pesquisa_nao_suportada"} and conv.CONVERSA_ATIVA:
             async with message.channel.typing():
                 texto = await self._conversar(message, conteudo_usuario)
             if tem_imagem:
