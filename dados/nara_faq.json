@@ -65,7 +65,7 @@
         "enviar",
         "submeter"
       ],
-      "answer": "Abra `/coliseu`, entre em **Platinas** e escolha **Registrar**. Informe o jogo, a plataforma, a data da conquista e anexe o comprovante no formulário. Depois, o pedido segue para a moderação; nada de tentar pular a fila. Quando a platina for aprovada, ela também entra automaticamente em **Jogos Zerados** para o mesmo jogo e plataforma — não precisa cadastrar tudo de novo. As recompensas de platina e zerado continuam seguindo as regras próprias de cada sistema.",
+      "answer": "Abra `/nara` → **Minha biblioteca** → **Platinas** e clique em **Registrar platina**. Informe o jogo, a plataforma, a data da conquista e anexe o comprovante no formulário. Depois, o pedido segue para a moderação; nada de tentar pular a fila. Quando a platina for aprovada, ela também entra automaticamente em **Jogos Zerados** para o mesmo jogo e plataforma — não precisa cadastrar tudo de novo. As recompensas de platina e zerado continuam seguindo as regras próprias de cada sistema.",
       "category": "Platinas e conquistas",
       "verified_sources": {
         "files": [
@@ -120,7 +120,7 @@
         "finalizei",
         "concluido"
       ],
-      "answer": "Terminou um jogo sem platinar? Abra `/zerados` ou entre em **Zerados** pelo `/coliseu`. Informe jogo, plataforma e data de conclusão; o comprovante é opcional. O pedido vai para a Central de Aprovação e só aparece como registro válido depois da análise da moderação. Se a platina do mesmo jogo e plataforma já foi aprovada, o jogo entra automaticamente nos seus zerados. Uma conquista, um registro — não precisamos fabricar trabalho extra.",
+      "answer": "Terminou um jogo sem platinar? Abra `/nara` → **Minha biblioteca** → **Zerados** e clique em **Registrar zerado**. Informe jogo, plataforma e data de conclusão; o comprovante é opcional. O pedido vai para a Central de Aprovação e só aparece como registro válido depois da análise da moderação. Se a platina do mesmo jogo e plataforma já foi aprovada, o jogo entra automaticamente nos seus zerados. Uma conquista, um registro — não precisamos fabricar trabalho extra.",
       "category": "Jogos zerados",
       "verified_sources": {
         "files": [
@@ -167,7 +167,7 @@
         "tempo",
         "soulslike"
       ],
-      "answer": "Quer colocar sua marca no Hall da Fama? Abra `/coliseu`, entre em **Runs**, escolha o jogo e o desafio e informe tempo e build. Anexe o comprovante quando o formulário solicitar. Revise o tempo antes de confirmar: um dígito errado pode transformar um recorde em uma tragédia estatística. A run fica pendente até a equipe analisar; só depois da aprovação entra no ranking.",
+      "answer": "Quer colocar sua marca no Hall da Fama? Abra `/nara` → **Minha biblioteca** → **Runs e desafios**, clique em **Registrar run**, escolha o jogo e o desafio e informe tempo e build. Anexe o comprovante quando o formulário solicitar. Revise o tempo antes de confirmar: um dígito errado pode transformar um recorde em uma tragédia estatística. A run fica pendente até a equipe analisar; só depois da aprovação entra no ranking.",
       "category": "Runs e desafios",
       "verified_sources": {
         "files": [
@@ -208,7 +208,7 @@
         "zerado",
         "cadastrei errado"
       ],
-      "answer": "Para remover um jogo zerado, use `/remover_zerado` e selecione o número correspondente ao registro da sua lista. Confira o jogo antes de confirmar. Se o registro já concedeu XP ou Denários, o sistema também retira a recompensa correspondente, respeitando o saldo mínimo disponível. Pense antes de apertar: não existe botão mágico para desfazer arrependimento.",
+      "answer": "Para remover um jogo zerado, abra `/nara` → **Minha biblioteca** → **Remover zerado** e informe o número correspondente ao registro da sua lista. Confira o jogo antes de confirmar. Se o registro já concedeu XP ou Denários, o sistema também retira a recompensa correspondente, respeitando o saldo mínimo disponível. Pense antes de apertar: não existe botão mágico para desfazer arrependimento.",
       "category": "Jogos zerados",
       "verified_sources": {
         "files": [
@@ -333,7 +333,7 @@
         "histórico",
         "consultar"
       ],
-      "answer": "Para rever suas conquistas, abra `/coliseu` e escolha **Platinas**. Ali ficam as platinas aprovadas que já fazem parte da sua coleção. Também pode escrever **minhas platinas** aqui no chat que eu consulto seus registros. Viu? Até a burocracia pode ser elegante quando me deixam trabalhar.",
+      "answer": "Para rever suas conquistas, abra `/nara` → **Minha biblioteca** → **Platinas**. Ali ficam as platinas aprovadas que já fazem parte da sua coleção. Também pode escrever **minhas platinas** aqui no chat que eu consulto seus registros. Viu? Até a burocracia pode ser elegante quando me deixam trabalhar.",
       "category": "Platinas e conquistas",
       "verified_sources": {
         "files": [
@@ -371,7 +371,7 @@
         "terminei",
         "finalizei"
       ],
-      "answer": "Quer conferir os jogos concluídos? Use `/zerados` ou abra **Zerados** dentro do `/coliseu`. O painel permite consultar seus registros e acompanhar o ranking. Se preferir ir direto ao resultado, escreva **meus jogos zerados** e eu verifico sua lista. Só entram como válidos os registros aprovados — a empolgação não substitui a revisão.",
+      "answer": "Quer conferir os jogos concluídos? Abra `/nara` → **Minha biblioteca** → **Zerados** (botão **Lista**). O painel permite consultar seus registros e acompanhar o ranking. Se preferir ir direto ao resultado, escreva **meus jogos zerados** e eu verifico sua lista. Só entram como válidos os registros aprovados — a empolgação não substitui a revisão.",
       "category": "Jogos zerados",
       "verified_sources": {
         "files": [
@@ -403,7 +403,7 @@
         "histórico",
         "desafios"
       ],
-      "answer": "Suas tentativas ficam na Central Soulslike. Abra `/coliseu`, entre em **Runs** e escolha **Meu perfil** para consultar envios e status. Também pode escrever **minhas runs** que eu informo quantas foram aprovadas. Para tempos, desafios e detalhes de cada submissão, o painel continua sendo o lugar certo.",
+      "answer": "Suas tentativas ficam na Central Soulslike. Abra `/nara` → **Minha biblioteca** → **Runs e desafios** e consulte seu perfil de runs para consultar envios e status. Também pode escrever **minhas runs** que eu informo quantas foram aprovadas. Para tempos, desafios e detalhes de cada submissão, o painel continua sendo o lugar certo.",
       "category": "Runs e desafios",
       "verified_sources": {
         "files": [
@@ -444,7 +444,7 @@
         "prova",
         "anexo"
       ],
-      "answer": "O comprovante precisa acompanhar o formulário da atividade. Para platinas e runs, abra `/coliseu`, escolha a área correspondente e anexe imagem ou vídeo quando o formulário solicitar. Um print enviado solto nesta conversa não registra a conquista e não entra na fila de análise. Use o caminho oficial para a equipe receber a prova junto dos dados corretos. Eu ainda não desenvolvi clarividência para identificar jogo, plataforma e data olhando um arquivo perdido no chat.",
+      "answer": "O comprovante acompanha o formulário de registro. Para platinas, abra `/nara` → **Minha biblioteca** → **Platinas** → **Registrar platina**; para runs, **Runs e desafios** → **Registrar run**; zerados aceitam comprovante opcional. Um print enviado solto nesta conversa ou em canal não registra a conquista e não entra na fila de análise. Use o caminho oficial para a equipe receber a prova junto dos dados corretos. Eu ainda não desenvolvi clarividência para identificar jogo, plataforma e data olhando um arquivo perdido no chat.",
       "category": "Platinas e conquistas",
       "verified_sources": {
         "files": [
@@ -614,7 +614,7 @@
         "título",
         "inventário"
       ],
-      "answer": "A Loja usa Denários para liberar itens cosméticos, como cores de perfil e títulos. Abra `/loja` para consultar catálogo, preços e requisitos de nível; a própria tela mostra o que está disponível para sua conta. Esses itens mudam a aparência do perfil, não aumentam XP, atributos ou posição no ranking. Elegância compra-se. Habilidade, infelizmente, ainda exige jogar.",
+      "answer": "A Loja usa Denários para liberar itens cosméticos, como cores de perfil e títulos. Abra `/nara` → **Meu progresso** → **Loja de recompensas** para consultar catálogo, preços e requisitos de nível; a própria tela mostra o que está disponível para sua conta. Esses itens mudam a aparência do perfil, não aumentam XP, atributos ou posição no ranking. Elegância compra-se. Habilidade, infelizmente, ainda exige jogar.",
       "category": "Loja e Denários",
       "verified_sources": {
         "files": [
@@ -658,7 +658,7 @@
         "nível",
         "rank"
       ],
-      "answer": "Sua patente acompanha seu nível. Conforme acumula XP, você alcança os marcos necessários e desbloqueia novas patentes; quando a configuração do servidor permite, o bot também atualiza seu cargo. Use `/nivel` para conferir nível, patente e quanto falta para a próxima. Continue participando: observar a barra de progresso com intensidade não faz ela subir.",
+      "answer": "Sua patente acompanha seu nível. Conforme acumula XP, você alcança os marcos necessários e desbloqueia novas patentes; quando a configuração do servidor permite, o bot também atualiza seu cargo. Abra `/nara` → **Meu progresso** → **Meu nível e XP** para conferir nível, patente e quanto falta para a próxima. Continue participando: observar a barra de progresso com intensidade não faz ela subir.",
       "category": "XP e patentes",
       "verified_sources": {
         "files": [
@@ -694,7 +694,7 @@
         "central",
         "soulslike"
       ],
-      "answer": "O `/coliseu` é o painel central dos sistemas de jogador. Por ali você acessa **Platinas**, **Runs**, desafios, rankings, perfil e Santuário, sem precisar decorar um desfile de comandos. Abra o painel e escolha a área que quer consultar. Organização: uma invenção magnífica, especialmente quando alguém realmente a utiliza.",
+      "answer": "O `/nara` é a sua central: um único comando que abre tudo. Por ali você acessa **Ports & Mods**, **Minha biblioteca** (Platinas, Zerados, Runs e desafios), **Meu progresso** (nível, ranking e Loja), **Meu perfil**, **Meu Santuário**, **Preferências**, **Comunidade** e **Ajuda e suporte**. O painel é privado: só você o enxerga e usa. Organização: uma invenção magnífica, especialmente quando alguém realmente a utiliza.",
       "category": "Servidor, cargos e painéis",
       "verified_sources": {
         "files": [
@@ -733,7 +733,7 @@
         "bio",
         "redes"
       ],
-      "answer": "Seu Santuário é seu espaço pessoal na comunidade: uma vitrine das conquistas e da identidade que você quer mostrar como jogador. Nele, você pode apresentar biografia, jogo favorito, plataformas, redes e galeria de platinas aprovadas. Abra `/coliseu` e escolha **Meu Santuário** para cuidar do seu espaço; use **Visitar Santuário** para conhecer o de alguém que liberou acesso. Só o proprietário pode editar o próprio Santuário. A decoração é sua responsabilidade — não me culpe por escolhas duvidosas.",
+      "answer": "Seu Santuário é seu espaço pessoal na comunidade: uma vitrine das conquistas e da identidade que você quer mostrar como jogador. Nele, você pode apresentar biografia, jogo favorito, plataformas, redes e galeria de platinas aprovadas. Abra `/nara` e clique em **Meu Santuário** para cuidar do seu espaço; para visitar, use **Visitar santuário** em **Minha biblioteca** → **Platinas**, para conhecer o de alguém que liberou acesso. Só o proprietário pode editar o próprio Santuário. A decoração é sua responsabilidade — não me culpe por escolhas duvidosas.",
       "category": "Perfis e Santuários",
       "verified_sources": {
         "files": [
@@ -772,7 +772,7 @@
         "top",
         "posição"
       ],
-      "answer": "Temos rankings de XP, platinas, jogos zerados e desafios Soulslike. Para XP, use `/ranking-xp`; os painéis `/coliseu` e `/zerados` reúnem as classificações de conquistas e jogos concluídos. Nos desafios, o Hall da Fama considera apenas runs aprovadas e usa o melhor tempo de cada jogador por jogo e desafio. Consulte o painel da modalidade que quer acompanhar. E se seu nome ainda não está no topo, a solução costuma envolver jogar, não reclamar para mim.",
+      "answer": "Temos rankings de XP, platinas, jogos zerados e desafios Soulslike. Para XP, abra `/nara` → **Meu progresso** → **Ranking de XP**; os painéis de **Platinas** e **Zerados** (em **Minha biblioteca**) reúnem as classificações de conquistas e jogos concluídos. Nos desafios, o Hall da Fama considera apenas runs aprovadas e usa o melhor tempo de cada jogador por jogo e desafio. Consulte o painel da modalidade que quer acompanhar. E se seu nome ainda não está no topo, a solução costuma envolver jogar, não reclamar para mim.",
       "category": "Perfis e rankings",
       "verified_sources": {
         "files": [
@@ -944,7 +944,7 @@
         "dados",
         "público"
       ],
-      "answer": "Nem toda informação do perfil é automaticamente privada. Dependendo da tela e das permissões, o Santuário e algumas áreas do `/coliseu` podem exibir nível, XP, platinas e até Denários. Já consultas pessoais de inventário pela conversa comigo são direcionadas ao próprio usuário. Antes de liberar alguém para visitar seu Santuário, confira o que o cartão mostra e conceda acesso apenas a quem você escolheu.",
+      "answer": "Nem toda informação do perfil é automaticamente privada. Dependendo da tela e das permissões, o Santuário e algumas áreas do painel podem exibir nível, XP, platinas e até Denários. Já consultas pessoais de inventário pela conversa comigo são direcionadas ao próprio usuário. Antes de liberar alguém para visitar seu Santuário, confira o que o cartão mostra e conceda acesso apenas a quem você escolheu.",
       "category": "Perfis e Santuários",
       "verified_sources": {
         "files": [
@@ -1021,7 +1021,7 @@
         "membro",
         "pessoa"
       ],
-      "answer": "Abra `/coliseu` e escolha a pessoa no seletor de membros. O painel pode mostrar patente, nível, XP e platinas aprovadas; algumas telas também exibem Denários. O inventário de outra pessoa não fica disponível nessa consulta. E atenção: a resposta privada do painel não transforma automaticamente todos os dados exibidos em informações privadas para o dono do perfil.",
+      "answer": "Abra `/nara` → **Meu perfil** (ou o painel de **Platinas** → **Perfil**) e escolha a pessoa no seletor de membros. O painel pode mostrar patente, nível, XP e platinas aprovadas; algumas telas também exibem Denários. O inventário de outra pessoa não fica disponível nessa consulta. E atenção: a resposta privada do painel não transforma automaticamente todos os dados exibidos em informações privadas para o dono do perfil.",
       "category": "Perfis e rankings",
       "verified_sources": {
         "files": [
@@ -1700,7 +1700,7 @@
         "proximo nivel",
         "progressao"
       ],
-      "answer": "Seu nível é calculado pelo XP acumulado, e a quantidade necessária aumenta conforme você progride. Por isso os primeiros níveis chegam mais rápido; os mais altos exigem participação maior. Use `/nivel` para consultar nível, barra de progresso e XP que falta para o próximo. A matemática fica comigo. A parte de conquistar XP continua sendo sua.",
+      "answer": "Seu nível é calculado pelo XP acumulado, e a quantidade necessária aumenta conforme você progride. Por isso os primeiros níveis chegam mais rápido; os mais altos exigem participação maior. Abra `/nara` → **Meu progresso** → **Meu nível e XP** para consultar nível, barra de progresso e XP que falta para o próximo. A matemática fica comigo. A parte de conquistar XP continua sendo sua.",
       "verified_sources": {
         "files": [
           "cogs/progressao.py",
@@ -1735,7 +1735,7 @@
         "lista",
         "senhor das almas"
       ],
-      "answer": "As patentes são desbloqueadas nestes níveis: **1** Cinzas Novatas; **5** Guerreiro Caído; **10** Caçador de Almas; **15** Cavaleiro do Abismo; **20** Guardião das Cinzas; **30** Arauto da Ruína; **40** Executor Sombrio; **50** Senhor das Almas; **75** Lenda do Coliseu; **100** Sentinela Imortal. Use `/nivel` para conferir sua patente atual e a próxima meta. Uma longa escalada — pelo menos os títulos fazem jus ao esforço.",
+      "answer": "As patentes são desbloqueadas nestes níveis: **1** Cinzas Novatas; **5** Guerreiro Caído; **10** Caçador de Almas; **15** Cavaleiro do Abismo; **20** Guardião das Cinzas; **30** Arauto da Ruína; **40** Executor Sombrio; **50** Senhor das Almas; **75** Lenda do Coliseu; **100** Sentinela Imortal. Abra `/nara` → **Meu progresso** → **Meu nível e XP** para conferir sua patente atual e a próxima meta. Uma longa escalada — pelo menos os títulos fazem jus ao esforço.",
       "verified_sources": {
         "files": [
           "cogs/progressao.py",
@@ -2037,7 +2037,7 @@
         "xp",
         "denarios"
       ],
-      "answer": "Ao remover um registro de jogo zerado, o sistema também retira o XP e os Denários que ele concedeu, respeitando o saldo mínimo de zero. Use `/remover_zerado`, selecione o número exibido na lista e confira o jogo antes de confirmar. A remoção atualiza suas estatísticas e pode alterar sua posição nos rankings. Leia antes de clicar; arrependimento não é uma categoria de suporte técnico.",
+      "answer": "Ao remover um registro de jogo zerado, o sistema também retira o XP e os Denários que ele concedeu, respeitando o saldo mínimo de zero. Abra `/nara` → **Minha biblioteca** → **Remover zerado**, informe o número exibido na lista e confira o jogo antes de confirmar. A remoção atualiza suas estatísticas e pode alterar sua posição nos rankings. Leia antes de clicar; arrependimento não é uma categoria de suporte técnico.",
       "verified_sources": {
         "files": [
           "cogs/zerados.py",
@@ -2316,7 +2316,7 @@
         "visitar",
         "canal de perfis"
       ],
-      "answer": "Para abrir seu espaço, entre em `/coliseu` e escolha **Meu Santuário**. Para visitar outra pessoa, use **Visitar Santuário**, selecione o membro e solicite entrada no tópico privado; o acesso só é liberado quando você for adicionado. Ao terminar, use **Sair do tópico** no menu do Discord. Visitar permite conhecer o espaço, não editar o que pertence a outra pessoa. Curiosidade liberada; invasão, não.",
+      "answer": "Para abrir seu espaço, use `/nara` → **Meu Santuário**. Para visitar outra pessoa, use **Visitar santuário** (em **Minha biblioteca** → **Platinas**), selecione o membro e solicite entrada no tópico privado; o acesso só é liberado quando você for adicionado. Ao terminar, use **Sair do tópico** no menu do Discord. Visitar permite conhecer o espaço, não editar o que pertence a outra pessoa. Curiosidade liberada; invasão, não.",
       "verified_sources": {
         "files": [
           "cogs/santuario.py",
@@ -2464,7 +2464,7 @@
         "cosmético",
         "loja"
       ],
-      "answer": "A Loja oferece itens cosméticos para personalizar seu perfil. As cores custam **100 Denários** cada; os títulos comuns custam **150 Denários**; e **Eterno Renascido** custa **300 Denários** e exige nível 20. Abra `/loja` para conferir catálogo e requisitos antes de comprar: os valores mostrados no painel são os que valem no momento. Nenhum desses itens aumenta XP ou melhora sua posição no ranking. Estilo é ótimo; vantagem competitiva comprada, não.",
+      "answer": "A Loja oferece itens cosméticos para personalizar seu perfil. As cores custam **100 Denários** cada; os títulos comuns custam **150 Denários**; e **Eterno Renascido** custa **300 Denários** e exige nível 20. Abra `/nara` → **Meu progresso** → **Loja de recompensas** para conferir catálogo e requisitos antes de comprar: os valores mostrados no painel são os que valem no momento. Nenhum desses itens aumenta XP ou melhora sua posição no ranking. Estilo é ótimo; vantagem competitiva comprada, não.",
       "verified_sources": {
         "files": [
           "cogs/loja.py",
@@ -2496,7 +2496,7 @@
         "cosmético",
         "loja"
       ],
-      "answer": "Abra `/loja`, escolha o item e clique em **Comprar**. A compra só é concluída se você tiver Denários suficientes e cumprir o nível mínimo. Depois, use **Equipar** para exibir o item ou **Desequipar** para removê-lo do perfil; comprar não significa que ele já estará equipado. São itens cosméticos: não alteram XP, patente nem atributos. A aparência muda. O chefe continua igualmente mal-educado.",
+      "answer": "Abra `/nara` → **Meu progresso** → **Loja de recompensas**, escolha o item e clique em **Comprar**. A compra só é concluída se você tiver Denários suficientes e cumprir o nível mínimo. Depois, use **Equipar** para exibir o item ou **Desequipar** para removê-lo do perfil; comprar não significa que ele já estará equipado. São itens cosméticos: não alteram XP, patente nem atributos. A aparência muda. O chefe continua igualmente mal-educado.",
       "verified_sources": {
         "files": [
           "cogs/loja.py",
@@ -2599,7 +2599,7 @@
         "platinas",
         "central"
       ],
-      "answer": "Os painéis públicos de platinas, jogos zerados, Loja e Santuários são publicados pela equipe para manter os acessos organizados nos canais. Como membro, você não precisa publicar nada: use `/coliseu` para platinas, runs, perfil e Santuário; `/zerados` para jogos concluídos; e `/loja` para itens cosméticos. Se algum painel estiver ausente ou desatualizado, avise a moderação. Não tente reconstruir a infraestrutura no braço.",
+      "answer": "Os painéis públicos de platinas, jogos zerados, Loja e Santuários são publicados pela equipe para manter os acessos organizados nos canais. Como membro, você não precisa publicar nada: use `/nara` para platinas, zerados, runs, perfil, Santuário, nível e Loja. Se algum painel estiver ausente ou desatualizado, avise a moderação. Não tente reconstruir a infraestrutura no braço.",
       "verified_sources": {
         "files": [
           "cogs/cargos.py",
@@ -2666,7 +2666,7 @@
         "top 3",
         "ranking"
       ],
-      "answer": "O Hall do Coliseu é uma publicação automática com destaques da comunidade e é atualizado periodicamente. Para consultar seus próprios dados ou rankings detalhados, abra `/coliseu`. O painel mostra os destaques; não substitui as consultas individuais. Uma vitrine não é um banco de dados, por mais que pareça conveniente.",
+      "answer": "O Hall do Coliseu é uma publicação automática com destaques da comunidade e é atualizado periodicamente. Para consultar seus próprios dados ou rankings detalhados, abra `/nara`. O painel mostra os destaques; não substitui as consultas individuais. Uma vitrine não é um banco de dados, por mais que pareça conveniente.",
       "verified_sources": {
         "files": [
           "cogs/cargos.py",
@@ -2994,7 +2994,7 @@
         "perguntas prontas",
         "selecionar"
       ],
-      "answer": "Use `/central_ajuda`, escolha uma categoria e depois selecione a pergunta que corresponde à sua dúvida. A resposta aparece de forma privada para você, sem lotar o canal com mensagens. Se não encontrar o que procura, volte às categorias ou me mencione no canal de dúvidas. Até pedir ajuda pode ser organizado. Eu exijo um mínimo de estética operacional.",
+      "answer": "Use `/nara` → **Ajuda e suporte** → **Abrir central de ajuda**, escolha uma categoria e depois selecione a pergunta que corresponde à sua dúvida. A resposta aparece de forma privada para você, sem lotar o canal com mensagens. Se não encontrar o que procura, volte às categorias ou me mencione no canal de dúvidas. Até pedir ajuda pode ser organizado. Eu exijo um mínimo de estética operacional.",
       "verified_sources": {
         "files": [
           "cogs/admin.py",
@@ -3248,7 +3248,7 @@
         "conversa",
         "cache"
       ],
-      "answer": "Não registro automaticamente cada mensagem do servidor como se estivesse escrevendo um diário sobre todos. A memória pessoal é opcional e fica sob seu controle pelo comando `/nara_memoria`: ali você pode ativar, desativar, consultar o status ou apagar seu histórico. Com a memória desligada, não devo tratar conversas antigas como lembranças permanentes. Privacidade primeiro; curiosidade depois.",
+      "answer": "Não registro automaticamente cada mensagem do servidor como se estivesse escrevendo um diário sobre todos. A memória pessoal é opcional e fica sob seu controle em `/nara` → **Preferências** → **Memória da Nara**: ali você pode ativar, desativar, consultar o status ou apagar seu histórico. Com a memória desligada, não devo tratar conversas antigas como lembranças permanentes. Privacidade primeiro; curiosidade depois.",
       "verified_sources": {
         "files": [
           "cogs/nara_ia.py",
@@ -3390,7 +3390,7 @@
         "mês atual",
         "conquistas"
       ],
-      "answer": "No `/coliseu`, abra **Rankings** e escolha **Platinas do mês**. A lista considera platinas aprovadas cuja data de conquista pertence ao mês atual, no horário de Brasília, e mostra até 10 posições. Se sua platina ainda estiver pendente, ela não entra na classificação até ser aprovada. Primeiro a revisão, depois o lugar na vitrine. Eu não negocio com o calendário.",
+      "answer": "Abra `/nara` → **Minha biblioteca** → **Platinas** → **Ranking** e escolha **Platinas do mês**. A lista considera platinas aprovadas cuja data de conquista pertence ao mês atual, no horário de Brasília, e mostra até 10 posições. Se sua platina ainda estiver pendente, ela não entra na classificação até ser aprovada. Primeiro a revisão, depois o lugar na vitrine. Eu não negocio com o calendário.",
       "verified_sources": {
         "files": [
           "cogs/ranking.py",
@@ -3422,7 +3422,7 @@
         "jogos concluídos",
         "mês atual"
       ],
-      "answer": "No painel `/zerados`, abra **Ranking** e escolha **Zerados do mês** para ver quem registrou mais jogos concluídos no período. O painel também oferece o ranking geral, que considera registros de todos os períodos. Os registros precisam estar aprovados para contar. Agora você já sabe onde encontrar seus concorrentes — use a informação com sabedoria.",
+      "answer": "Abra `/nara` → **Minha biblioteca** → **Zerados** → **Ranking** e escolha **Zerados do mês** para ver quem registrou mais jogos concluídos no período. O painel também oferece o ranking geral, que considera registros de todos os períodos. Os registros precisam estar aprovados para contar. Agora você já sabe onde encontrar seus concorrentes — use a informação com sabedoria.",
       "verified_sources": {
         "files": [
           "cogs/ranking.py",
@@ -3456,7 +3456,7 @@
         "zerado",
         "plataforma"
       ],
-      "answer": "O sistema evita cadastrar mais de uma vez a mesma combinação de **pessoa + jogo + plataforma**. Confira se já existe um registro pendente ou aprovado e se escolheu a plataforma correta. Para corrigir um jogo zerado lançado errado, use `/remover_zerado`; para platina, envie uma mensagem à moderação. Criar outro pedido igual não substitui o anterior nem acelera a análise. Repetição não é estratégia.",
+      "answer": "O sistema evita cadastrar mais de uma vez a mesma combinação de **pessoa + jogo + plataforma**. Confira se já existe um registro pendente ou aprovado e se escolheu a plataforma correta. Para corrigir um jogo zerado lançado errado, use `/nara` → **Minha biblioteca** → **Remover zerado**; para platina, envie uma mensagem à moderação. Criar outro pedido igual não substitui o anterior nem acelera a análise. Repetição não é estratégia.",
       "verified_sources": {
         "files": [
           "nara_local.py",
@@ -3844,7 +3844,7 @@
         "painel privado",
         "platinas"
       ],
-      "answer": "Abra `/coliseu` e use o seletor de membros para escolher quem deseja consultar. O painel pode mostrar nível, patente, XP, platinas e outros dados disponibilizados naquela tela. A resposta do painel é privada para quem abriu, mas algumas informações também podem estar visíveis em outros espaços, como o Santuário. Privado é o envio do painel; não significa que cada dado exibido seja invisível para todos os demais.",
+      "answer": "Abra `/nara` → **Meu perfil** e use o seletor de membros para escolher quem deseja consultar. O painel pode mostrar nível, patente, XP, platinas e outros dados disponibilizados naquela tela. A resposta do painel é privada para quem abriu, mas algumas informações também podem estar visíveis em outros espaços, como o Santuário. Privado é o envio do painel; não significa que cada dado exibido seja invisível para todos os demais.",
       "verified_sources": {
         "files": [
           "cogs/platinas.py",
@@ -3912,7 +3912,7 @@
         "consulta",
         "privacidade"
       ],
-      "answer": "Na conversa comigo, não libero o inventário de outra pessoa nem apresento o saldo dela como consulta pessoal. Mas algumas telas do `/coliseu` e cartões do Santuário podem exibir Denários para quem tem acesso. Portanto, o saldo não fica oculto em todas as áreas do servidor. Confira as permissões e o conteúdo exibido no seu Santuário antes de liberar visitantes.",
+      "answer": "Na conversa comigo, não libero o inventário de outra pessoa nem apresento o saldo dela como consulta pessoal. Mas algumas telas do painel e cartões do Santuário podem exibir Denários para quem tem acesso. Portanto, o saldo não fica oculto em todas as áreas do servidor. Confira as permissões e o conteúdo exibido no seu Santuário antes de liberar visitantes.",
       "verified_sources": {
         "files": [
           "ia_ferramentas.py",
@@ -4382,7 +4382,7 @@
         "tópico privado",
         "visitar"
       ],
-      "answer": "A publicação do painel público de Santuários é feita pela moderação. Como membro, você pode abrir `/coliseu` e escolher **Meu Santuário** para criar ou acessar o seu. Não precisa publicar o painel para usar o próprio espaço.",
+      "answer": "A publicação do painel público de Santuários é feita pela moderação. Como membro, você pode abrir `/nara` e clicar em **Meu Santuário** para criar ou acessar o seu. Não precisa publicar o painel para usar o próprio espaço.",
       "verified_sources": {
         "files": [
           "cogs/santuario.py",
@@ -4476,7 +4476,7 @@
         "público",
         "loja privada"
       ],
-      "answer": "A vitrine pública da Loja é publicada pela moderação. Para consultar ou comprar itens, use `/loja`; sua loja pessoal aparece apenas para você. A publicação do painel é tarefa administrativa, não uma etapa da compra.",
+      "answer": "A vitrine pública da Loja é publicada pela moderação. Para consultar ou comprar itens, use `/nara` → **Meu progresso** → **Loja de recompensas**; sua loja pessoal aparece apenas para você. A publicação do painel é tarefa administrativa, não uma etapa da compra.",
       "verified_sources": {
         "files": [
           "cogs/loja.py",
@@ -4505,7 +4505,7 @@
         "informações",
         "ranking"
       ],
-      "answer": "A publicação dos painéis informativos do Coliseu é responsabilidade da moderação. Para acessar seus próprios recursos, use `/coliseu`. Se o painel público estiver ausente, informe a equipe; não é necessário duplicar a solicitação em vários canais.",
+      "answer": "A publicação dos painéis informativos do Coliseu é responsabilidade da moderação. Para acessar seus próprios recursos, use `/nara`. Se o painel público estiver ausente, informe a equipe; não é necessário duplicar a solicitação em vários canais.",
       "verified_sources": {
         "files": [
           "cogs/colizeu.py",
@@ -4534,7 +4534,7 @@
         "zerados",
         "publicar"
       ],
-      "answer": "O painel público de Jogos Zerados é publicado pela moderação. Para registrar ou consultar seus jogos concluídos, use `/zerados`. Publicar o painel e usar o sistema são tarefas diferentes; a segunda está disponível para você pelo comando.",
+      "answer": "O painel público de Jogos Zerados é publicado pela moderação. Para registrar ou consultar seus jogos concluídos, abra `/nara` → **Minha biblioteca** → **Zerados**. Publicar o painel e usar o sistema são tarefas diferentes; a segunda está disponível para você em `/nara`.",
       "verified_sources": {
         "files": [
           "cogs/zerados.py",
@@ -4563,7 +4563,7 @@
         "painel",
         "botão"
       ],
-      "answer": "O painel público de Platinas é publicado pela moderação. Para registrar uma conquista ou consultar sua coleção, abra `/coliseu` e escolha **Platinas**. O acesso aos seus registros não depende de você publicar o painel público.",
+      "answer": "O painel público de Platinas é publicado pela moderação. Para registrar uma conquista ou consultar sua coleção, abra `/nara` → **Minha biblioteca** → **Platinas**. O acesso aos seus registros não depende de você publicar o painel público.",
       "verified_sources": {
         "files": [
           "cogs/platinas.py",
