@@ -21,6 +21,49 @@ def _tem(texto: str, *termos: str) -> bool:
     return any(re.search(rf"(?<![a-z0-9]){re.escape(t)}(?![a-z0-9])", texto) for t in termos)
 
 
+def chamada_textual_nara(mensagem: str) -> bool:
+    """Detecta o nome Nara escrito como palavra, sem exigir menção Discord real."""
+    return _tem(normalizar(mensagem), "nara")
+
+
+def remover_chamada_inicial_nara(mensagem: str) -> str:
+    """Remove vocativo inicial para classificar o pedido sem alterar o texto original."""
+    texto = normalizar(mensagem)
+    return re.sub(r"^(?:(?:ei|oi|ola|o|hey)\s+)?nara\b[\s,;:!?-]*", "", texto).strip()
+
+
+def decidir_interacao_nara(
+    mensagem: str, *, foi_marcado: bool, canal_livre: bool, tem_imagem: bool = False
+) -> tuple[str, str | None, bool]:
+    """Decide a rota e informa se houve chamada textual sem @.
+
+    Menção Discord real mantém o fluxo de IA/ferramentas. Nome escrito sem menção
+    força exclusivamente respostas locais, mesmo em canal que antes permitia conversa livre.
+    """
+    if foi_marcado:
+        rota, intent = decidir_rota(
+            mensagem, direcionada=True, canal_livre=False, tem_imagem=tem_imagem
+        )
+        return rota, intent, False
+
+    chamada_por_nome = chamada_textual_nara(mensagem)
+    if chamada_por_nome:
+        texto = remover_chamada_inicial_nara(mensagem)
+        if not texto:
+            return "local", "saudacao", True
+        rota, intent = decidir_rota(
+            texto, direcionada=False, canal_livre=True, tem_imagem=tem_imagem
+        )
+        if rota in {"fallback", "pedir_mencao", "ignorar"}:
+            return "fallback", None, True
+        return rota, intent, True
+
+    rota, intent = decidir_rota(
+        mensagem, direcionada=False, canal_livre=canal_livre, tem_imagem=tem_imagem
+    )
+    return rota, intent, False
+
+
 _GAME_NAMES = (
     "elden ring", "dark souls", "dark souls 2", "dark souls 3", "demon souls", "demons souls",
     "bloodborne", "sekiro", "god of war", "lies of p", "black myth wukong", "hollow knight",

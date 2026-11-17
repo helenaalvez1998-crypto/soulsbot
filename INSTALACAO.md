@@ -84,7 +84,7 @@ A pesquisa roda pela Tavily e os Gemini recebem apenas texto e trechos recuperad
 ## 6. Checklist depois de conectar
 
 - `/nara`: teste os botões da central dos membros, incluindo Central de Ajuda e Memória da Nara.
-- Faça uma pergunta de FAQ num canal de `IA_CANAIS_LIVRES`; fora deles, mencione a Nara.
+- Teste os três caminhos: `@Nara` + pergunta (IA); “Nara, meu saldo” (consulta local); pergunta de FAQ em canal `IA_CANAIS_LIVRES` (resposta local, sem Gemini). Sem menção/chamada pelo nome, a Nara não inicia conversa generativa.
 - `/adm`: confira canais, cargos e recompensas.
 - Publique só os painéis que vai usar: `/painel_principal`, `/painel_platinas`, `/postar_painel_zerados`, `/painel_santuarios`, `/painel_cargos`, `/painel_loja`.
 - Teste a atribuição de um cargo e a hierarquia do bot antes de liberar cargos autoatribuíveis.

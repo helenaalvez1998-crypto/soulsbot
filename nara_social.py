@@ -38,10 +38,12 @@ TERMOS_EXTERNOS = (
 
 SAUDACOES = (
     "oi", "ola", "eai", "e ai", "opa", "salve", "bom dia", "boa tarde", "boa noite",
-    "tudo bem", "como voce esta", "como vai", "de boa", "suave", "tudo certo", "valeu",
-    "obrigado", "obrigada", "obg", "tmj", "tchau", "falou", "ate mais", "fui",
-    "voce e chata", "voce e burra", "nara", "ta ai", "esta ai", "sentiu minha falta",
-    "calma ai gatinha", "calma ai nara", "calma ai", "gatinha",
+    "tudo bem", "como voce esta", "como vc ta", "vc ta bem", "c ta bem", "ta tudo bem",
+    "como ta", "como vai", "qual e a boa", "que que ta pegando", "o que ta pegando",
+    "tudo na paz", "de boa", "suave", "tudo certo", "valeu", "obrigado", "obrigada",
+    "obg", "tmj", "tchau", "falou", "ate mais", "fui", "voce e chata", "voce e burra",
+    "nara", "ta ai", "esta ai", "sentiu minha falta", "calma ai gatinha",
+    "calma ai nara", "calma ai", "gatinha",
 )
 
 RESPOSTA_FORA_ESCOPO = (

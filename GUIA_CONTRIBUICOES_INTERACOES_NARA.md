@@ -76,7 +76,7 @@ A aprovação e o lançamento de XP são transacionais e idempotentes. Ocultar u
 
 ### FAQ da comunidade
 
-Uma FAQ aprovada é publicada na Biblioteca e registrada em uma tabela separada da FAQ editorial oficial. A NARA só consulta essas respostas em mensagens já dirigidas a ela ou em canal livre configurado e exige correspondência textual forte e inequívoca. A resposta informa que foi enviada por membro e aprovada pela equipe.
+Uma FAQ aprovada é publicada na Biblioteca e registrada em uma tabela separada da FAQ editorial oficial. A NARA consulta essas respostas em mensagens dirigidas a ela, em chamadas pelo nome “Nara” sem menção real ou em canal livre configurado, sempre com correspondência textual forte e inequívoca. Esse caminho é local e não usa Gemini. A resposta informa que foi enviada por membro e aprovada pela equipe.
 
 ### Lore, teorias e descobertas
 

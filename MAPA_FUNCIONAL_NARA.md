@@ -166,7 +166,10 @@ Quando o nível muda, o bot tenta sincronizar o cargo da patente. Os cargos prec
 - `NARA_CONVERSA_ENABLED` controla o papo normal com Gemini; por padrão está ligado no código. Padrões: 20 respostas por pessoa/dia, 250 por servidor/dia, cooldown de 6 segundos e 320 tokens por resposta. `0` remove cada teto numérico correspondente.
 - `NARA_CHAT_IA_ENABLED` controla pesquisa factual com ferramentas/fontes; não desliga a conversa normal. A pesquisa de chat usa `IA_LIMITE_DIARIO` (padrão 3 por usuário/dia) e cooldown de 8 segundos entre pesquisas externas.
 - O roteador de conversa tenta Gemini principal, depois reserva e depois terceira configuração. `/gemini_status` (administrador) mostra o estado local dos circuitos, não a quota real restante no Google.
-- `IA_CANAIS_LIVRES` lista IDs de canais onde perguntas locais podem ser respondidas sem menção.
+- `IA_CANAIS_LIVRES` lista IDs de canais onde perguntas locais reconhecidas podem ser respondidas sem menção; essa rota não chama Gemini.
+- Menção real `@Nara` (ou resposta direta à Nara) direciona conversa para IA. Respostas locais/SQLite são usadas como contexto factual para que o modelo não invente dados.
+- Escrever “Nara” no texto sem menção real direciona somente para respostas locais, inclusive FAQ comunitária aprovada quando houver correspondência.
+- Mensagens sem menção e sem chamada pelo nome não iniciam conversa generativa.
 - Ao ser mencionada com pedido explícito de ação, a Nara pode abrir atalhos para `/coliseu`, Platinas, Zerados, Runs, Loja e Santuário; consultar perfil/platinas/zerados/rankings/Hall da Fama/loja; equipar/desequipar itens próprios; e preparar compra, registro de zerado, edição do Santuário ou gestão de redes para confirmação do autor. O agente não confirma sucesso antes do resultado da ferramenta.
 - A concessão de XP pela IA é ferramenta opcional, controlada por `IA_ACOES_MODERACAO=false` por padrão; quando habilitada, exige moderador e confirmação, aceita 1–500 XP e registra o motivo. Não há ferramenta geral de banir/expulsar/silenciar.
 - A pesquisa com ferramentas do chat está limitada a páginas textuais de Elden Ring em domínios permitidos; não é pesquisa irrestrita de qualquer jogo nem leitura de PDF/imagens.
@@ -174,10 +177,11 @@ Quando o nível muda, o bot tenta sincronizar o cargo da patente. Os cargos prec
 
 ## 12. O que a Nara faz quando não entende
 
-- Em canal configurado em `IA_CANAIS_LIVRES`, uma pergunta reconhecida recebe resposta local sem menção.
-- Se não reconhecer em canal livre, ela pede para repetir a pergunta mencionando a Nara e mostra botão para abrir a Central de Ajuda.
-- Se mencionada, pergunta fora do FAQ pode seguir para a conversa Gemini quando `NARA_CONVERSA_ENABLED=true`.
-- Fora de canal livre, mensagens sem menção/resposta à Nara são ignoradas como política de roteamento.
+- Em canal configurado em `IA_CANAIS_LIVRES`, uma pergunta reconhecida recebe resposta local sem menção e sem consumo Gemini.
+- Se não reconhecer em canal livre, ela pede para repetir a pergunta mencionando `@Nara` e mostra botão para abrir a Central de Ajuda.
+- Ao receber menção real `@Nara` (ou resposta direta a ela), pergunta aberta segue para Gemini quando `NARA_CONVERSA_ENABLED=true`; intenções locais podem fornecer dados verificados ao modelo.
+- Chamar “Nara” apenas pelo texto, sem `@`, mantém o fluxo local: FAQ, dados SQLite e fallback determinístico, sem IA generativa.
+- Fora de canal livre, mensagens sem menção e sem chamada textual pelo nome são ignoradas.
 - A classificação local usa normalização, exemplos e semelhança por tokens com limite/margem. Ela reduz falhas de formulação, mas não interpreta literalmente qualquer pergunta imaginável; quando houver dúvida, não deve inventar.
 
 ## 13. Itens removidos na limpeza do projeto

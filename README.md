@@ -193,7 +193,7 @@ A Nara tem escopo exclusivo da comunidade, personalidade debochada, vínculos so
 
 ## Limpeza automática do canal de dúvidas da Nara
 
-Configure `IA_CANAIS_LIVRES` com os IDs dos canais em que a Nara responde sem ser mencionada, separados por vírgula. Por padrão, esses canais são limpos a cada 30 minutos (`NARA_DUVIDAS_LIMPEZA_INTERVALO_MINUTOS=30`). A limpeza começa somente após o primeiro intervalo completo depois que o bot fica pronto. Mensagens fixadas são preservadas. Para desligar, use `NARA_DUVIDAS_LIMPEZA_ENABLED=false`.
+Configure `IA_CANAIS_LIVRES` com os IDs dos canais em que a Nara pode responder perguntas locais reconhecidas sem menção, separados por vírgula; essa rota não consome Gemini. Para conversa generativa, marque `@Nara` (ou responda diretamente a uma mensagem dela). Escrever “Nara” no texto, sem menção real, aciona apenas respostas locais. Por padrão, esses canais são limpos a cada 30 minutos (`NARA_DUVIDAS_LIMPEZA_INTERVALO_MINUTOS=30`). A limpeza começa somente após o primeiro intervalo completo depois que o bot fica pronto. Mensagens fixadas são preservadas. Para desligar, use `NARA_DUVIDAS_LIMPEZA_ENABLED=false`.
 
 O bot precisa de `Ver canal`, `Ler histórico de mensagens` e `Gerenciar mensagens` em cada canal. A limpeza remove mensagens não fixadas, inclusive perguntas e respostas antigas, portanto fixe qualquer aviso ou painel que deva permanecer.
 

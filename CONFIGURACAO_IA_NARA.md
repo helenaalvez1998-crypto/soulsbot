@@ -15,7 +15,10 @@
 - `IA_LIMITE_DIARIO`: teto diário de pesquisas avançadas por usuário.
 
 ## Canais e limites da conversa
-- `IA_CANAIS_LIVRES`: IDs separados por vírgula dos canais em que a Nara pode responder sem menção.
+- `IA_CANAIS_LIVRES`: IDs separados por vírgula dos canais em que a Nara pode responder perguntas locais reconhecidas sem menção; não inicia conversa Gemini.
+- Menção real `@Nara` (ou resposta direta a ela): usa IA na conversa; quando existe resposta local/SQLite, ela é passada como contexto factual para o modelo.
+- Nome “Nara” escrito sem menção real: usa somente FAQ/SQLite/fallback local, sem Gemini.
+- Sem menção nem chamada pelo nome: não inicia conversa livre com IA; em canal configurado, apenas perguntas locais reconhecidas podem receber resposta.
 - `NARA_CONVERSA_LIMITE_USUARIO`: limite diário por pessoa (0 = ilimitado).
 - `NARA_CONVERSA_LIMITE_GLOBAL`: limite diário global (0 = ilimitado).
 - `NARA_CONVERSA_COOLDOWN`: intervalo em segundos entre respostas da mesma pessoa.
