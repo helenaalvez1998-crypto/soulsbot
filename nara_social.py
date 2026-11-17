@@ -45,8 +45,8 @@ SAUDACOES = (
 )
 
 RESPOSTA_FORA_ESCOPO = (
-    "Isso foge um pouco do meu universo kkk. Eu cuido da comunidade, do servidor, dos jogos e dos sistemas do NARA. "
-    "Se tiver alguma ligação com isso, me dá o contexto."
+    "Mds, isso já saiu do meu território kkk. Eu cuido da comunidade, do servidor, dos jogos e dos sistemas do NARA. "
+    "Se tiver ligação com esse universo, me dá o contexto que eu entro no assunto."
 )
 
 @dataclass(frozen=True)

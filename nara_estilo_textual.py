@@ -9,15 +9,15 @@ from __future__ import annotations
 from typing import Final
 
 _ENQUADRAMENTOS: Final[dict[str, str]] = {
-    "saldo": "Hm. Vamos aos números — sem ilusões:",
-    "perfil": "Seu retrato atual na comunidade. A realidade, sem filtros:",
-    "platinas": "Sua coleção de platinas até agora. Vamos conferir:",
-    "zerados": "Jogos concluídos. O backlog está perdendo terreno:",
-    "runs": "Suas runs aprovadas. Que os tempos falem:",
-    "inventario": "Abrindo seu inventário cosmético:",
-    "ranking": "A arena está assim. Observe os nomes:",
-    "ajuda": "Certo. Aqui está o mapa, sem caça ao tesouro:",
-    "sistemas": "Módulos que o sistema confirma como ativos agora:",
+    "saldo": "Hm. O saldo não mente. Vamos aos números:",
+    "perfil": "Seu retrato no servidor. Sem filtro e sem desculpa:",
+    "platinas": "Olha só sua coleção de platinas:",
+    "zerados": "Backlog diminuindo. Vamos ver o que vc concluiu:",
+    "runs": "Suas runs aprovadas. Agora os tempos têm a palavra:",
+    "inventario": "Seu arsenal cosmético. Abrindo:",
+    "ranking": "A arena tá assim. Não reclame comigo; reclame com seu desempenho:",
+    "ajuda": "Tá, vamos ao mapa. Sem caça ao tesouro:",
+    "sistemas": "Estes são os módulos que o sistema confirma como ativos:",
 }
 
 

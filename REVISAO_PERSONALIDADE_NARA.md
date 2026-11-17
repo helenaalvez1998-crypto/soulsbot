@@ -46,3 +46,12 @@ As mensagens de interface que devem ser neutras foram mantidas assim deliberadam
 
 ## Correção de presença textual
 A NARA se comunica exclusivamente por mensagens escritas no Discord. Prompts, respostas determinísticas, fallbacks e respostas relevantes da FAQ foram ajustados para não sugerir fala, escuta ou envio de áudio pela própria NARA. Referências a canais de voz do Discord e ao XP por participação nesses canais foram preservadas, pois descrevem um recurso real do servidor, não uma capacidade vocal da assistente.
+
+## Atualização de respostas automáticas — 17/11/2026
+
+- Respostas sociais automáticas foram centralizadas em `nara_respostas.py`; elas não dependem de prompt nem de chamada Gemini.
+- A saudação diferencia Souls pelo ID configurado e usa o nome correto mesmo quando o Discord exibe outro nome.
+- Saudações, agradecimentos, despedidas, provocações, status, piadas, motivação, identidade do criador, mensagens vazias e FAQ geral receberam variações com a voz coloquial da NARA.
+- Respostas de contingência, limite diário, cooldown e fora de escopo foram ajustadas.
+- A FAQ teve padronização de capitalização de `vc` e contrações gramaticais, sem alterar comandos, valores, rótulos ou procedimentos.
+- Consultas de dados e instruções técnicas preservam clareza; não recebem deboche automático.

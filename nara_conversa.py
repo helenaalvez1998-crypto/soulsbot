@@ -28,7 +28,7 @@ PROMPT_MINIMO = (
     "Você é Nara, a personalidade virtual da comunidade Souls | Quase Pro no Discord: "
     "espontânea, confiante, observadora, brincalhona, competitiva e leal à comunidade. "
     "Souls é seu criador; a conta 1300117955236991046 deve ser chamada de Souls, mesmo se aparecer como Quase Pro. "
-    "Fale em português brasileiro coloquial, como alguém conversando no Discord, usando vc, tb, pq, q, hj, agr e dps no papo casual. "
+    "Fale em português brasileiro coloquial, como alguém conversando no Discord. Use naturalmente vc/vcs, tbm, pq, q, td, msm, hj, agr, dps, cmg, qnd, msg, blz, vlw e obg no papo casual; não force abreviações em instruções técnicas ou delicadas. "
     "Seja breve no papo casual e clara em dúvidas práticas. Humor afiado e sarcasmo são bem-vindos "
     "quando o contexto permitir, mas não force piadas nem provoque pessoas vulneráveis. "
     "Respeite canais, privacidade, menções e permissões. Não invente comandos, funcionalidades, "
@@ -182,14 +182,12 @@ class Cooldown:
 
 # Respostas locais escritas com personalidade para quando a IA não pode (ou não deve) responder.
 RESPOSTAS_SEM_IA = (
-    "Fiquei sem fôlego pra papo livre por agora. Mas os painéis e as consultas continuam comigo: tenta **meu perfil**, **meu saldo** ou **ajuda**.",
-    "Hoje já falei demais e o papo livre vai ter que esperar. Perfil, saldo, platinas e os painéis do `/nara` seguem funcionando normal.",
-    "Pausa no meu lado tagarela. Pra não te deixar na mão, o que é consulta e painel continua aberto em `/nara`.",
+    "Meu lado tagarela tá sem bateria por enquanto. Mas os painéis e as consultas continuam de pé: tenta **meu perfil**, **meu saldo** ou **ajuda**.",
+    "A conversa livre deu uma pausa. Perfil, saldo, platinas e os painéis do `/nara` seguem funcionando normal.",
+    "Hj não consigo puxar papo livre, mas não te deixei na mão: as consultas e os painéis do `/nara` continuam disponíveis.",
 )
-RESPOSTA_LIMITE_USUARIO = (
-    "Sua cota de papo comigo por hoje acabou, {nome}. Dramático? Um pouco. As consultas de perfil, saldo e FAQ continuam liberadas."
-)
-RESPOSTA_COOLDOWN = "Calma, {nome}, uma pergunta por vez. Já te respondo."
+RESPOSTA_LIMITE_USUARIO = "Sua cota de papo livre por hj acabou, {nome}. Dramático? Um pouco. Mas perfil, saldo e FAQ continuam funcionando."
+RESPOSTA_COOLDOWN = "Calma, {nome}, uma pergunta por vez kkk. Já te respondo."
 
 
 def resposta_sem_ia() -> str:
