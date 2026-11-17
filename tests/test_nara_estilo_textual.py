@@ -3,7 +3,7 @@ from nara_estilo_textual import enquadrar
 
 def test_enquadrar_adiciona_abertura_contextual_sem_alterar_o_conteudo():
     corpo = "Você tem **120 Denários**."
-    assert enquadrar(corpo, "saldo") == "Hm. Vamos aos números — sem ilusões:\n" + corpo
+    assert enquadrar(corpo, "saldo") == "Hm. O saldo não mente. Vamos aos números:\n" + corpo
 
 
 def test_enquadrar_preserva_texto_desconhecido_ou_vazio():
@@ -12,7 +12,7 @@ def test_enquadrar_preserva_texto_desconhecido_ou_vazio():
 
 
 def test_enquadrar_nao_duplica_abertura():
-    texto = "Hm. Vamos aos números — sem ilusões:\nVocê tem **120 Denários**."
+    texto = "Hm. O saldo não mente. Vamos aos números:\nVocê tem **120 Denários**."
     assert enquadrar(texto, "saldo") == texto
 
 
