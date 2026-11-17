@@ -236,8 +236,11 @@ def validar_links(**links):
     return None
 
 
+MAX_LINKS_OPCIONAIS = 5  # slots 'Programa N' por port (guardados em jogos.outros_links, JSON)
+
+
 def analisar_links_complementares(texto):
-    """Primeira linha: URL do tutorial (opcional). Próximas: Nome | URL, até 3."""
+    """Primeira linha: URL do tutorial (opcional). Próximas: Nome | URL, até MAX_LINKS_OPCIONAIS."""
     linhas = [linha.strip() for linha in (texto or "").splitlines() if linha.strip()]
     tutorial = ""
     extras = []
@@ -252,8 +255,8 @@ def analisar_links_complementares(texto):
         if not nome or len(nome) > 80 or not url or len(url) > 500 or not link_valido(url):
             return None, None, f"❌ Link adicional {numero} inválido. Use Nome | https://..."
         extras.append({"nome": nome, "url": url})
-    if len(extras) > 3:
-        return None, None, "❌ Você pode adicionar no máximo 3 links opcionais."
+    if len(extras) > MAX_LINKS_OPCIONAIS:
+        return None, None, f"❌ Você pode adicionar no máximo {MAX_LINKS_OPCIONAIS} links opcionais."
     return tutorial, extras, None
 
 
@@ -723,7 +726,7 @@ class LinksOpcionaisView(discord.ui.View):
     def __init__(self, jogo_id):
         super().__init__(timeout=900)
         self.jogo_id = jogo_id
-        for numero in range(1, 4):
+        for numero in range(1, MAX_LINKS_OPCIONAIS + 1):
             botao = discord.ui.Button(
                 label=f"Programa {numero}", emoji="🔗",
                 style=discord.ButtonStyle.secondary, row=(numero - 1) // 2
@@ -774,10 +777,10 @@ class LinkOpcionalModal(discord.ui.Modal):
             await interaction.response.send_message("❌ Port não encontrado.", ephemeral=True)
             return
         links = formatar_outros_links(jogo["outros_links"] if "outros_links" in jogo.keys() else None)
-        while len(links) < 3:
+        while len(links) < MAX_LINKS_OPCIONAIS:
             links.append({})
         links[self.numero - 1] = ({"nome": nome, "url": url} if nome and url else {})
-        # Mantém os três espaços independentes para que Programa 2 não mude de posição.
+        # Mantém os espaços independentes para que Programa 2 não mude de posição.
         with db() as conn:
             conn.execute("UPDATE jogos SET outros_links = ? WHERE id = ?", (json.dumps(links, ensure_ascii=False), self.jogo_id))
         await interaction.response.send_message(
