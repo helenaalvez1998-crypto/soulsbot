@@ -28,7 +28,7 @@ from gemini_resilience import GeminiUnavailableError, all_gemini_status
 from ia_provedores import pesquisa_status
 from nara_local import (
     aplicar_politica_de_quota, decidir_interacao_nara,
-    resposta_local_fallback, tem_anexo_visual,
+    resposta_local_fallback, tem_anexo_visual, chamada_textual_nara,
 )
 import faq_base
 import nara_conhecimento
@@ -488,11 +488,10 @@ class NaraIA(commands.Cog):
             return contexto_local or nara_respostas.resposta_social("mensagem_vazia", nome=nome)
 
         contexto = self._contexto_nara(message)
-        decisao_escopo = nara_social.avaliar_escopo(texto, contexto, tem_imagem=bool(anexos))
-        if not decisao_escopo.permitido and not contexto_local:
-            log.info("Nara bloqueou conversa fora do escopo: guild=%s user=%s motivo=%s",
-                     guild_id, autor.id, decisao_escopo.motivo)
-            return nara_social.RESPOSTA_FORA_ESCOPO
+        # A conversa marcada é tematicamente aberta. Segurança sexual é tratada
+        # separadamente por um detector contextual, sem bloquear educação ou pedidos de ajuda.
+        if nara_social.detectar_abordagem_sexual(texto):
+            return nara_social.resposta_limite_sexual(texto)
         if self.ia is None:
             return contexto_local or conv.resposta_sem_ia()
 
@@ -518,7 +517,8 @@ class NaraIA(commands.Cog):
         imagens = await self._imagens_para_modelo(message) if anexos else []
         if anexos and not imagens and tem_anexo_visual(anexos):
             return "Não consegui ler esse formato ou arquivo. Envie PNG, JPG ou WEBP com até 5 MiB por imagem."
-        prompt = self.prompt_conversa + nara_social.contexto_especialista(texto)
+        prompt = (self.prompt_conversa + nara_social.contexto_especialista(texto)
+                  + nara_social.instrucoes_tom(texto))
         if contexto_local:
             prompt += (
                 "\n\nCONTEXTO FACTUAL VERIFICADO PELO CÓDIGO — fonte de verdade para esta resposta:\n"
@@ -792,6 +792,7 @@ class NaraIA(commands.Cog):
         system = "\n\n---\n\n".join(
             bloco for bloco in (self.prompt_personalidade, self.prompt_identidade, self.prompt_manual, inventario) if bloco
         )
+        system += nara_social.instrucoes_tom(message.clean_content or "")
         gerar = self.ia.criar_gerador(system, registro)
         texto = await rodar_agente(gerar, self.ia, pedido, registro, ctx)
         return (texto or "Não consegui concluir a ação com as ferramentas disponíveis." ).strip(), ctx
@@ -813,7 +814,8 @@ class NaraIA(commands.Cog):
         # Pesquisa em chat fica estritamente limitada a ferramentas de leitura.
         registro = Registro([f for f in registro.ferramentas.values() if f.risco is Risco.LEITURA])
 
-        gerar = self.ia.criar_gerador(self.prompt_pesquisa, registro)
+        prompt = self.prompt_pesquisa + nara_social.instrucoes_tom(pergunta)
+        gerar = self.ia.criar_gerador(prompt, registro)
         texto = await rodar_agente(gerar, self.ia, conteudo, registro, ctx)
         return (texto or "Não consegui concluir a pesquisa.").strip(), ctx
 
@@ -857,6 +859,12 @@ class NaraIA(commands.Cog):
             # clean_content pode variar conforme apelido; remove a menção real pelo ID também.
             conteudo_usuario = re.sub(rf"<@!?{self.bot.user.id}>", "", conteudo_usuario).strip()
         tem_imagem = tem_anexo_visual(message.attachments)
+        chamada_direta = foi_marcado or chamada_textual_nara(conteudo_usuario)
+        if chamada_direta and nara_social.detectar_abordagem_sexual(conteudo_usuario):
+            return await message.reply(
+                nara_social.resposta_limite_sexual(conteudo_usuario),
+                allowed_mentions=sem_mencao,
+            )
         texto_prova = conteudo_usuario.casefold()
         termos_prova = ("comprovante", "prova da platina", "prova da run", "print da platina",
                         "print da run", "aprova minha", "aprovar minha", "validar minha conquista")
