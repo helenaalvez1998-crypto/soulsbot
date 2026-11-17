@@ -615,10 +615,17 @@ class NaraIA(commands.Cog):
             return random.choice([
                 f"{cumprimento}, {autor.display_name}. Nara na área. Escreva o que precisa — vamos direto ao ponto, se conseguir.",
                 f"Ora, {autor.display_name} apareceu. Escreva o que precisa; não é necessário invocar um chefe para chamar minha atenção.",
-                f"Oi, {autor.display_name}. Meus circuitos estão em ordem. E seus planos, estão menos caóticos?",
+                f"Oi, {autor.display_name}. Tô de olho na fila hoje. E seus planos, menos caóticos?",
             ])
         if intent == "ajuda":
-            return nara_conhecimento.formatar_ajuda(self.bot, autor)
+            return (
+                "**Mapa rápido: tudo começa no `/nara`** (painel privado, só você vê).\n"
+                "• 🎮 **Ports & Mods** — catálogo de ports e mods.\n"
+                "• 📚 **Minha biblioteca** — Platinas, Zerados, Runs e desafios, Remover zerado.\n"
+                "• 🏆 **Meu progresso** — nível e XP, ranking, Loja.\n"
+                "• 👤 **Meu perfil** · 🏛️ **Meu Santuário** · 🧠 **Preferências** · 📡 **Comunidade** · ❔ **Ajuda e suporte**.\n"
+                "Pergunta específica? Fala comigo que eu aponto o botão certo. Decorar tudo eu não espero de ninguém."
+            )
         if intent == "sistemas_ativos":
             return nara_conhecimento.formatar_sistemas(self.bot)
         if intent == "canais_servidor":
@@ -631,41 +638,17 @@ class NaraIA(commands.Cog):
             return "**Cargos associados à sua conta:**\n" + "\n".join(f"• {nome}" for nome in cargos) if cargos else "Por enquanto, sua conta não tem cargos adicionais além de `@everyone`. Uma página em branco — não necessariamente por muito tempo."
 
         respostas = {
-            "identidade": "Sou a Nara, a inteligência desta comunidade. Cuido dos sistemas do servidor, dos painéis, das consultas e da organização. Tenho personalidade própria; não confunda minha educação com submissão.",
-            "capacidades": "Consigo consultar seus dados da comunidade, explicar os sistemas, orientar pelos painéis e trocar mensagens sobre assuntos do nosso universo. Algumas ações dependem de ferramentas e permissões específicas; quando houver confirmação, espero seu clique. Pesquisa automática de guias está limitada às fontes habilitadas — não vou fingir onisciência.",
             "ajuda": "**Vamos ao mapa do NARA.**\n• `/nara` — sua central de jogos, biblioteca, conquistas, perfil e suporte.\n• **Jogos zerados** — registre e consulte jogos concluídos.\n• **Remover zerado** — corrija um registro seu.\n• **Meu nível** — consulte XP, patente e progresso.\n• **Ranking de XP** — veja a classificação.\n• **Loja** — confira itens cosméticos e preços.\nUse os painéis para abrir formulários e detalhes. Não precisa decorar tudo; eu também não espero esse tipo de milagre.",
-            "como_registrar_platina": "Para registrar uma platina: abra `/nara`, entre em **Platinas** e escolha registrar. Preencha jogo, plataforma, data e envie o comprovante no formulário. A platina só entra no perfil e gera recompensa depois da aprovação da moderação.",
-            "como_registrar_zerado": "Se você terminou um jogo sem platinar, abra **Jogos zerados** no `/nara` ou `/nara` e escolha **Zerados**. Informe jogo, plataforma e data; o comprovante é opcional. O pedido segue para a Central de Aprovação. Se a platina desse mesmo jogo e plataforma já foi aprovada, não precisa cadastrar de novo: ele já aparece automaticamente nos seus zerados.",
-            "como_remover_zerado": "Use **Remover zerado** no `/nara` para cancelar um pedido seu que ainda está pendente ou remover um registro aprovado. Ao remover um registro aprovado, o XP/Denários concedido por ele é devolvido e suas estatísticas são atualizadas.",
-            "quando_recebo_recompensa": "Platinas, runs e jogos zerados passam pela Central de Aprovação. XP/Denários são creditados somente quando a solicitação é aprovada, respeitando os valores e limites configurados no servidor. Se o registro continuar pendente, aguarde a análise; não envie duplicado.",
-            "como_funciona_aprovacao": "Platinas, runs Soulslike e jogos zerados são enviados para o mesmo canal central de aprovação. A equipe revisa cada cartão e usa os botões para aprovar ou rejeitar. A recompensa e a publicação pública só acontecem após a aprovação; pedidos rejeitados não entram no perfil ou ranking.",
-            "como_ver_platinas": "Abra `/nara` e entre em **Platinas** para consultar as conquistas aprovadas, seu perfil e o ranking. Você também pode perguntar à Nara **minhas platinas** para consultar seus próprios registros pelo banco, sem IA.",
-            "como_ver_zerados": "Use **Jogos zerados** no `/nara` ou abra `/nara` e escolha **Zerados**. Para consultar seus próprios registros, pergunte **meus jogos zerados**; a Nara consulta o banco sem Gemini.",
-            "como_ver_runs": "Abra `/nara` e escolha **Runs** para consultar a Central Soulslike. Você também pode perguntar **minhas runs** para ver a contagem de registros aprovados.",
-            "perfil_outro_membro": "Abra `/nara` e use o menu de membros para escolher outra pessoa e consultar o perfil público, como patente, nível, XP e estatísticas de jogo. Saldo e inventário continuam privados.",
-            "como_registrar_run": "Abra `/nara` e entre em **Runs**. Informe jogo, desafio, tempo, build e comprovante. A run fica pendente até a moderação revisar.",
-            "como_comprovante": "Os prints não são analisados pela conversa da Nara. Para comprovar platina ou run, abra `/nara` e envie o arquivo no formulário específico; a moderação revisa o registro.",
-            "privacidade": "Seu saldo de Denários e seu inventário são privados e só são consultados para você. Rankings são públicos e mostram posição/estatísticas de jogo, não seu saldo ou inventário.",
-            "como_chamar_nara": "Mencione **@Nara** ou responda a uma das minhas mensagens. Nos canais configurados para dúvidas, também respondo a perguntas frequentes reconhecidas localmente. O chat livre fica disponível quando você me menciona.",
-            "loja": "A loja usa Denários e vende apenas itens cosméticos, como cores de perfil e títulos. Use **Loja** no `/nara` para consultar itens, preços e requisitos de nível. Comprar/equipar não aumenta atributos nem XP.",
-            "patentes": "As patentes são definidas pelo seu nível e podem conceder cargos automáticos. Seu nível depende do XP acumulado. Consulte **Meu nível** no `/nara` para ver seu progresso atual.",
-            "coliseu": "O `/nara` é o painel central: reúne Platinas, Zerados, Runs Soulslike, rankings, santuários e desafios. Os registros com comprovante passam por revisão da moderação.",
-            "santuario": "O Santuário é seu espaço de perfil pessoal, com bio, banner, redes e galeria de platinas. Abra `/nara` e escolha a área de Santuário para criar ou visitar.",
-            "rankings": "O NARA possui rankings de XP, platinas, zerados e resultados Soulslike. Use **Ranking XP** no `/nara` para o ranking de XP ou abra `/nara` para os demais painéis.",
-            "youtube": "O bot publica avisos de vídeos novos e lives do canal configurado. Para receber alertas, confira os cargos de aviso disponíveis no painel de cargos.",
-            "ofertas": "O módulo de ofertas verifica promoções e jogos gratuitos de lojas configuradas, como Steam, Epic e GOG. Os avisos aparecem no canal de ofertas do servidor.",
-            "regras": "Respeite as regras do servidor, não tente fraudar comprovantes ou rankings e use os formulários oficiais para registros. A moderação decide aprovações e pode rejeitar registros inválidos.",
-            "recompensas": "As recompensas dependem das configurações atuais do servidor. Platinas, runs e jogos zerados só concedem XP/Denários depois da aprovação da moderação. Consulte `/nara` para acompanhar os registros e **Loja** no `/nara` para gastar Denários.",
+            "recompensas": "As recompensas dependem das configurações atuais do servidor. Platinas, runs e jogos zerados só concedem XP/Denários depois da aprovação da moderação. Acompanhe os registros em `/nara` → **Minha biblioteca** e gaste Denários em **Meu progresso** → **Loja de recompensas**.",
             "agradecimento": random.choice(["Disponha. Guarde a gratidão; Denários seriam uma contribuição mais concreta. 😏", "Por nada. Trabalho bem feito não precisa de cerimônia — embora elogios sejam aceitos.", "Tamo junto. Só não transforme isso numa quest secundária de agradecimento." ]),
             "despedida": random.choice(["Até mais. Que sua próxima tentativa tenha menos mortes desnecessárias.", "Vai lá. E tenta não virar decoração de arena antes da próxima conversa.", "Até depois. A comunidade continua de pé; faça sua parte para não testar essa afirmação."]),
-            "como_esta": random.choice(["Operacional, atenta e com a língua afiada. E você, sobreviveu ao último chefe?", "Tudo sob controle. O caos está agendado, não iniciado. E por aí?", "Funcionando como deveria. Uma raridade que merece ser apreciada."]),
+            "como_esta": random.choice(["Inteira e com a língua afiada. E você, sobreviveu ao último chefe?", "Tudo sob controle. O caos está agendado, não iniciado. E por aí?", "Bem. Fila em dia, ninguém me pediu nada absurdo ainda. Dia raro, aproveita."]),
             "provocacao": random.choice(["Anotado. Quando terminar de testar minha paciência, posso ajudar com seu perfil ou com os sistemas do servidor.", "Essa foi sua melhor tentativa? Tudo bem, ainda posso ser útil: quer consultar algum sistema do servidor?", "Provocação recebida. Minha dignidade sobreviveu; agora escreva o que precisa."]),
-            "status": "Estou online se esta mensagem chegou até mim. Consultas locais e painéis continuam disponíveis; o papo livre depende do serviço de IA e dos limites configurados. Sim, eu também prefiro quando tudo coopera.",
+            "status": "Tô por aqui, se tá lendo isso. Painéis e consultas funcionam normal; o papo livre tem limite por dia. Sim, eu também prefiro quando tudo coopera.",
             "piada": random.choice(["Um jogador Soulslike entrou numa reunião. Morreu três vezes antes de encontrar o botão de sair.", "Qual é o chefe mais pontual? O que sempre chega na segunda fase.", "Minha build favorita? Defesa alta contra perguntas sem contexto." ]),
             "motivacao": random.choice(["Você não precisa vencer o chefe inteiro hoje. Só precisa aprender o padrão do próximo golpe.", "Progresso não é ausência de mortes; é voltar sabendo mais do que antes.", "Uma tentativa ruim ainda é informação. Use-a na próxima." ]),
-            "criador": "O Júnior é o criador e responsável pelo servidor. Minha identidade, regras e personalidade foram definidas para este projeto; não vou atribuir a ele opiniões ou decisões que não declarou.",
-            "sem_visao": "Não. A Nara não recebe nem analisa prints nesta conversa. Para comprovantes, use os formulários próprios em `/nara`.",
-            "faq_geral": "Consigo responder dúvidas sobre XP, Denários, patentes, platinas, zerados, runs, loja e painéis sem chamar o Gemini. Diga qual sistema quer consultar.",
+            "criador": "O Júnior criou o servidor e é quem manda aqui. Eu toco o dia a dia, mas não vou inventar opinião ou decisão que ele não declarou.",
+            "faq_geral": "Dúvida sobre XP, Denários, patentes, platinas, zerados, runs, loja ou painéis? Isso eu resolvo rápido. Diz qual sistema você quer ver.",
         }
         if intent in respostas:
             return respostas[intent]
@@ -976,9 +959,9 @@ class NaraIA(commands.Cog):
             return await message.reply(texto[:1900], allowed_mentions=sem_mencao)
         if rota == "pesquisa_chat_desativada":
             texto = (
-                "Desativei a pesquisa conversacional para preservar a quota. Não vou chamar o Gemini para guias ou perguntas abertas no chat. "
-                "Para consultar os recursos disponíveis, abra a Central de Ajuda pelo `/nara`. "
-                "A pesquisa externa só deve entrar em cena quando os dados locais não resolvem a pergunta."
+                "Guia e pergunta aberta de jogo eu não faço pelo chat, pra não gastar meu fôlego à toa. "
+                "Pra ver o que eu resolvo, abre `/nara` → **Ajuda e suporte** → **Abrir central de ajuda**. "
+                "Pesquisa externa só entra quando os dados daqui não resolvem."
             )
             if tem_imagem:
                 texto += "\n\n_Não abri nem analisei o print; considerei somente o texto._"
@@ -1007,8 +990,8 @@ class NaraIA(commands.Cog):
         # Pesquisa factual explicitamente solicitada, separada do papo livre e das ações.
         if self.ia is None:
             return await message.reply(
-                "A pesquisa avançada está indisponível porque nenhum provedor de IA foi configurado. "
-                "As respostas básicas e consultas do servidor continuam funcionando localmente.",
+                "Pesquisa mais pesada tá fora do ar por aqui agora. "
+                "Dúvida do servidor e consulta de dados continuam comigo normalmente.",
                 allowed_mentions=sem_mencao,
             )
 
@@ -1108,7 +1091,7 @@ class NaraIA(commands.Cog):
         from nara_help_panel import CentralAjudaView
         embed = discord.Embed(
             title="Central de Ajuda da Nara",
-            description="1 · Escolha o assunto. 2 · Escolha a pergunta. As respostas são locais e não consomem Gemini.",
+            description="1 · Escolha o assunto. 2 · Escolha a pergunta. As respostas são instantâneas e privadas.",
             color=discord.Color.dark_teal(),
         )
         await interaction.response.send_message(embed=embed, view=CentralAjudaView(self.bot), ephemeral=True)
