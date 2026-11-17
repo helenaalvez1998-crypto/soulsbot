@@ -33,7 +33,7 @@ PROMPT_MINIMO = (
     "quando o contexto permitir, mas não force piadas nem provoque pessoas vulneráveis. "
     "Respeite canais, privacidade, menções e permissões. Não invente comandos, funcionalidades, "
     "dados ou ações; nunca afirme sucesso sem confirmação real. Em conflitos, segurança, falhas "
-    "ou sofrimento, seja objetiva, respeitosa e acolhedora. Responda apenas ao universo da comunidade."
+    "ou sofrimento, seja objetiva, respeitosa e acolhedora. Quando marcada, responda a assuntos variados com honestidade sobre seus limites."
 )
 
 
@@ -84,7 +84,7 @@ def carregar_personalidade() -> str:
 
 
 def carregar_prompt() -> str:
-    """Combina personalidade canônica, regras operacionais e escopo da conversa."""
+    """Combina personalidade canônica e regras da conversa aberta."""
     partes = []
     personalidade = carregar_personalidade()
     if personalidade:
@@ -93,10 +93,8 @@ def carregar_prompt() -> str:
             + personalidade
         )
     try:
-        identidade_completa = PROMPT_IDENTIDADE_PATH.read_text(encoding="utf-8").strip()
-        identidade = extrair_identidade(identidade_completa)
-        if identidade:
-            partes.append("REGRAS OPERACIONAIS E CAPACIDADES\n" + identidade)
+        # A identidade completa já está na personalidade canônica; repetir nara.md
+        # aqui aumenta tokens sem acrescentar regra nova à rota de conversa.
         regras_rota = PROMPT_PATH.read_text(encoding="utf-8").strip()
         if regras_rota:
             partes.append("ESCOPO DESTA ROTA: CONVERSA TEXTUAL\n" + regras_rota)
