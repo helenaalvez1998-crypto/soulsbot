@@ -22,12 +22,29 @@ from database import Database
 
 
 LOG_LEVEL = getattr(logging, config.LOG_LEVEL, logging.INFO)
-logging.basicConfig(
-    level=LOG_LEVEL,
-    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+try:
+    from zoneinfo import ZoneInfo
+    FUSO_LOG = ZoneInfo("America/Sao_Paulo")  # horário de Brasília
+except Exception:  # sem tzdata: Brasília é UTC-3 fixo (sem horário de verão desde 2019)
+    from datetime import timedelta, timezone
+    FUSO_LOG = timezone(timedelta(hours=-3), "BRT")
+
+
+class _FormatterBrasilia(logging.Formatter):
+    """Carimba os logs no horário de Brasília, independente do fuso do servidor."""
+
+    def formatTime(self, record, datefmt=None):
+        from datetime import datetime
+        momento = datetime.fromtimestamp(record.created, FUSO_LOG)
+        return momento.strftime(datefmt or "%Y-%m-%d %H:%M:%S")
+
+
+_handler_log = logging.StreamHandler(sys.stdout)
+_handler_log.setFormatter(_FormatterBrasilia(
+    "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
-    stream=sys.stdout,
-)
+))
+logging.basicConfig(level=LOG_LEVEL, handlers=[_handler_log])
 logging.captureWarnings(True)
 log = logging.getLogger("nara")
 
