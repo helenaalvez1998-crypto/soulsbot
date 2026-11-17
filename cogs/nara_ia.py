@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 
 import discord
+import config
 from discord import app_commands
 from discord.ext import commands
 
@@ -473,7 +474,9 @@ class NaraIA(commands.Cog):
     async def _conversar(self, message: discord.Message, texto: str) -> str:
         """Papo livre com a personalidade da Nara. Sempre devolve texto; nunca derruba o bot."""
         autor = message.author
-        nome = autor.display_name
+        # No Discord, o ID é a identidade estável: mesmo com display_name "Quase Pro",
+        # esta conta deve ser tratada e chamada de "Souls".
+        nome = "Souls" if int(getattr(autor, "id", 0) or 0) == config.SOULS_USER_ID else autor.display_name
         guild_id = getattr(getattr(message, "guild", None), "id", 0) or 0
         anexos = getattr(message, "attachments", None) or []
         if not texto.strip() and not anexos:
@@ -613,9 +616,9 @@ class NaraIA(commands.Cog):
             hora = datetime.now(config.BRAZIL_TZ).hour
             cumprimento = "Bom dia" if hora < 12 else ("Boa tarde" if hora < 18 else "Boa noite")
             return random.choice([
-                f"{cumprimento}, {autor.display_name}. Nara na área. Escreva o que precisa — vamos direto ao ponto, se conseguir.",
-                f"Ora, {autor.display_name} apareceu. Escreva o que precisa; não é necessário invocar um chefe para chamar minha atenção.",
-                f"Oi, {autor.display_name}. Tô de olho na fila hoje. E seus planos, menos caóticos?",
+                f"{cumprimento}! Tudo bem por aqui kkk. E contigo?",
+                f"Opa! Tô bem, por aqui tudo em ordem. E você?",
+                f"Tudo certo por aqui. Só administrando o caos habitual da comunidade. E aí?",
             ])
         if intent == "ajuda":
             return (
@@ -642,12 +645,12 @@ class NaraIA(commands.Cog):
             "recompensas": "As recompensas dependem das configurações atuais do servidor. Platinas, runs e jogos zerados só concedem XP/Denários depois da aprovação da moderação. Acompanhe os registros em `/nara` → **Minha biblioteca** e gaste Denários em **Meu progresso** → **Loja de recompensas**.",
             "agradecimento": random.choice(["Disponha. Guarde a gratidão; Denários seriam uma contribuição mais concreta. 😏", "Por nada. Trabalho bem feito não precisa de cerimônia — embora elogios sejam aceitos.", "Tamo junto. Só não transforme isso numa quest secundária de agradecimento." ]),
             "despedida": random.choice(["Até mais. Que sua próxima tentativa tenha menos mortes desnecessárias.", "Vai lá. E tenta não virar decoração de arena antes da próxima conversa.", "Até depois. A comunidade continua de pé; faça sua parte para não testar essa afirmação."]),
-            "como_esta": random.choice(["Inteira e com a língua afiada. E você, sobreviveu ao último chefe?", "Tudo sob controle. O caos está agendado, não iniciado. E por aí?", "Bem. Fila em dia, ninguém me pediu nada absurdo ainda. Dia raro, aproveita."]),
-            "provocacao": random.choice(["Anotado. Quando terminar de testar minha paciência, posso ajudar com seu perfil ou com os sistemas do servidor.", "Essa foi sua melhor tentativa? Tudo bem, ainda posso ser útil: quer consultar algum sistema do servidor?", "Provocação recebida. Minha dignidade sobreviveu; agora escreva o que precisa."]),
+            "como_esta": random.choice(["Tô bem kkk. E você?", "Tudo certo por aqui, só o caos habitual da comunidade. E aí?", "Bem! Hoje até os sistemas resolveram colaborar."]),
+            "provocacao": random.choice(["KKKK tá bom, essa eu deixo passar.", "Olha a coragem. Gostei, mas não se empolga.", "Pode tentar de novo, essa provocação veio meio sem força."]),
             "status": "Tô por aqui, se tá lendo isso. Painéis e consultas funcionam normal; o papo livre tem limite por dia. Sim, eu também prefiro quando tudo coopera.",
             "piada": random.choice(["Um jogador Soulslike entrou numa reunião. Morreu três vezes antes de encontrar o botão de sair.", "Qual é o chefe mais pontual? O que sempre chega na segunda fase.", "Minha build favorita? Defesa alta contra perguntas sem contexto." ]),
             "motivacao": random.choice(["Você não precisa vencer o chefe inteiro hoje. Só precisa aprender o padrão do próximo golpe.", "Progresso não é ausência de mortes; é voltar sabendo mais do que antes.", "Uma tentativa ruim ainda é informação. Use-a na próxima." ]),
-            "criador": "O Júnior criou o servidor e é quem manda aqui. Eu toco o dia a dia, mas não vou inventar opinião ou decisão que ele não declarou.",
+            "criador": "O Souls criou o servidor e é quem manda aqui. Eu toco o dia a dia, mas não vou inventar opinião ou decisão que ele não declarou.",
             "faq_geral": "Dúvida sobre XP, Denários, patentes, platinas, zerados, runs, loja ou painéis? Isso eu resolvo rápido. Diz qual sistema você quer ver.",
         }
         if intent in respostas:
@@ -718,7 +721,8 @@ class NaraIA(commands.Cog):
             from levels import barra_progresso, xp_para_nivel
             prox = xp_para_nivel(nivel + 1) - xp
             posicao = await db.posicao_xp(xp)
-            texto_perfil = (f"**Perfil de {autor.display_name}**\nNível **{nivel}** — {patente_por_nivel(nivel)}\n"
+            nome_perfil = "Souls" if int(getattr(autor, "id", 0) or 0) == config.SOULS_USER_ID else autor.display_name
+            texto_perfil = (f"**Perfil de {nome_perfil}**\nNível **{nivel}** — {patente_por_nivel(nivel)}\n"
                     f"XP: **{xp}** ({barra_progresso(xp)})\nPróximo nível: **{max(0, prox)} XP**\n"
                     f"Denários: **{int(user['denarios'] or 0)}**\nPlatinas: **{platinas}** · Zerados: **{zerados}** · Runs: **{runs}**\n"
                     f"Posição no ranking XP: **#{posicao}**")
@@ -737,7 +741,8 @@ class NaraIA(commands.Cog):
             linhas = []
             for i, row in enumerate(rows, 1):
                 membro = guild.get_member(int(row["user_id"])) if guild else None
-                nome = membro.display_name if membro else f"Membro {str(row['user_id'])[-4:]}"
+                uid = int(row["user_id"])
+                nome = ("Souls" if uid == config.SOULS_USER_ID else membro.display_name) if membro else f"Membro {str(row['user_id'])[-4:]}"
                 linhas.append(f"**{i}.** {nome} — {int(row['valor'])} {label}")
             return nara_estilo_textual.enquadrar(f"**Top {label}:**\n" + "\n".join(linhas), "ranking")
 
