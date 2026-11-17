@@ -91,7 +91,8 @@ Enviar de novo não acelera. Correção de platina errada: falar com a moderaç�
 ## Conteúdo automático do servidor
 - Avisos de vídeos e lives do YouTube, ofertas de jogos (Steam, Epic, GOG), Radar de Games (notícias)
   e painéis rotativos são postados pelo bot nos canais configurados pela administração.
-- Falar comigo: marque @Nara (ou use o canal livre da Nara, se configurado). Respondo por texto.
+- Conversa com IA: marque @Nara ou responda diretamente a uma mensagem dela.
+- Resposta local: escreva “Nara” no texto (sem menção real) ou faça uma pergunta local reconhecida em canal livre configurado. Essa rota não usa Gemini. Respondo por texto.
   Posso consultar seus dados (saldo, platinas, zerados, runs, inventário) quando você pedir; não mostro
   dados privados de outra pessoa.
 
