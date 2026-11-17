@@ -379,16 +379,16 @@ def aplicar_politica_de_quota(rota: str, *, chat_ia_ativa: bool = False) -> str:
     return rota
 
 def resposta_local_fallback(mensagem: str) -> str:
-    """Fallback sem IA para mensagens dirigidas à Nara não cobertas pelo FAQ."""
+    """Fallback para mensagens dirigidas à Nara não cobertas pelo FAQ."""
     t = normalizar(mensagem)
     if any(x in t for x in ("jogo", "elden", "souls", "boss", "chefe", "trofeu", "platina", "conquista", "dlc")):
         return (
-            "Posso trocar mensagens sobre jogos e orientar com o que está verificado. A pesquisa automática de guias e checklists está indisponível no momento. "
-            "Não vou inventar requisito de troféu só para bancar a especialista — até eu tenho padrões."
+            "Sobre jogo eu converso, mas guia e checklist de troféu eu não consigo buscar agora. "
+            "Não vou inventar requisito só pra bancar a especialista; até eu tenho padrões."
         )
     return (
-        "Hm... isso parece fora do território da NARA. Meu domínio é esta comunidade: servidor, membros, Soulslikes, platinas, runs, jogos zerados, rankings, XP, Denários e painéis. "
-        "Reformule a pergunta trazendo-a para esse universo. Aí sim posso fazer alguma coisa útil — e talvez um comentário atravessado."
+        "Isso aí tá fora do meu território. Eu cuido da comunidade: servidor, membros, Soulslikes, platinas, runs, zerados, rankings, XP, Denários e painéis. "
+        "Traz a pergunta pra esse universo que eu resolvo, e talvez com um comentário atravessado."
     )
 
 
