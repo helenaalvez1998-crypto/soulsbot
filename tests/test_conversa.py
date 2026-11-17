@@ -14,9 +14,13 @@ os.environ.setdefault("DATA_DIR", tempfile.mkdtemp())
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import nara_conversa as conv  # noqa: E402
+import nara_social  # noqa: E402
 from gemini_resilience import GeminiUnavailableError, _state_path, _register_block, _reset_for_tests  # noqa: E402
 from ia_multi import RoteadorIA, TodosProvedoresIndisponiveis  # noqa: E402
-from nara_local import classificar_resposta_local, decidir_rota  # noqa: E402
+from nara_local import (
+    chamada_textual_nara, classificar_resposta_local, decidir_interacao_nara, decidir_rota,
+    remover_chamada_inicial_nara,
+)  # noqa: E402
 
 
 def run(coro):
@@ -56,6 +60,45 @@ class RoteamentoTests(unittest.TestCase):
     def test_sem_mencao_nao_gasta(self):
         self.assertEqual(decidir_rota("me ensina a ativar a transmissão no canal do NARA?", direcionada=False, canal_livre=False)[0], "ignorar")
 
+    def test_nara_escrita_sem_mencao_e_detectada_para_rota_local(self):
+        self.assertTrue(chamada_textual_nara("Nara"))
+        self.assertTrue(chamada_textual_nara("Oi, Nara, tudo bem?"))
+        self.assertFalse(chamada_textual_nara("Narnia é outro assunto"))
+        self.assertEqual(remover_chamada_inicial_nara("Nara, meu saldo"), "meu saldo")
+        self.assertEqual(remover_chamada_inicial_nara("Ei Nara, oi"), "oi")
+
+    def test_mencao_real_prioriza_fluxo_ia_e_nome_digitado_fica_local(self):
+        rota, intent, chamada_nome = decidir_interacao_nara(
+            "meu saldo", foi_marcado=True, canal_livre=False
+        )
+        self.assertEqual((rota, intent), ("local", "meu_saldo"))
+        self.assertFalse(chamada_nome)  # o cog transforma essa rota local em contexto para a IA
+
+        rota, intent, chamada_nome = decidir_interacao_nara(
+            "Nara, meu saldo", foi_marcado=False, canal_livre=False
+        )
+        self.assertEqual((rota, intent), ("local", "meu_saldo"))
+        self.assertTrue(chamada_nome)
+
+        rota, intent, chamada_nome = decidir_interacao_nara(
+            "Nara", foi_marcado=False, canal_livre=False
+        )
+        self.assertEqual((rota, intent), ("local", "saudacao"))
+        self.assertTrue(chamada_nome)
+
+        rota, intent, chamada_nome = decidir_interacao_nara(
+            "Nara, vc viu isso?", foi_marcado=False, canal_livre=False
+        )
+        self.assertEqual((rota, intent), ("fallback", None))
+        self.assertTrue(chamada_nome)  # o cog tenta FAQ comunitária e depois usa fallback local
+
+        rota, _, chamada_nome = decidir_interacao_nara(
+            "oi pessoal", foi_marcado=False, canal_livre=False
+        )
+        self.assertEqual(rota, "ignorar")
+        self.assertFalse(chamada_nome)
+
+
 
 class PedidoTests(unittest.TestCase):
     def test_pedido_curto_sem_dados_privados(self):
@@ -69,6 +112,23 @@ class PedidoTests(unittest.TestCase):
         out = conv.limpar_resposta(longa)
         self.assertLessEqual(len(out), conv.MAX_SAIDA)
         self.assertTrue(out.endswith("."))
+
+    def test_config_e_global_dentro_de_responder_local(self):
+        import symtable
+        from pathlib import Path
+
+        source = (Path(__file__).resolve().parents[1] / "cogs" / "nara_ia.py").read_text(encoding="utf-8")
+        module = symtable.symtable(source, "cogs/nara_ia.py", "exec")
+        cog = next(table for table in module.get_children() if table.get_name() == "NaraIA")
+        responder = next(table for table in cog.get_children() if table.get_name() == "_responder_local")
+        symbol = responder.lookup("config")
+        self.assertTrue(symbol.is_global())
+        self.assertFalse(symbol.is_local())
+
+    def test_girias_sociais_curta_nao_sao_bloqueadas_pelo_escopo(self):
+        for texto in ("vc ta bem?", "como vc ta?", "qual e a boa?", "que que ta pegando?"):
+            decisao = nara_social.avaliar_escopo(texto)
+            self.assertTrue(decisao.permitido, (texto, decisao.motivo))
 
     def test_prompt_existe_e_define_personalidade(self):
         txt = conv.carregar_prompt()
