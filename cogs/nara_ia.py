@@ -73,6 +73,27 @@ NARA_DUVIDAS_LIMPEZA_INTERVALO_MINUTOS = _env_nonnegative_int("NARA_DUVIDAS_LIMP
 COOLDOWN_SEG = 8  # intervalo mínimo entre pesquisas externas feitas no chat por usuário
 PROMPT_PESQUISA_PATH = Path(__file__).resolve().parent.parent / "prompts" / "nara_pesquisa.md"
 
+def preservar_links_contexto_local(resposta: str, contexto_local: str, limite: int = 1900) -> str:
+    """Reinsere links mascarados do contexto factual que a IA tenha omitido.
+
+    A IA pode reescrever a explicação, mas não deve apagar os destinos de download
+    fornecidos pelo código. O formato [rótulo](URL) é clicável nas mensagens do Discord.
+    """
+    links = re.findall(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", contexto_local or "")
+    ausentes = [(rotulo, url) for rotulo, url in links if url not in (resposta or "")]
+    if not ausentes:
+        return resposta
+
+    bloco = "\n\n**Links de acesso:**\n" + "\n".join(
+        f"• [{rotulo}]({url})" for rotulo, url in ausentes
+    )
+    corpo = (resposta or "").rstrip()
+    espaco = limite - len(bloco)
+    if len(corpo) > espaco:
+        corpo = corpo[:max(0, espaco - 2)].rstrip() + "…"
+    return corpo + bloco
+
+
 # ------------------------------------------------------------------------- cog
 class NaraIA(commands.Cog):
     def __init__(self, bot):
@@ -566,6 +587,9 @@ class NaraIA(commands.Cog):
         resposta = conv.limpar_resposta(bruto)
         if not resposta:
             return contexto_local or conv.resposta_sem_ia()
+        if contexto_local:
+            # A IA pode personalizar a explicação, mas os links factuais não podem sumir.
+            resposta = preservar_links_contexto_local(resposta, contexto_local)
         try:
             await self._salvar_memoria(guild_id, autor.id, texto, resposta)
         except Exception:
