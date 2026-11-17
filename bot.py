@@ -56,11 +56,11 @@ EXTENSOES = (
     "cogs.painel_membros", "cogs.catalogo_integrado", "cogs.game_news",
 )
 
-COMANDOS_PRINCIPAIS = frozenset({"nara", "adm"})
+COMANDOS_PRINCIPAIS = frozenset({"nara", "adm", "nara_relacionamento"})
 
 
 def _manter_apenas_comandos_principais(tree) -> list[str]:
-    """Remove da árvore local todos os slash commands exceto /nara e /adm."""
+    """Remove da árvore local os comandos públicos fora da lista principal aprovada."""
     removidos = []
     for comando in list(tree.get_commands()):
         if comando.name not in COMANDOS_PRINCIPAIS:
@@ -69,7 +69,7 @@ def _manter_apenas_comandos_principais(tree) -> list[str]:
     restantes = {comando.name for comando in tree.get_commands()}
     if restantes != COMANDOS_PRINCIPAIS:
         raise RuntimeError(
-            "A árvore de comandos precisa conter exatamente /nara e /adm; "
+            "A árvore de comandos precisa conter exatamente os comandos principais aprovados; "
             f"encontrados: {sorted(restantes)}"
         )
     return removidos
