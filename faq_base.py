@@ -173,9 +173,37 @@ def classificar(pergunta: str, *, min_score: float | None = None,
         return None, 0.0
     primeiro, score, compartilhados = melhores_por_intent[0]
     segundo_score = melhores_por_intent[1][1] if len(melhores_por_intent) > 1 else 0.0
-    if (score < threshold or compartilhados < min_shared or (score - segundo_score) < margin):
+    # Pergunta muito parecida com um exemplo conhecido (score alto) aceita uma margem menor:
+    # intenções vizinhas (ex.: registrar platina x platina duplicada) não devem anular um acerto claro.
+    margem_efetiva = margin / 2 if score >= 0.85 else margin
+    if (score < threshold or compartilhados < min_shared or (score - segundo_score) < margem_efetiva):
         return None, score
     return primeiro, score
+
+
+def buscar_relacionadas(pergunta: str, limite: int = 3, minimo: float = 0.35) -> list[tuple[str, str, float]]:
+    """Entradas da FAQ com resposta fixa mais parecidas com a pergunta: (intent, resposta, score).
+
+    Usado para dar à IA a resposta OFICIAL do bot como contexto, em vez de ela inventar.
+    """
+    qnorm = normalizar(str(pergunta or ""))
+    qt = _tokens_normalizados(qnorm)
+    if not qt:
+        return []
+    cfg = carregar_base().get("matching", {})
+    fuzzy = float(cfg.get("fuzzy_token_threshold", 0.88))
+    corpus, _ = _corpus_preparado()
+    respostas = {i.get("intent"): str(i.get("answer") or "").strip() for i in carregar_base()["intents"]}
+    achados = []
+    for intent, exemplos, _vocab in corpus:
+        resposta = respostas.get(intent)
+        if not resposta:
+            continue
+        melhor = max((_score_preparado(qnorm, qt, ex, et, fuzzy) for ex, et in exemplos), default=0.0)
+        if melhor >= minimo:
+            achados.append((intent, resposta, melhor))
+    achados.sort(key=lambda x: x[2], reverse=True)
+    return achados[:max(0, limite)]
 
 
 def resposta_pronta(intent: str) -> str | None:
