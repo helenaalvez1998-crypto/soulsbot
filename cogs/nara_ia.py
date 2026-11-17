@@ -12,6 +12,7 @@ import random
 import re
 import time
 from pathlib import Path
+from typing import Optional
 
 import discord
 import config
@@ -34,6 +35,7 @@ import faq_base
 import nara_conhecimento
 import nara_conversa as conv
 import nara_social
+import nara_relacionamento
 import nara_estilo_textual
 import nara_respostas
 
@@ -94,6 +96,122 @@ def preservar_links_contexto_local(resposta: str, contexto_local: str, limite: i
     return corpo + bloco
 
 
+class PainelRelacionamentoAdminView(discord.ui.View):
+    """Painel efêmero de ajustes; apenas o proprietário global do bot pode interagir."""
+
+    PASSO = 0.5
+
+    def __init__(self, cog, guild_id: int, user_id: int, owner_id: int):
+        super().__init__(timeout=300)
+        self.cog = cog
+        self.guild_id = int(guild_id)
+        self.user_id = int(user_id)
+        self.owner_id = int(owner_id)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        autorizado = (
+            int(interaction.user.id) == self.owner_id
+            and await self.cog._interacao_e_dono_bot(interaction)
+        )
+        if not autorizado:
+            await interaction.response.send_message(
+                "Este painel é privado e só pode ser usado pelo proprietário do bot.", ephemeral=True
+            )
+            return False
+        if int(interaction.guild_id or 0) != self.guild_id or not self.cog._relacionamento_configurado(
+            self.guild_id, self.user_id
+        ):
+            await interaction.response.send_message(
+                "Este painel expirou ou o usuário configurado foi alterado. Abra `/nara_relacionamento` novamente.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    async def _ajustar(self, interaction: discord.Interaction, campo: str, delta: float):
+        if campo not in {"afinidade", "paciencia"}:
+            return await interaction.response.send_message("Indicador inválido.", ephemeral=True)
+
+        agora = int(time.time())
+        perfil = await self.cog.bot.db._one(
+            "SELECT afinidade, paciencia FROM nara_relacionamento_perfil WHERE guild_id=? AND user_id=?",
+            (self.guild_id, self.user_id),
+        )
+        if perfil:
+            afinidade = float(perfil["afinidade"] or 5.0)
+            paciencia = float(perfil["paciencia"] or 5.0)
+        else:
+            afinidade = paciencia = 5.0
+            await self.cog.bot.db.conn.execute(
+                "INSERT INTO nara_relacionamento_perfil(guild_id,user_id,afinidade,paciencia,updated_at,recovered_at) VALUES (?,?,5.0,5.0,?,?)",
+                (self.guild_id, self.user_id, agora, agora),
+            )
+
+        valor_atual = afinidade if campo == "afinidade" else paciencia
+        novo_valor = nara_relacionamento.ajustar_indicador(valor_atual, delta)
+        await self.cog.bot.db.conn.execute(
+            f"UPDATE nara_relacionamento_perfil SET {campo}=?, updated_at=?, recovered_at=? WHERE guild_id=? AND user_id=?",
+            (novo_valor, agora, agora, self.guild_id, self.user_id),
+        )
+        await self.cog.bot.db.conn.commit()
+        await self._renderizar(interaction)
+
+    async def _renderizar(self, interaction: discord.Interaction | None = None):
+        embed, afinidade, paciencia = await self.cog._montar_embed_relacionamento_admin(
+            self.guild_id, self.user_id
+        )
+        self.afinidade_aumentar.disabled = afinidade >= 10.0
+        self.afinidade_diminuir.disabled = afinidade <= 1.0
+        self.paciencia_aumentar.disabled = paciencia >= 10.0
+        self.paciencia_diminuir.disabled = paciencia <= 1.0
+        if interaction is not None:
+            await interaction.response.edit_message(embed=embed, view=self)
+        return embed
+
+    @discord.ui.button(label="Afinidade +0,5", style=discord.ButtonStyle.success, row=0)
+    async def afinidade_aumentar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._ajustar(interaction, "afinidade", self.PASSO)
+
+    @discord.ui.button(label="Afinidade −0,5", style=discord.ButtonStyle.danger, row=0)
+    async def afinidade_diminuir(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._ajustar(interaction, "afinidade", -self.PASSO)
+
+    @discord.ui.button(label="Paciência +0,5", style=discord.ButtonStyle.success, row=1)
+    async def paciencia_aumentar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._ajustar(interaction, "paciencia", self.PASSO)
+
+    @discord.ui.button(label="Paciência −0,5", style=discord.ButtonStyle.danger, row=1)
+    async def paciencia_diminuir(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._ajustar(interaction, "paciencia", -self.PASSO)
+
+    @discord.ui.button(label="Atualizar", style=discord.ButtonStyle.secondary, row=1)
+    async def atualizar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._renderizar(interaction)
+
+    @discord.ui.button(label="Desativar relacionamento", style=discord.ButtonStyle.danger, row=2)
+    async def desativar_relacionamento(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.cog.bot.db.conn.execute(
+            "DELETE FROM nara_relacionamento_config WHERE guild_id=?", (self.guild_id,)
+        )
+        await self.cog.bot.db.conn.execute(
+            "DELETE FROM nara_relacionamento_perfil WHERE guild_id=? AND user_id=?",
+            (self.guild_id, self.user_id),
+        )
+        await self.cog.bot.db.conn.execute(
+            "DELETE FROM nara_relacionamento_eventos WHERE guild_id=? AND user_id=?",
+            (self.guild_id, self.user_id),
+        )
+        await self.cog.bot.db.conn.commit()
+        self.cog._relacionamento_alvos.pop(self.guild_id, None)
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(
+            content=f"Relacionamento adaptativo desativado para <@{self.user_id}>. Indicadores e eventos relacionais foram apagados.",
+            embed=None,
+            view=self,
+        )
+
+
 # ------------------------------------------------------------------------- cog
 class NaraIA(commands.Cog):
     def __init__(self, bot):
@@ -113,6 +231,8 @@ class NaraIA(commands.Cog):
                 self.ia_config_error = f"{type(exc).__name__}: {exc}"[:300]
                 log.exception("Provedores conversacionais não puderam ser inicializados; respostas locais continuam ativas.")
         self.ultimo_uso: dict[int, float] = {}
+        # Um alvo por servidor; carregado do SQLite para consulta síncrona no fluxo de chat.
+        self._relacionamento_alvos: dict[int, int] = {}
         self._limpeza_duvidas_task = None
         if NARA_DUVIDAS_LIMPEZA_ENABLED and not IA_CANAIS_LIVRES:
             log.info("Limpeza automática da Nara não iniciada: IA_CANAIS_LIVRES não contém canais configurados.")
@@ -208,10 +328,50 @@ class NaraIA(commands.Cog):
                  updated_at INTEGER NOT NULL,
                  PRIMARY KEY (guild_id, user_id))"""
         )
+        # Relação adaptativa isolada: um único alvo por servidor, configurado pelo dono
+        # do bot via slash command. A pessoa ainda precisa autorizar pela /nara_memoria.
+        await self.bot.db.conn.execute(
+            """CREATE TABLE IF NOT EXISTS nara_relacionamento_config (
+                 guild_id INTEGER PRIMARY KEY,
+                 user_id INTEGER NOT NULL,
+                 configured_by INTEGER NOT NULL,
+                 updated_at INTEGER NOT NULL)"""
+        )
+        await self.bot.db.conn.execute(
+            """CREATE TABLE IF NOT EXISTS nara_relacionamento_perfil (
+                 guild_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+                 afinidade REAL NOT NULL DEFAULT 5.0,
+                 paciencia REAL NOT NULL DEFAULT 5.0,
+                 updated_at INTEGER NOT NULL,
+                 recovered_at INTEGER NOT NULL,
+                 PRIMARY KEY (guild_id, user_id))"""
+        )
+        await self.bot.db.conn.execute(
+            """CREATE TABLE IF NOT EXISTS nara_relacionamento_eventos (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 guild_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+                 event_type TEXT NOT NULL, summary TEXT NOT NULL,
+                 afinidade_delta REAL NOT NULL DEFAULT 0,
+                 paciencia_delta REAL NOT NULL DEFAULT 0,
+                 created_at INTEGER NOT NULL)"""
+        )
+        await self.bot.db.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_nara_rel_eventos_scope ON nara_relacionamento_eventos(guild_id,user_id,created_at)"
+        )
         await self.bot.db.conn.execute(
             "DELETE FROM nara_memoria WHERE created_at<?", (int(time.time()) - 30 * 86400,)
         )
+        await self.bot.db.conn.execute(
+            "DELETE FROM nara_relacionamento_eventos WHERE created_at<?", (int(time.time()) - 90 * 86400,)
+        )
         await self.bot.db.conn.commit()
+        alvos_configurados = await self.bot.db._all(
+            "SELECT guild_id, user_id FROM nara_relacionamento_config"
+        )
+        self._relacionamento_alvos = {
+            int(row["guild_id"]): int(row["user_id"])
+            for row in (alvos_configurados or [])
+        }
         if NARA_DUVIDAS_LIMPEZA_ENABLED and IA_CANAIS_LIVRES and NARA_DUVIDAS_LIMPEZA_INTERVALO_MINUTOS > 0:
             self._limpeza_duvidas_task = asyncio.create_task(self._loop_limpeza_automatica_duvidas())
 
@@ -253,6 +413,256 @@ class NaraIA(commands.Cog):
             (guild_id, user_id, proximidade, intimidade, agora),
         )
         await self.bot.db.conn.commit()
+
+    def _relacionamento_configurado(self, guild_id: int, user_id: int) -> bool:
+        """Confere se a pessoa é o único alvo configurado para este servidor."""
+        alvo = self._relacionamento_alvos.get(int(guild_id or 0), 0)
+        return bool(alvo and int(user_id) == int(alvo))
+
+    async def _relacionamento_ativo(self, guild_id: int, user_id: int) -> bool:
+        """Exige alvo configurado, servidor e consentimento da memória da NARA."""
+        return bool(
+            guild_id
+            and self._relacionamento_configurado(guild_id, user_id)
+            and await self._memoria_ativa(guild_id, user_id)
+        )
+
+    async def _atualizar_relacionamento(self, guild_id: int, user_id: int, texto: str):
+        """Aplica recuperação e eventos locais; não guarda o texto original nem chama IA."""
+        if not await self._relacionamento_ativo(guild_id, user_id):
+            return
+
+        agora = int(time.time())
+        perfil = await self.bot.db._one(
+            "SELECT afinidade, paciencia, recovered_at FROM nara_relacionamento_perfil WHERE guild_id=? AND user_id=?",
+            (guild_id, user_id),
+        )
+        if perfil:
+            afinidade = float(perfil["afinidade"] or 5.0)
+            paciencia = float(perfil["paciencia"] or 5.0)
+            recuperado_em = int(perfil["recovered_at"] or agora)
+        else:
+            afinidade = paciencia = 5.0
+            recuperado_em = agora
+            await self.bot.db.conn.execute(
+                "INSERT INTO nara_relacionamento_perfil(guild_id,user_id,afinidade,paciencia,updated_at,recovered_at) VALUES (?,?,5.0,5.0,?,?)",
+                (guild_id, user_id, agora, agora),
+            )
+
+        afinidade, paciencia = nara_relacionamento.recuperar_com_tempo(
+            afinidade, paciencia, max(0, agora - recuperado_em)
+        )
+
+        ofensa_recente = await self.bot.db._one(
+            """SELECT id FROM nara_relacionamento_eventos
+               WHERE guild_id=? AND user_id=?
+                 AND event_type IN ('provocacao','desrespeito','desrespeito_grave')
+                 AND created_at>=? LIMIT 1""",
+            (guild_id, user_id, agora - 30 * 86400),
+        )
+        evento = nara_relacionamento.avaliar_mensagem(
+            texto, houve_desrespeito_recente=bool(ofensa_recente)
+        )
+        if evento:
+            repetido = await self.bot.db._one(
+                """SELECT id FROM nara_relacionamento_eventos
+                   WHERE guild_id=? AND user_id=? AND event_type=? AND created_at>=?
+                   ORDER BY id DESC LIMIT 1""",
+                (guild_id, user_id, evento.tipo, agora - 900),
+            )
+            if repetido:
+                evento = None
+
+        if evento and (evento.afinidade_delta > 0 or evento.paciencia_delta > 0):
+            ganhos = await self.bot.db._one(
+                """SELECT
+                     COALESCE(SUM(CASE WHEN afinidade_delta>0 THEN afinidade_delta ELSE 0 END),0) AS afinidade,
+                     COALESCE(SUM(CASE WHEN paciencia_delta>0 THEN paciencia_delta ELSE 0 END),0) AS paciencia
+                   FROM nara_relacionamento_eventos
+                   WHERE guild_id=? AND user_id=? AND created_at>=?""",
+                (guild_id, user_id, agora - 86400),
+            )
+            evento = nara_relacionamento.limitar_delta_positivo(
+                evento,
+                afinidade_positiva_24h=float(ganhos["afinidade"] or 0) if ganhos else 0.0,
+                paciencia_positiva_24h=float(ganhos["paciencia"] or 0) if ganhos else 0.0,
+            )
+
+        if evento:
+            afinidade += evento.afinidade_delta
+            paciencia += evento.paciencia_delta
+            await self.bot.db.conn.execute(
+                """INSERT INTO nara_relacionamento_eventos
+                   (guild_id,user_id,event_type,summary,afinidade_delta,paciencia_delta,created_at)
+                   VALUES (?,?,?,?,?,?,?)""",
+                (guild_id, user_id, evento.tipo, evento.resumo,
+                 evento.afinidade_delta, evento.paciencia_delta, agora),
+            )
+            await self.bot.db.conn.execute(
+                """DELETE FROM nara_relacionamento_eventos
+                   WHERE guild_id=? AND user_id=? AND id NOT IN
+                   (SELECT id FROM nara_relacionamento_eventos
+                    WHERE guild_id=? AND user_id=? ORDER BY id DESC LIMIT 25)""",
+                (guild_id, user_id, guild_id, user_id),
+            )
+
+        afinidade = min(10.0, max(1.0, afinidade))
+        paciencia = min(10.0, max(1.0, paciencia))
+        await self.bot.db.conn.execute(
+            """INSERT INTO nara_relacionamento_perfil
+               (guild_id,user_id,afinidade,paciencia,updated_at,recovered_at)
+               VALUES (?,?,?,?,?,?)
+               ON CONFLICT(guild_id,user_id) DO UPDATE SET
+                 afinidade=excluded.afinidade, paciencia=excluded.paciencia,
+                 updated_at=excluded.updated_at, recovered_at=excluded.recovered_at""",
+            (guild_id, user_id, afinidade, paciencia, agora, agora),
+        )
+        await self.bot.db.conn.execute(
+            "DELETE FROM nara_relacionamento_eventos WHERE guild_id=? AND user_id=? AND created_at<?",
+            (guild_id, user_id, agora - 90 * 86400),
+        )
+        await self.bot.db.conn.commit()
+
+    async def _carregar_contexto_relacionamento(self, guild_id: int, user_id: int) -> str:
+        """Fornece afinidade, paciência e eventos importantes ao prompt da NARA."""
+        if not await self._relacionamento_ativo(guild_id, user_id):
+            return ""
+        perfil = await self.bot.db._one(
+            "SELECT afinidade, paciencia FROM nara_relacionamento_perfil WHERE guild_id=? AND user_id=?",
+            (guild_id, user_id),
+        )
+        if not perfil:
+            return nara_relacionamento.formatar_contexto(5.0, 5.0, [])
+        eventos = await self.bot.db._all(
+            """SELECT summary FROM nara_relacionamento_eventos
+               WHERE guild_id=? AND user_id=? ORDER BY id DESC LIMIT 4""",
+            (guild_id, user_id),
+        )
+        return nara_relacionamento.formatar_contexto(
+            float(perfil["afinidade"] or 5.0),
+            float(perfil["paciencia"] or 5.0),
+            [{"summary": str(evento["summary"] or "")} for evento in (eventos or [])],
+        )
+
+    async def _montar_embed_relacionamento_admin(self, guild_id: int, user_id: int):
+        """Monta dados administrativos do relacionamento; nunca é usado em painéis públicos."""
+        if await self._memoria_ativa(guild_id, user_id):
+            await self._atualizar_relacionamento(guild_id, user_id, "")
+        perfil = await self.bot.db._one(
+            "SELECT afinidade, paciencia FROM nara_relacionamento_perfil WHERE guild_id=? AND user_id=?",
+            (guild_id, user_id),
+        )
+        afinidade = float(perfil["afinidade"] or 5.0) if perfil else 5.0
+        paciencia = float(perfil["paciencia"] or 5.0) if perfil else 5.0
+        memoria_ativa = await self._memoria_ativa(guild_id, user_id)
+        eventos = await self.bot.db._all(
+            "SELECT summary FROM nara_relacionamento_eventos WHERE guild_id=? AND user_id=? ORDER BY id DESC LIMIT 5",
+            (guild_id, user_id),
+        )
+
+        def barra(valor: float) -> str:
+            preenchidos = max(0, min(10, round(valor)))
+            return "█" * preenchidos + "░" * (10 - preenchidos)
+
+        embed = discord.Embed(
+            title="NARA — Painel privado de relacionamento",
+            description=(
+                f"**Usuário monitorado:** <@{user_id}> (`{user_id}`)\n"
+                f"**Memória autorizada:** {'Sim' if memoria_ativa else 'Não'}"
+            ),
+            color=0x5865F2,
+        )
+        embed.add_field(
+            name="Afinidade",
+            value=f"`{afinidade:.1f}/10`\n`{barra(afinidade)}`",
+            inline=True,
+        )
+        embed.add_field(
+            name="Paciência",
+            value=f"`{paciencia:.1f}/10`\n`{barra(paciencia)}`",
+            inline=True,
+        )
+        resumos = [str(evento["summary"] or "").strip()[:120] for evento in (eventos or []) if evento["summary"]]
+        embed.add_field(
+            name="Eventos importantes recentes",
+            value="\n".join(f"• {resumo}" for resumo in resumos) if resumos else "Nenhum evento registrado.",
+            inline=False,
+        )
+        observacao = (
+            "Os botões alteram 0,5 ponto por clique. Os indicadores permanecem entre 1 e 10."
+        )
+        if not memoria_ativa:
+            observacao += " A pessoa ainda precisa autorizar `/nara_memoria`; os valores não serão aplicados às conversas enquanto a autorização estiver desativada."
+        embed.set_footer(text=observacao[:2048])
+        return embed, afinidade, paciencia
+
+    async def _interacao_e_dono_bot(self, interaction: discord.Interaction) -> bool:
+        """Aceita somente o proprietário global do bot, não apenas moderadores do servidor."""
+        owner_id = int(getattr(config, "BOT_OWNER_ID", 0) or 0)
+        if owner_id and int(interaction.user.id) == owner_id:
+            return True
+        try:
+            return bool(await self.bot.is_owner(interaction.user))
+        except Exception:
+            log.exception("Não foi possível validar o proprietário do bot em /nara_relacionamento.")
+            return False
+
+    @app_commands.command(
+        name="nara_relacionamento",
+        description="Abre o painel privado de relacionamento adaptativo da NARA.",
+    )
+    @app_commands.guild_only()
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.describe(usuario="Opcional: escolha quem será monitorado neste servidor")
+    async def nara_relacionamento(
+        self, interaction: discord.Interaction, usuario: Optional[discord.Member] = None
+    ):
+        if not await self._interacao_e_dono_bot(interaction):
+            return await interaction.response.send_message(
+                "Somente o proprietário do bot pode abrir ou alterar o painel de relacionamento.",
+                ephemeral=True,
+            )
+        if interaction.guild_id is None:
+            return await interaction.response.send_message(
+                "Este painel só pode ser usado dentro de um servidor.", ephemeral=True
+            )
+
+        guild_id = int(interaction.guild_id)
+        anterior = int(self._relacionamento_alvos.get(guild_id, 0) or 0)
+        if usuario is not None:
+            if usuario.bot:
+                return await interaction.response.send_message(
+                    "Escolha uma pessoa, não outro bot.", ephemeral=True
+                )
+            novo_user_id = int(usuario.id)
+            agora = int(time.time())
+            await self.bot.db.conn.execute(
+                """INSERT INTO nara_relacionamento_config(guild_id,user_id,configured_by,updated_at)
+                   VALUES (?,?,?,?)
+                   ON CONFLICT(guild_id) DO UPDATE SET
+                     user_id=excluded.user_id,
+                     configured_by=excluded.configured_by,
+                     updated_at=excluded.updated_at""",
+                (guild_id, novo_user_id, int(interaction.user.id), agora),
+            )
+            # O servidor acompanha uma pessoa por vez. Ao trocar o alvo, o perfil
+            # anterior fica preservado para que o dono possa selecioná-lo novamente.
+            await self.bot.db.conn.commit()
+            self._relacionamento_alvos[guild_id] = novo_user_id
+            user_id = novo_user_id
+        else:
+            user_id = anterior
+            if not user_id:
+                return await interaction.response.send_message(
+                    "Nenhuma pessoa está configurada. Execute `/nara_relacionamento usuario:@membro` para escolher quem será monitorado.",
+                    ephemeral=True,
+                )
+
+        painel = PainelRelacionamentoAdminView(
+            self, guild_id, user_id, int(interaction.user.id)
+        )
+        embed = await painel._renderizar()
+        await interaction.response.send_message(embed=embed, view=painel, ephemeral=True)
 
     async def _carregar_memoria(self, guild_id: int, user_id: int) -> str:
         """Carrega somente as últimas 12 mensagens de quem autorizou memória."""
@@ -326,7 +736,13 @@ class NaraIA(commands.Cog):
                     (guild_id, user_id, agora),
                 )
                 await self.bot.db.conn.commit()
-                texto = "Memória ativada. Vou usar até 12 mensagens recentes para manter continuidade. O histórico expira em 30 dias; imagens não são armazenadas."
+                if self._relacionamento_configurado(guild_id, user_id):
+                    texto = ("Memória ativada. Vou usar até 12 mensagens recentes para manter continuidade. "
+                             "Esta autorização também permite um perfil interno de personalização baseado nas interações, "
+                             "administrado separadamente pelo proprietário do bot. Os controles desse perfil não são exibidos aqui. "
+                             "As conversas expiram em 30 dias e os registros relacionais em 90 dias; imagens não são armazenadas.")
+                else:
+                    texto = "Memória ativada. Vou usar até 12 mensagens recentes para manter continuidade. O histórico expira em 30 dias; imagens não são armazenadas."
             elif acao == "desativar":
                 await self.bot.db.conn.execute(
                     """INSERT INTO nara_memoria_privacidade(guild_id,user_id,enabled,updated_at)
@@ -335,13 +751,23 @@ class NaraIA(commands.Cog):
                     (guild_id, user_id, agora),
                 )
                 await self.bot.db.conn.commit()
-                texto = "Memória desativada. Não vou guardar novas conversas. O histórico existente permanece até ser apagado ou expirar."
+                if self._relacionamento_configurado(guild_id, user_id):
+                    texto = ("Memória desativada. Não vou guardar novas conversas nem atualizar o perfil interno de personalização. "
+                             "Os dados já existentes permanecem até serem apagados ou expirarem.")
+                else:
+                    texto = "Memória desativada. Não vou guardar novas conversas. O histórico existente permanece até ser apagado ou expirar."
             elif acao == "apagar":
                 await self.bot.db.conn.execute(
                     "DELETE FROM nara_memoria WHERE guild_id=? AND user_id=?", (guild_id, user_id)
                 )
                 await self.bot.db.conn.execute(
                     "DELETE FROM nara_social_perfil WHERE guild_id=? AND user_id=?", (guild_id, user_id)
+                )
+                await self.bot.db.conn.execute(
+                    "DELETE FROM nara_relacionamento_perfil WHERE guild_id=? AND user_id=?", (guild_id, user_id)
+                )
+                await self.bot.db.conn.execute(
+                    "DELETE FROM nara_relacionamento_eventos WHERE guild_id=? AND user_id=?", (guild_id, user_id)
                 )
                 await self.bot.db.conn.execute(
                     """INSERT INTO nara_memoria_privacidade(guild_id,user_id,enabled,updated_at)
@@ -353,20 +779,31 @@ class NaraIA(commands.Cog):
                 texto = "Seu histórico foi apagado e a memória ficou desativada."
             else:
                 ativa = await self._memoria_ativa(guild_id, user_id)
+                if ativa and self._relacionamento_configurado(guild_id, user_id):
+                    # Atualiza a recuperação pelo tempo mesmo quando o membro só consulta o status.
+                    await self._atualizar_relacionamento(guild_id, user_id, "")
                 row = await self.bot.db._one(
                     "SELECT COUNT(*) AS total FROM nara_memoria WHERE guild_id=? AND user_id=?",
                     (guild_id, user_id),
                 )
                 total = int(row["total"] if row else 0)
-                perfil = await self.bot.db._one(
-                    "SELECT interacoes, afinidade, intimidade FROM nara_social_perfil WHERE guild_id=? AND user_id=?",
-                    (guild_id, user_id),
-                )
-                relacao = (
-                    nara_social.formatar_relacao(int(perfil["interacoes"]), float(perfil["afinidade"]), float(perfil["intimidade"]))
-                    if perfil else "Ainda não há vínculo social registrado."
-                )
-                texto = f"Memória: **{'ativada' if ativa else 'desativada'}**. Registros armazenados: **{total}**. Limite: 12 mensagens, retenção de 30 dias.\n{relacao}\nO perfil social personalizado também depende desta autorização."
+                if self._relacionamento_configurado(guild_id, user_id):
+                    # O alvo controla sua própria memória, mas os dados de relacionamento
+                    # (indicadores, eventos e configuração) são reservados ao dono do bot.
+                    relacao = (
+                        "\nO perfil interno de personalização da NARA também depende desta autorização. "
+                        "Os controles administrativos desse perfil são privados e não aparecem neste painel."
+                    )
+                else:
+                    perfil = await self.bot.db._one(
+                        "SELECT interacoes, afinidade, intimidade FROM nara_social_perfil WHERE guild_id=? AND user_id=?",
+                        (guild_id, user_id),
+                    )
+                    relacao = (
+                        "\n" + nara_social.formatar_relacao(int(perfil["interacoes"]), float(perfil["afinidade"]), float(perfil["intimidade"]))
+                        if perfil else ""
+                    )
+                texto = f"Memória: **{'ativada' if ativa else 'desativada'}**. Registros armazenados: **{total}**. Limite: 12 mensagens, retenção de 30 dias.{relacao}"
             await interacao.response.edit_message(content=texto, view=view)
 
         botoes = (
@@ -382,11 +819,16 @@ class NaraIA(commands.Cog):
             botao.callback = callback
             view.add_item(botao)
 
-        await interaction.response.send_message(
-            "## Memória privada da Nara\nEscolha o que deseja fazer. A memória começa desativada, é separada por servidor e só guarda texto e indicadores sociais após sua autorização. São mantidas até 12 mensagens por 30 dias; imagens nunca são armazenadas. Apagar o histórico também apaga seu perfil de afinidade.",
-            view=view,
-            ephemeral=True,
+        descricao_memoria = (
+            "## Memória privada da Nara\nEscolha o que deseja fazer. A memória começa desativada, é separada por servidor e só guarda informações de continuidade após sua autorização. São mantidas até 12 mensagens por 30 dias; imagens nunca são armazenadas. Apagar o histórico também apaga os dados de personalização associados."
         )
+        if self._relacionamento_configurado(guild_id, user_id):
+            descricao_memoria += (
+                "\n\nCom a memória ativada, a NARA também mantém um perfil interno de personalização e eventos resumidos "
+                "por até 90 dias. A administração desse perfil é privada ao proprietário do bot; pontuações e controles "
+                "não aparecem neste painel. O conteúdo original das mensagens não é copiado para esse registro."
+            )
+        await interaction.response.send_message(descricao_memoria, view=view, ephemeral=True)
 
     @app_commands.command(name="nara_relatorio", description="Mostra indicadores de uso e disponibilidade da Nara para a equipe.")
     async def nara_relatorio(self, interaction: discord.Interaction):
@@ -517,6 +959,7 @@ class NaraIA(commands.Cog):
             return contexto_local or conv.resposta_sem_ia()
 
         memoria_ativa = await self._memoria_ativa(guild_id, autor.id)
+        relacionamento_ativo = bool(guild_id and memoria_ativa and self._relacionamento_configurado(guild_id, autor.id))
         chave = conv.chave_cache(texto)
         if not contexto and not memoria_ativa and not anexos and not contexto_local:
             em_cache = self.conv_cache.obter(chave)
@@ -538,6 +981,9 @@ class NaraIA(commands.Cog):
         imagens = await self._imagens_para_modelo(message) if anexos else []
         if anexos and not imagens and tem_anexo_visual(anexos):
             return "Não consegui ler esse formato ou arquivo. Envie PNG, JPG ou WEBP com até 5 MiB por imagem."
+        if relacionamento_ativo:
+            # A avaliação é local e acontece na mesma interação; não cria chamada adicional à IA.
+            await self._atualizar_relacionamento(guild_id, autor.id, texto)
         prompt = (self.prompt_conversa + nara_social.contexto_especialista(texto)
                   + nara_social.instrucoes_tom(texto))
         if contexto_local:
@@ -547,9 +993,14 @@ class NaraIA(commands.Cog):
                 + "\nUse esses dados como referência obrigatória. Preserve valores, nomes, estados e limites exatamente. "
                   "Você pode adaptar a linguagem à sua personalidade, mas não invente, complete ou altere informações."
             )
-        relacao = await self._carregar_relacao_social(guild_id, autor.id)
-        if relacao:
-            prompt += "\n\n" + relacao
+        if not relacionamento_ativo:
+            relacao = await self._carregar_relacao_social(guild_id, autor.id)
+            if relacao:
+                prompt += "\n\n" + relacao
+        else:
+            contexto_relacionamento = await self._carregar_contexto_relacionamento(guild_id, autor.id)
+            if contexto_relacionamento:
+                prompt += "\n\n" + contexto_relacionamento
         norm = texto.casefold()
         termos_bot = (
             "nara", "servidor", "comando", "painel", "santuario", "platina", "zerado",
@@ -594,10 +1045,11 @@ class NaraIA(commands.Cog):
             await self._salvar_memoria(guild_id, autor.id, texto, resposta)
         except Exception:
             log.exception("Não foi possível persistir a memória opt-in da Nara.")
-        try:
-            await self._atualizar_relacao_social(guild_id, autor.id, texto)
-        except Exception:
-            log.exception("Não foi possível atualizar o vínculo social opt-in da Nara.")
+        if not relacionamento_ativo:
+            try:
+                await self._atualizar_relacao_social(guild_id, autor.id, texto)
+            except Exception:
+                log.exception("Não foi possível atualizar o vínculo social opt-in da Nara.")
         try:
             await self._registrar_conversa(autor.id)
         except Exception:
