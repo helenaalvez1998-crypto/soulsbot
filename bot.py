@@ -188,6 +188,16 @@ def _contexto_relatorio(
     }
 
 
+def _interacao_expirada(error: BaseException | None) -> bool:
+    """True para 404/10062 (Unknown interaction): o Discord já descartou a interação
+    (passou de 3s sem resposta, normalmente por lag do gateway). Não há mais o que responder."""
+    while error is not None:
+        if isinstance(error, discord.NotFound) and getattr(error, "code", None) == 10062:
+            return True
+        error = getattr(error, "original", None)
+    return False
+
+
 async def _responder_erro_interacao(
     interaction: discord.Interaction,
     mensagem: str,
@@ -211,6 +221,9 @@ async def _nara_view_on_error(
 ) -> None:
     """Tratamento padrão para falhas em botões/selects sem handler local."""
     acao = getattr(item, "label", None) or getattr(item, "custom_id", None) or type(item).__name__
+    if _interacao_expirada(error):
+        log.warning("Interação expirada em componente (%s); o clique chegou após o prazo de 3s.", acao)
+        return
     log.error(
         "Falha em componente de interface (%s).",
         acao,
@@ -239,6 +252,10 @@ class NaraCommandTree(app_commands.CommandTree):
         command = getattr(interaction, "command", None)
         command_name = getattr(command, "qualified_name", "comando desconhecido")
         original = error.original if isinstance(error, app_commands.CommandInvokeError) else error
+
+        if _interacao_expirada(error):
+            log.warning("Interação expirada em /%s; a resposta chegou após o prazo de 3s (lag do gateway).", command_name)
+            return
 
         # Cogs e comandos já possuem handlers locais; não enviar uma segunda
         # mensagem ao usuário depois que esses handlers trataram a exceção.
