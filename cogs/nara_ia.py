@@ -328,8 +328,8 @@ class NaraIA(commands.Cog):
                  updated_at INTEGER NOT NULL,
                  PRIMARY KEY (guild_id, user_id))"""
         )
-        # Relação adaptativa isolada: um único alvo por servidor, configurado pelo dono
-        # do bot via slash command. A pessoa ainda precisa autorizar pela /nara_memoria.
+        # Relacionamento adaptativo individual para todos os membros que mantêm a memória ativa.
+        # O painel administrativo seleciona um usuário apenas para consulta e ajuste manual.
         await self.bot.db.conn.execute(
             """CREATE TABLE IF NOT EXISTS nara_relacionamento_config (
                  guild_id INTEGER PRIMARY KEY,
@@ -382,8 +382,29 @@ class NaraIA(commands.Cog):
         )
         return bool(row and int(row["enabled"]))
 
+    async def _ativar_memoria_no_primeiro_contato(self, guild_id: int, user_id: int) -> bool:
+        """Ativa memória no primeiro contato; retorna True quando acabou de ativar.
+
+        O membro pode desativar ou apagar tudo em /nara_memoria.
+        """
+        if not guild_id or not user_id:
+            return False
+        row = await self.bot.db._one(
+            "SELECT enabled FROM nara_memoria_privacidade WHERE guild_id=? AND user_id=?",
+            (guild_id, user_id),
+        )
+        if row is not None:
+            return False  # respeita tanto opt-in anterior quanto opt-out explícito
+        agora = int(time.time())
+        await self.bot.db.conn.execute(
+            "INSERT OR IGNORE INTO nara_memoria_privacidade(guild_id,user_id,enabled,updated_at) VALUES (?,?,1,?)",
+            (guild_id, user_id, agora),
+        )
+        await self.bot.db.conn.commit()
+        return True
+
     async def _carregar_relacao_social(self, guild_id: int, user_id: int) -> str:
-        """Perfil social privado; só existe/é lido quando o membro autorizou memória."""
+        """Perfil social privado; só existe/é lido enquanto a memória estiver ativa."""
         if not await self._memoria_ativa(guild_id, user_id):
             return ""
         row = await self.bot.db._one(
@@ -397,7 +418,7 @@ class NaraIA(commands.Cog):
         )
 
     async def _atualizar_relacao_social(self, guild_id: int, user_id: int, texto: str):
-        """Atualiza vínculo apenas após opt-in explícito e interação bem-sucedida."""
+        """Atualiza vínculo social durante interações bem-sucedidas com memória ativa."""
         if not await self._memoria_ativa(guild_id, user_id):
             return
         proximidade, intimidade = nara_social.calcular_sinal(texto)
@@ -420,12 +441,8 @@ class NaraIA(commands.Cog):
         return bool(alvo and int(user_id) == int(alvo))
 
     async def _relacionamento_ativo(self, guild_id: int, user_id: int) -> bool:
-        """Exige alvo configurado, servidor e consentimento da memória da NARA."""
-        return bool(
-            guild_id
-            and self._relacionamento_configurado(guild_id, user_id)
-            and await self._memoria_ativa(guild_id, user_id)
-        )
+        """Relacionamento individual ativo para todo membro com memória habilitada."""
+        return bool(guild_id and user_id and await self._memoria_ativa(guild_id, user_id))
 
     async def _atualizar_relacionamento(self, guild_id: int, user_id: int, texto: str):
         """Aplica recuperação e eventos locais; não guarda o texto original nem chama IA."""
@@ -592,7 +609,7 @@ class NaraIA(commands.Cog):
             "Os botões alteram 0,5 ponto por clique. Os indicadores permanecem entre 1 e 10."
         )
         if not memoria_ativa:
-            observacao += " A pessoa ainda precisa autorizar `/nara_memoria`; os valores não serão aplicados às conversas enquanto a autorização estiver desativada."
+            observacao += " A memória está desativada para esta pessoa; os dados não serão atualizados até que ela reative em `/nara_memoria`."
         embed.set_footer(text=observacao[:2048])
         return embed, afinidade, paciencia
 
@@ -666,7 +683,7 @@ class NaraIA(commands.Cog):
             await interaction.response.send_message(embed=embed, view=painel, ephemeral=True)
 
     async def _carregar_memoria(self, guild_id: int, user_id: int) -> str:
-        """Carrega somente as últimas 12 mensagens de quem autorizou memória."""
+        """Carrega somente as últimas 12 mensagens de quem mantém a memória ativa."""
         if not await self._memoria_ativa(guild_id, user_id):
             return ""
         agora = int(time.time())
@@ -693,7 +710,7 @@ class NaraIA(commands.Cog):
         )[:5000]
 
     async def _salvar_memoria(self, guild_id: int, user_id: int, pergunta: str, resposta: str):
-        """Persiste texto apenas após opt-in; imagens e anexos nunca são armazenados."""
+        """Persiste texto enquanto a memória estiver ativa; imagens e anexos nunca são armazenados."""
         if not await self._memoria_ativa(guild_id, user_id):
             return
         agora = int(time.time())
@@ -780,7 +797,7 @@ class NaraIA(commands.Cog):
                 texto = "Seu histórico foi apagado e a memória ficou desativada."
             else:
                 ativa = await self._memoria_ativa(guild_id, user_id)
-                if ativa and self._relacionamento_configurado(guild_id, user_id):
+                if ativa:
                     # Atualiza a recuperação pelo tempo mesmo quando o membro só consulta o status.
                     await self._atualizar_relacionamento(guild_id, user_id, "")
                 row = await self.bot.db._one(
@@ -788,22 +805,11 @@ class NaraIA(commands.Cog):
                     (guild_id, user_id),
                 )
                 total = int(row["total"] if row else 0)
-                if self._relacionamento_configurado(guild_id, user_id):
-                    # O alvo controla sua própria memória, mas os dados de relacionamento
-                    # (indicadores, eventos e configuração) são reservados ao dono do bot.
-                    relacao = (
-                        "\nO perfil interno de personalização da NARA também depende desta autorização. "
-                        "Os controles administrativos desse perfil são privados e não aparecem neste painel."
-                    )
-                else:
-                    perfil = await self.bot.db._one(
-                        "SELECT interacoes, afinidade, intimidade FROM nara_social_perfil WHERE guild_id=? AND user_id=?",
-                        (guild_id, user_id),
-                    )
-                    relacao = (
-                        "\n" + nara_social.formatar_relacao(int(perfil["interacoes"]), float(perfil["afinidade"]), float(perfil["intimidade"]))
-                        if perfil else ""
-                    )
+                relacao = (
+                    "\nO perfil de relacionamento da NARA é individual. Afinidade, paciência e eventos "
+                    "são usados para adaptar as respostas enquanto a memória estiver ativada; os indicadores "
+                    "e controles administrativos não aparecem neste painel."
+                ) if ativa else ""
                 texto = f"Memória: **{'ativada' if ativa else 'desativada'}**. Registros armazenados: **{total}**. Limite: 12 mensagens, retenção de 30 dias.{relacao}"
             await interacao.response.edit_message(content=texto, view=view)
 
@@ -821,14 +827,12 @@ class NaraIA(commands.Cog):
             view.add_item(botao)
 
         descricao_memoria = (
-            "## Memória privada da Nara\nEscolha o que deseja fazer. A memória começa desativada, é separada por servidor e só guarda informações de continuidade após sua autorização. São mantidas até 12 mensagens por 30 dias; imagens nunca são armazenadas. Apagar o histórico também apaga os dados de personalização associados."
+            "## Memória privada da Nara\nA memória é ativada automaticamente no primeiro contato com a NARA. "
+            "Você pode consultar, desativar ou apagar seus dados a qualquer momento neste painel. "
+            "São mantidas até 12 mensagens recentes por até 30 dias; imagens e anexos não são armazenados. "
+            "O relacionamento individual mantém afinidade, paciência e eventos resumidos por até 90 dias. "
+            "Apagar o histórico também apaga os dados de personalização associados."
         )
-        if self._relacionamento_configurado(guild_id, user_id):
-            descricao_memoria += (
-                "\n\nCom a memória ativada, a NARA também mantém um perfil interno de personalização e eventos resumidos "
-                "por até 90 dias. A administração desse perfil é privada ao proprietário do bot; pontuações e controles "
-                "não aparecem neste painel. O conteúdo original das mensagens não é copiado para esse registro."
-            )
         await interaction.response.send_message(descricao_memoria, view=view, ephemeral=True)
 
     @app_commands.command(name="nara_relatorio", description="Mostra indicadores de uso e disponibilidade da Nara para a equipe.")
@@ -959,8 +963,9 @@ class NaraIA(commands.Cog):
         if self.ia is None:
             return contexto_local or conv.resposta_sem_ia()
 
+        memoria_ativada_agora = await self._ativar_memoria_no_primeiro_contato(guild_id, int(autor.id))
         memoria_ativa = await self._memoria_ativa(guild_id, autor.id)
-        relacionamento_ativo = bool(guild_id and memoria_ativa and self._relacionamento_configurado(guild_id, autor.id))
+        relacionamento_ativo = bool(guild_id and memoria_ativa)
         chave = conv.chave_cache(texto)
         if not contexto and not memoria_ativa and not anexos and not contexto_local:
             em_cache = self.conv_cache.obter(chave)
@@ -1039,18 +1044,25 @@ class NaraIA(commands.Cog):
         resposta = conv.limpar_resposta(bruto)
         if not resposta:
             return contexto_local or conv.resposta_sem_ia()
+        if memoria_ativada_agora:
+            resposta = (
+                "*Aviso: a memória da NARA foi ativada no seu primeiro contato para manter continuidade "
+                "entre conversas. Você pode consultar, desativar ou apagar seus dados a qualquer momento "
+                "em `/nara_memoria`. São armazenadas até 12 mensagens recentes por até 30 dias, além de "
+                "eventos resumidos de relacionamento por até 90 dias.*\n\n" + resposta
+            )
         if contexto_local:
             # A IA pode personalizar a explicação, mas os links factuais não podem sumir.
             resposta = preservar_links_contexto_local(resposta, contexto_local)
         try:
             await self._salvar_memoria(guild_id, autor.id, texto, resposta)
         except Exception:
-            log.exception("Não foi possível persistir a memória opt-in da Nara.")
+            log.exception("Não foi possível persistir a memória automática da Nara.")
         if not relacionamento_ativo:
             try:
                 await self._atualizar_relacao_social(guild_id, autor.id, texto)
             except Exception:
-                log.exception("Não foi possível atualizar o vínculo social opt-in da Nara.")
+                log.exception("Não foi possível atualizar o vínculo social da Nara.")
         try:
             await self._registrar_conversa(autor.id)
         except Exception:
