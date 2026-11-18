@@ -104,11 +104,11 @@ YOUTUBE_LIVE_CHECK_MINUTES = max(5, _env_int("YOUTUBE_LIVE_CHECK_MINUTES", 10))
 LIVE_START_HOUR = _env_int("LIVE_START_HOUR", 19, minimo=0, maximo=23)
 LIVE_END_HOUR = _env_int("LIVE_END_HOUR", 24, minimo=1, maximo=24)  # exclusivo: 19:00 até 23:59
 
-OFFERS_CHECK_MINUTES = max(10, _env_int("OFFERS_CHECK_MINUTES", 30))
-MAX_OFFERS_PER_CHECK = max(1, _env_int("MAX_OFFERS_PER_CHECK", 8))
+OFFERS_CHECK_MINUTES = max(10, _env_int("OFFERS_CHECK_MINUTES", 15))
+MAX_OFFERS_PER_CHECK = max(1, _env_int("MAX_OFFERS_PER_CHECK", 15))
 # Só avisa promoções da Steam com pelo menos esse desconto (0 = todas)
 MIN_PROMO_DISCOUNT = max(0, _env_int("MIN_PROMO_DISCOUNT", 50))
-# Chave opcional da API do GG.deals (comparação de preços em região brasileira).
+# Chave da API GG.deals (fonte prioritária de comparação de preços em região brasileira).
 GG_DEALS_API_KEY = os.getenv("GG_DEALS_API_KEY", "").strip()
 
 # IsThereAnyDeal (https://isthereanydeal.com/apps/my/ — chave gratuita). Opcional:
