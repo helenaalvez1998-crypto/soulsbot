@@ -14,6 +14,7 @@ e preço de agora. Nenhuma fonte é obrigatória: se uma falhar, as outras conti
 """
 import asyncio
 import json
+from email.utils import parsedate_to_datetime
 import logging
 import os
 import re
@@ -277,15 +278,50 @@ def _brl_only(currency: Any) -> bool:
 
 # =============================================================== requisição segura
 
+# Respeita o Retry-After para não insistir enquanto a API mantém o bloqueio.
+_REQUEST_COOLDOWNS: dict[str, datetime] = {}
+
+
 async def _request_json(session: aiohttp.ClientSession, method: str, url: str,
                         nome: str, **kwargs) -> Any | None:
     """Faz a requisição e devolve JSON ou None. Nunca registra URL/headers (podem ter chave)."""
+    cooldown_until = _REQUEST_COOLDOWNS.get(nome)
+    now = datetime.now(timezone.utc)
+    if cooldown_until and now < cooldown_until:
+        remaining = int((cooldown_until - now).total_seconds())
+        log.info("%s em pausa por limite da API; nova tentativa em aproximadamente %s s.", nome, remaining)
+        return None
+
     try:
         async with session.request(
             method, url, timeout=aiohttp.ClientTimeout(total=20), **kwargs
         ) as resp:
             if resp.status == 429:
-                log.warning("%s limitou requisições; tentaremos no próximo ciclo.", nome)
+                retry_after = (resp.headers.get("Retry-After") or "").strip()
+                retry_seconds = 0
+                if retry_after:
+                    try:
+                        retry_seconds = max(0, int(float(retry_after)))
+                    except ValueError:
+                        try:
+                            retry_dt = parsedate_to_datetime(retry_after)
+                            if retry_dt.tzinfo is None:
+                                retry_dt = retry_dt.replace(tzinfo=timezone.utc)
+                            retry_seconds = max(0, int((retry_dt - now).total_seconds()))
+                        except (TypeError, ValueError, OverflowError):
+                            retry_seconds = 0
+                if retry_seconds > 0:
+                    _REQUEST_COOLDOWNS[nome] = now + timedelta(seconds=retry_seconds)
+                    log.warning(
+                        "%s respondeu HTTP 429; respeitando Retry-After de %s s.",
+                        nome, retry_seconds,
+                    )
+                else:
+                    _REQUEST_COOLDOWNS[nome] = now + timedelta(minutes=30)
+                    log.warning(
+                        "%s respondeu HTTP 429 sem Retry-After válido; pausa preventiva de 30 minutos.",
+                        nome,
+                    )
                 return None
             if resp.status in (401, 403):
                 log.warning("%s recusou o acesso (HTTP %s). Confira a chave/plano.", nome, resp.status)
@@ -702,8 +738,8 @@ async def fetch_cheapshark_offers(
             "pageSize": 60,
             "sortBy": "Savings",
             "desc": 1,
-            "onSale": 1,
         },
+        headers={"User-Agent": "SoulsBot/1.0 (Discord game deals monitor)"},
     )
     if not isinstance(data, list):
         log.warning(
@@ -714,6 +750,7 @@ async def fetch_cheapshark_offers(
 
     log.info("CheapShark API respondeu com %s registros brutos.", len(data))
     items: list[dict[str, Any]] = []
+    rejected_not_on_sale = 0
     rejected_discount = 0
     for deal in data:
         try:
@@ -725,6 +762,7 @@ async def fetch_cheapshark_offers(
             if not title or not deal_id or sale_usd < 0 or normal_usd <= 0:
                 continue
             if sale_usd >= normal_usd:
+                rejected_not_on_sale += 1
                 continue
             if discount < MIN_PROMO_DISCOUNT:
                 rejected_discount += 1
@@ -755,8 +793,10 @@ async def fetch_cheapshark_offers(
             "via": f"CheapShark · conversão estimada (US$ 1 = {fmt_brl(usd_brl)})",
         })
     log.info(
-        "CheapShark filtro: registros=%s | abaixo de %s%%=%s | aprovados=%s",
-        len(data), MIN_PROMO_DISCOUNT, rejected_discount, len(items),
+        "CheapShark filtro: registros=%s | sem desconto=%s | "
+        "desconto abaixo de %s%%=%s | aprovados=%s",
+        len(data), rejected_not_on_sale, MIN_PROMO_DISCOUNT,
+        rejected_discount, len(items),
     )
     return items
 
