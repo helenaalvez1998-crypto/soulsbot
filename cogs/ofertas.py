@@ -738,6 +738,7 @@ async def fetch_cheapshark_offers(
             "pageSize": 60,
             "sortBy": "Savings",
             "desc": 1,
+            "onSale": 1,
         },
         headers={"User-Agent": "SoulsBot/1.0 (Discord game deals monitor)"},
     )
@@ -750,6 +751,7 @@ async def fetch_cheapshark_offers(
 
     log.info("CheapShark API respondeu com %s registros brutos.", len(data))
     items: list[dict[str, Any]] = []
+    rejected_not_flagged = 0
     rejected_not_on_sale = 0
     rejected_discount = 0
     for deal in data:
@@ -758,12 +760,19 @@ async def fetch_cheapshark_offers(
             deal_id = str(deal.get("dealID") or "").strip()
             sale_usd = float(deal.get("salePrice"))
             normal_usd = float(deal.get("normalPrice"))
-            discount = int(float(deal.get("savings") or 0))
             if not title or not deal_id or sale_usd < 0 or normal_usd <= 0:
+                continue
+
+            # onSale=1 já pede apenas promoções; confirmamos também o indicador
+            # retornado pela API e calculamos o desconto pelos preços recebidos.
+            if str(deal.get("isOnSale", "0")).strip() != "1":
+                rejected_not_flagged += 1
                 continue
             if sale_usd >= normal_usd:
                 rejected_not_on_sale += 1
                 continue
+
+            discount = round(((normal_usd - sale_usd) / normal_usd) * 100)
             if discount < MIN_PROMO_DISCOUNT:
                 rejected_discount += 1
                 continue
@@ -793,10 +802,10 @@ async def fetch_cheapshark_offers(
             "via": f"CheapShark · conversão estimada (US$ 1 = {fmt_brl(usd_brl)})",
         })
     log.info(
-        "CheapShark filtro: registros=%s | sem desconto=%s | "
-        "desconto abaixo de %s%%=%s | aprovados=%s",
-        len(data), rejected_not_on_sale, MIN_PROMO_DISCOUNT,
-        rejected_discount, len(items),
+        "CheapShark filtro: registros=%s | isOnSale!=1=%s | "
+        "preço sem redução=%s | desconto abaixo de %s%%=%s | aprovados=%s",
+        len(data), rejected_not_flagged, rejected_not_on_sale,
+        MIN_PROMO_DISCOUNT, rejected_discount, len(items),
     )
     return items
 
