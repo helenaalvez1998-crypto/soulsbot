@@ -6,7 +6,8 @@ Fontes (todas consultadas em região BR / preços em reais quando a loja informa
   • GOG                 – promoções e jogos grátis em BRL                (sem chave)
   • GamerPower          – giveaways de várias lojas                      (sem chave)
   • IsThereAnyDeal      – Nuuvem e outras lojas em BRL + giveaways       (ITAD_API_KEY, opcional)
-  • GG.deals            – comparação prioritária de preços BRL da Steam (GG_DEALS_API_KEY)
+  • CheapShark          – promoções de várias lojas em USD → BRL        (sem chave)
+  • GG.deals            – comparação de preço da Steam em BRL            (GG_DEALS_API_KEY, opcional)
 
 Cada oferta vira um cartão limpo: imagem grande, nome grande, preço original riscado
 e preço de agora. Nenhuma fonte é obrigatória: se uma falhar, as outras continuam.
@@ -425,25 +426,17 @@ async def fetch_gog_offers(session: aiohttp.ClientSession) -> list[dict[str, Any
     """Catálogo público da GOG, região BR, preços em BRL (sem chave)."""
     if not OFFERS_GOG_ENABLED:
         return []
-    # Pagina resultados para não ficar restrito aos primeiros 48 jogos em tendência.
-    products: list[dict[str, Any]] = []
-    for page in range(1, 4):
-        data = await _request_json(
-            session, "GET", "https://catalog.gog.com/v1/catalog", "GOG",
-            params={
-                "limit": 48, "order": "desc:trending", "discounted": "eq:true",
-                "productType": "in:game,pack", "page": page,
-                "countryCode": "BR", "locale": "pt-BR", "currencyCode": "BRL",
-            },
-        )
-        page_products = data.get("products") if isinstance(data, dict) else None
-        if not isinstance(page_products, list) or not page_products:
-            break
-        products.extend(page_products)
-        if len(page_products) < 48:
-            break
+    data = await _request_json(
+        session, "GET", "https://catalog.gog.com/v1/catalog", "GOG",
+        params={
+            "limit": 48, "order": "desc:trending", "discounted": "eq:true",
+            "productType": "in:game,pack", "page": 1,
+            "countryCode": "BR", "locale": "pt-BR", "currencyCode": "BRL",
+        },
+    )
+    products = data.get("products") if isinstance(data, dict) else None
     items: list[dict[str, Any]] = []
-    for p in products:
+    for p in products if isinstance(products, list) else []:
         title, pid = p.get("title"), p.get("id")
         price = p.get("price") or {}
         final, base = _gog_amount(price.get("finalMoney")), _gog_amount(price.get("baseMoney"))
@@ -627,14 +620,115 @@ async def fetch_itad_giveaways(session: aiohttp.ClientSession) -> list[dict[str,
     return items
 
 
-# ---- GG.deals (comparador prioritário; API oficial consulta IDs Steam) ---------
-async def enrich_with_gg_deals_prices(session: aiohttp.ClientSession, items: list[dict[str, Any]]) -> None:
-    """Enriquece candidatos com preços GG.deals BR; preserva preço de compra da loja de origem.
 
-    A API pública oficial do GG.deals não oferece feed/listagem de promoções: ela consulta
-    preços por Steam App ID (até 100 registros/minuto). Por isso, Steam/GOG/Epic/ITAD
-    continuam descobrindo ofertas; GG.deals é a referência prioritária de comparação.
-    """
+# ---- CheapShark (promoções de várias lojas) -------------------------------------
+CHEAPSHARK_DEALS_URL = "https://www.cheapshark.com/api/1.0/deals"
+CHEAPSHARK_STORES_URL = "https://www.cheapshark.com/api/1.0/stores"
+USD_BRL_URL = "https://economia.awesomeapi.com.br/json/last/USD-BRL"
+USD_BRL_CACHE_SECONDS = 6 * 60 * 60
+
+
+async def fetch_usd_brl_rate(session: aiohttp.ClientSession) -> float | None:
+    """Obtém a cotação USD/BRL. Cache global de 6h; não publica preço estrangeiro sem cotação."""
+    now = datetime.now(timezone.utc).timestamp()
+    cached_rate = getattr(fetch_usd_brl_rate, "_rate", None)
+    cached_at = getattr(fetch_usd_brl_rate, "_at", 0.0)
+    if cached_rate and now - cached_at < USD_BRL_CACHE_SECONDS:
+        return float(cached_rate)
+
+    data = await _request_json(session, "GET", USD_BRL_URL, "cotação USD/BRL")
+    try:
+        rate = float(data["USDBRL"]["bid"]) if isinstance(data, dict) else 0.0
+        if rate <= 0:
+            raise ValueError("cotação inválida")
+    except (KeyError, TypeError, ValueError):
+        # Se o serviço ficar indisponível, reutiliza a última cotação válida.
+        return float(cached_rate) if cached_rate else None
+
+    fetch_usd_brl_rate._rate = rate
+    fetch_usd_brl_rate._at = now
+    return rate
+
+
+async def fetch_cheapshark_stores(session: aiohttp.ClientSession) -> dict[str, str]:
+    """Obtém os nomes das lojas monitoradas pelo CheapShark."""
+    data = await _request_json(session, "GET", CHEAPSHARK_STORES_URL, "CheapShark (lojas)")
+    if not isinstance(data, list):
+        return {}
+    return {
+        str(store.get("storeID")): str(store.get("storeName") or "Loja")
+        for store in data
+        if isinstance(store, dict) and store.get("storeID") is not None
+        and str(store.get("isActive", "1")) == "1"
+    }
+
+
+async def fetch_cheapshark_offers(
+    session: aiohttp.ClientSession,
+    store_names: dict[str, str],
+    usd_brl: float | None,
+) -> list[dict[str, Any]]:
+    """Descobre promoções CheapShark em várias lojas e converte USD para BRL."""
+    if not usd_brl or usd_brl <= 0:
+        log.warning("CheapShark pausado: cotação USD/BRL indisponível; não serão exibidos preços incorretos.")
+        return []
+
+    data = await _request_json(
+        session, "GET", CHEAPSHARK_DEALS_URL, "CheapShark",
+        params={
+            "pageNumber": 0,
+            "pageSize": 60,
+            "sortBy": "Savings",
+            "desc": 1,
+            "onSale": 1,
+        },
+    )
+    if not isinstance(data, list):
+        return []
+
+    items: list[dict[str, Any]] = []
+    for deal in data:
+        try:
+            title = str(deal.get("title") or "").strip()
+            deal_id = str(deal.get("dealID") or "").strip()
+            sale_usd = float(deal.get("salePrice"))
+            normal_usd = float(deal.get("normalPrice"))
+            discount = int(float(deal.get("savings") or 0))
+            if not title or not deal_id or sale_usd < 0 or normal_usd <= 0:
+                continue
+            if sale_usd >= normal_usd or discount < MIN_PROMO_DISCOUNT:
+                continue
+        except (TypeError, ValueError):
+            continue
+
+        store_id = str(deal.get("storeID") or "")
+        store = store_names.get(store_id, f"Loja {store_id}" if store_id else "Loja")
+        # CheapShark fornece o dealID codificado. Mantemos o valor como veio da API.
+        url = f"https://www.cheapshark.com/redirect?dealID={deal_id}"
+        sale_brl = sale_usd * usd_brl
+        normal_brl = normal_usd * usd_brl
+        thumb = deal.get("thumb")
+        items.append({
+            "key": f"cheapshark:{deal_id}",
+            "source_id": "cheapshark",
+            "title": title,
+            "url": url,
+            "image": thumb if isinstance(thumb, str) and thumb.startswith("https://") else None,
+            "store": store,
+            "platform": "PC",
+            "price": fmt_brl(sale_brl),
+            "original_price": fmt_brl(normal_brl),
+            "discount": discount,
+            "end": None,
+            "kind": "promo",
+            "via": f"CheapShark · conversão estimada (US$ 1 = {fmt_brl(usd_brl)})",
+        })
+    return items
+
+
+# ---- GG.deals (comparação opcional, só Steam) -----------------------------------
+async def enrich_with_gg_deals_prices(session: aiohttp.ClientSession, items: list[dict[str, Any]]) -> None:
+    """Acrescenta comparação GG.deals em BRL sem substituir o preço regional da Steam."""
     if not GG_DEALS_API_KEY:
         return
     app_ids = sorted({int(item["steam_app_id"]) for item in items if item.get("steam_app_id")})
@@ -685,8 +779,6 @@ async def enrich_with_gg_deals_prices(session: aiohttp.ClientSession, items: lis
             item["gg_deals_url"] = game.get("url") or "https://gg.deals/"
             item["gg_deals_retail"] = money_decimal_brl(prices.get("currentRetail"))
             item["gg_deals_keyshops"] = money_decimal_brl(prices.get("currentKeyshops"))
-            item["gg_deals_match"] = bool(item["gg_deals_retail"] or item["gg_deals_keyshops"])
-            item["gg_deals_currency"] = prices.get("currency")
 
 
 # ===================================================================== cartão
@@ -737,10 +829,10 @@ def cartao_texto(item: dict[str, Any]) -> str:
     if gg_url and (gg_retail or gg_keys):
         partes = []
         if gg_retail:
-            partes.append(f"menor preço em lojas oficiais {gg_retail}")
+            partes.append(f"lojas oficiais {gg_retail}")
         if gg_keys:
             partes.append(f"keyshops {gg_keys}")
-        linhas.append(f"-# **Comparação principal GG.deals:** {' · '.join(partes)} · [ver no GG.deals]({gg_url})")
+        linhas.append(f"-# GG.deals: {' · '.join(partes)} · [comparar]({gg_url})")
 
     if OFFERS_SHOW_DESCRIPTION and item.get("description"):
         linhas.append(str(item["description"])[:300].rstrip() + ("…" if len(str(item["description"])) > 300 else ""))
@@ -821,14 +913,18 @@ AMOSTRA = {
 # ===================================================================== cog
 
 class Ofertas(commands.Cog):
-    """Jogos grátis e promoções (Steam BR, Epic, GOG, GamerPower, ITAD/Nuuvem) com cartões limpos."""
+    """Jogos grátis e promoções (Steam, Epic, GOG, CheapShark, GamerPower e ITAD/Nuuvem)."""
 
     def __init__(self, bot):
         self.bot = bot
         self.http_session: aiohttp.ClientSession | None = None
+        self.cheapshark_stores: dict[str, str] = {}
 
     async def cog_load(self):
-        self.http_session = aiohttp.ClientSession(headers={"User-Agent": "NaraBot/2.0"})
+        self.http_session = aiohttp.ClientSession(headers={
+            "User-Agent": "SoulsBot/1.0 (Discord game deals monitor)"
+        })
+        self.cheapshark_stores = await fetch_cheapshark_stores(self.http_session)
         await asyncio.to_thread(init_offers_db)
         await asyncio.to_thread(migrate_legacy_seeds)
         self.offers_loop.start()
@@ -853,6 +949,15 @@ class Ofertas(commands.Cog):
                 items.extend(result)
             elif isinstance(result, Exception):
                 log.error("Erro na fonte %s: %r", fonte.__name__, result)
+
+        try:
+            usd_brl = await fetch_usd_brl_rate(self.http_session)
+            cheapshark = await fetch_cheapshark_offers(
+                self.http_session, self.cheapshark_stores, usd_brl
+            )
+            items.extend(cheapshark)
+        except Exception:
+            log.exception("Erro na fonte CheapShark.")
         return items
 
     @tasks.loop(minutes=OFFERS_CHECK_MINUTES)
@@ -903,13 +1008,8 @@ class Ofertas(commands.Cog):
                 if item["kind"] == "promo" and (item.get("discount") or 0) < MIN_PROMO_DISCOUNT:
                     continue
                 novos.append(item)
-            # Jogos grátis primeiro; depois ofertas com comparação GG.deals validada;
-            # em seguida, maiores descontos. O GG.deals não fornece feed de descoberta.
-            novos.sort(key=lambda i: (
-                i["kind"] != "game",
-                not bool(i.get("gg_deals_match")),
-                -(i.get("discount") or 0),
-            ))
+            # Jogos grátis primeiro; depois as promoções de maior desconto.
+            novos.sort(key=lambda i: (i["kind"] != "game", -(i.get("discount") or 0)))
 
             sent_this_cycle = 0
             guild_id = self.bot.guilds[0].id if self.bot.guilds else 0
@@ -959,17 +1059,14 @@ class Ofertas(commands.Cog):
             itad = f"✅ IsThereAnyDeal — lojas {', '.join(map(str, ITAD_SHOPS))} (50 = Nuuvem)"
         else:
             itad = "⚪ IsThereAnyDeal — defina ITAD_API_KEY para ativar a Nuuvem"
-        gg = (
-            "✅ GG.deals prioritário para comparação de preços BR (API oficial)"
-            if GG_DEALS_API_KEY else
-            "⚠️ GG.deals sem chave: adicione GG_DEALS_API_KEY para ativar a comparação prioritária"
-        )
+        gg = "✅ GG.deals (comparação de preços)" if GG_DEALS_API_KEY else "⚪ GG.deals — defina GG_DEALS_API_KEY (opcional)"
         layout = "Components V2 (imagem grande)" if HAS_LAYOUT_VIEW else "embed (atualize o discord.py para >= 2.6)"
         await interaction.response.send_message(
             f"**Jogos grátis:** {games}\n**Promoções:** {promos}\n"
             f"**Verificação:** a cada {OFFERS_CHECK_MINUTES} minutos · desconto mínimo {MIN_PROMO_DISCOUNT}%\n"
             f"**Layout:** {layout}\n\n"
-            "**Descoberta de ofertas (fontes complementares)**\n✅ Steam Brasil\n✅ Epic Games Store (BR)\n✅ GamerPower\n"
+            "**Fontes**\n✅ Steam Brasil\n✅ Epic Games Store (BR)\n✅ GamerPower\n"
+            f"✅ CheapShark ({len(self.cheapshark_stores)} lojas cadastradas; USD → BRL)\n"
             f"{gog}\n{itad}\n{gg}",
             ephemeral=True,
         )
