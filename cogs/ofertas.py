@@ -728,36 +728,51 @@ async def fetch_cheapshark_offers(
     store_names: dict[str, str],
     usd_brl: float | None,
 ) -> list[dict[str, Any]]:
-    """Busca promoções CheapShark e prioriza jogos com sinais verificáveis de qualidade."""
+    """Busca até 300 promoções CheapShark, filtra qualidade e desconto mínimo."""
     if not usd_brl or usd_brl <= 0:
         log.warning("CheapShark pausado: cotação USD/BRL indisponível; não serão exibidos preços incorretos.")
         return []
 
-    data = await _request_json(
-        session, "GET", CHEAPSHARK_DEALS_URL, "CheapShark",
-        params={
-            "pageNumber": 0,
-            "pageSize": 60,
-            "sortBy": "DealRating",
-            "onSale": 1,
-        },
-        headers={"User-Agent": "SoulsBot/1.0 (Discord game deals monitor)"},
-    )
-    if not isinstance(data, list):
-        log.warning(
-            "CheapShark API não retornou uma lista de ofertas (tipo=%s).",
-            type(data).__name__,
+    # Cinco páginas sequenciais de até 60 resultados (limite documentado por página).
+    all_deals: list[dict[str, Any]] = []
+    for page_number in range(5):
+        page_data = await _request_json(
+            session, "GET", CHEAPSHARK_DEALS_URL, "CheapShark",
+            params={
+                "pageNumber": page_number,
+                "pageSize": 60,
+                "sortBy": "DealRating",
+                "onSale": 1,
+            },
+            headers={"User-Agent": "SoulsBot/1.0 (Discord game deals monitor)"},
         )
+        if not isinstance(page_data, list):
+            log.warning(
+                "CheapShark página %s não retornou uma lista (tipo=%s); interrompendo paginação.",
+                page_number + 1, type(page_data).__name__,
+            )
+            break
+        all_deals.extend(page_data)
+        log.info(
+            "CheapShark página %s/5: %s registros recebidos.",
+            page_number + 1, len(page_data),
+        )
+        if len(page_data) < 60:
+            break
+
+    if not all_deals:
+        log.warning("CheapShark não retornou registros nas páginas consultadas.")
         return []
 
-    log.info("CheapShark API respondeu com %s registros brutos.", len(data))
+    log.info("CheapShark API respondeu com %s registros brutos em até 5 páginas.", len(all_deals))
     candidates: dict[str, dict[str, Any]] = {}
     rejected_not_flagged = 0
     rejected_not_on_sale = 0
+    rejected_discount = 0
     rejected_low_quality = 0
     duplicate_game_deals = 0
 
-    for deal in data:
+    for deal in all_deals:
         try:
             title = str(deal.get("title") or "").strip()
             deal_id = str(deal.get("dealID") or "").strip()
@@ -773,20 +788,22 @@ async def fetch_cheapshark_offers(
                 rejected_not_on_sale += 1
                 continue
 
+            discount = round(((normal_usd - sale_usd) / normal_usd) * 100)
+            if discount < 50:
+                rejected_discount += 1
+                continue
+
             steam_rating = int(float(deal.get("steamRatingPercent") or 0))
             steam_review_count = int(float(deal.get("steamRatingCount") or 0))
             metacritic = int(float(deal.get("metacriticScore") or 0))
 
-            # Sinal de qualidade: Steam >=75% com >=300 avaliações OU Metacritic >=70.
-            # Quando ambos existem, basta um dos critérios; jogos sem dados suficientes
-            # não entram no canal principal para evitar promoções aleatórias/desconhecidas.
+            # Qualidade: Steam >=75% com >=300 avaliações OU Metacritic >=70.
             steam_quality = steam_rating >= 75 and steam_review_count >= 300
             metacritic_quality = metacritic >= 70
             if not (steam_quality or metacritic_quality):
                 rejected_low_quality += 1
                 continue
 
-            discount = round(((normal_usd - sale_usd) / normal_usd) * 100)
             deal_rating = float(deal.get("dealRating") or 0)
         except (TypeError, ValueError):
             continue
@@ -798,9 +815,10 @@ async def fetch_cheapshark_offers(
         normal_brl = normal_usd * usd_brl
         thumb = deal.get("thumb")
         steam_app_id = str(deal.get("steamAppID") or "").strip()
+        # Preferir header art Steam em resolução maior; o MediaGallery usa toda a largura do painel.
         image = (
             f"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/{steam_app_id}/header.jpg"
-            if steam_app_id and store_id == "1"
+            if steam_app_id
             else thumb if isinstance(thumb, str) and thumb.startswith("https://") else None
         )
         game_id = str(deal.get("gameID") or "").strip()
@@ -820,36 +838,32 @@ async def fetch_cheapshark_offers(
             "kind": "promo",
             "via": f"CheapShark · conversão estimada (US$ 1 = {fmt_brl(usd_brl)})",
             "relevance_rank": (
-                steam_rating
-                + min(steam_review_count, 10000) / 100
-                + metacritic
+                steam_rating + min(steam_review_count, 10000) / 100 + metacritic
             ),
             "_deal_rating": deal_rating,
-            "_game_id": game_id,
         }
 
-        # Um cartão por jogo: entre lojas/edições repetidas, mantém a oferta
-        # com maior DealRating; em empate, escolhe o maior desconto.
+        # Um cartão por jogo; mantém a oferta com melhor DealRating e depois maior desconto.
         existing = candidates.get(dedupe_id)
         if existing:
             duplicate_game_deals += 1
-            current_rank = (candidate["_deal_rating"], candidate["discount"])
-            existing_rank = (existing["_deal_rating"], existing["discount"])
-            if current_rank <= existing_rank:
+            if (candidate["_deal_rating"], candidate["discount"]) <= (
+                existing["_deal_rating"], existing["discount"]
+            ):
                 continue
         candidates[dedupe_id] = candidate
 
     items = []
     for candidate in candidates.values():
         candidate.pop("_deal_rating", None)
-        candidate.pop("_game_id", None)
         items.append(candidate)
 
     log.info(
         "CheapShark qualidade: brutos=%s | sem isOnSale=%s | sem redução=%s | "
-        "reprovados por avaliações/Metacritic=%s | duplicados do mesmo jogo=%s | aprovados únicos=%s",
-        len(data), rejected_not_flagged, rejected_not_on_sale,
-        rejected_low_quality, duplicate_game_deals, len(items),
+        "desconto abaixo de 50%%=%s | reprovados por avaliações/Metacritic=%s | "
+        "duplicados do mesmo jogo=%s | aprovados únicos=%s",
+        len(all_deals), rejected_not_flagged, rejected_not_on_sale,
+        rejected_discount, rejected_low_quality, duplicate_game_deals, len(items),
     )
     return items
 
