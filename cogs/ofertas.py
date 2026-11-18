@@ -739,7 +739,6 @@ async def fetch_cheapshark_offers(
             "pageNumber": 0,
             "pageSize": 60,
             "sortBy": "Savings",
-            "desc": 1,
             "onSale": 1,
         },
         headers={"User-Agent": "SoulsBot/1.0 (Discord game deals monitor)"},
