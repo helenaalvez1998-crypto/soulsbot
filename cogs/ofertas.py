@@ -1008,6 +1008,10 @@ class Ofertas(commands.Cog):
             fontes_presentes = {i["source_id"] for i in unique.values()}
             if SEED_OFFERS_ON_FIRST_RUN:
                 for src in fontes_presentes:
+                    # CheapShark deve publicar ofertas já encontradas na primeira coleta.
+                    # As fontes antigas continuam protegidas contra inundação inicial.
+                    if src == "cheapshark":
+                        continue
                     if await asyncio.to_thread(offer_already_sent, f"seed:{src}"):
                         continue
                     seeded = 0
