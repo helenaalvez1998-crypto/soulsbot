@@ -56,7 +56,7 @@ EXTENSOES = (
     "cogs.painel_membros", "cogs.catalogo_integrado", "cogs.game_news",
 )
 
-COMANDOS_PRINCIPAIS = frozenset({"nara", "adm", "nara_relacionamento"})
+COMANDOS_PRINCIPAIS = frozenset({"nara", "adm"})
 
 
 def _manter_apenas_comandos_principais(tree) -> list[str]:
