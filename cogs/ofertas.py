@@ -629,25 +629,47 @@ USD_BRL_CACHE_SECONDS = 6 * 60 * 60
 
 
 async def fetch_usd_brl_rate(session: aiohttp.ClientSession) -> float | None:
-    """Obtém a cotação USD/BRL. Cache global de 6h; não publica preço estrangeiro sem cotação."""
+    """Obtém USD/BRL com cache e duas fontes; evita consultar câmbio a cada ciclo."""
     now = datetime.now(timezone.utc).timestamp()
     cached_rate = getattr(fetch_usd_brl_rate, "_rate", None)
     cached_at = getattr(fetch_usd_brl_rate, "_at", 0.0)
     if cached_rate and now - cached_at < USD_BRL_CACHE_SECONDS:
         return float(cached_rate)
 
-    data = await _request_json(session, "GET", USD_BRL_URL, "cotação USD/BRL")
-    try:
-        rate = float(data["USDBRL"]["bid"]) if isinstance(data, dict) else 0.0
-        if rate <= 0:
-            raise ValueError("cotação inválida")
-    except (KeyError, TypeError, ValueError):
-        # Se o serviço ficar indisponível, reutiliza a última cotação válida.
-        return float(cached_rate) if cached_rate else None
+    # Frankfurter é a fonte principal: não exige chave e não publica quotas diárias/mensais.
+    # A AwesomeAPI fica como fallback caso a primeira esteja indisponível.
+    providers = (
+        (
+            "Frankfurter",
+            "https://api.frankfurter.dev/v2/rate/usd/brl",
+            lambda data: float(data["rate"]) if isinstance(data, dict) else 0.0,
+        ),
+        (
+            "AwesomeAPI",
+            USD_BRL_URL,
+            lambda data: float(data["USDBRL"]["bid"]) if isinstance(data, dict) else 0.0,
+        ),
+    )
 
-    fetch_usd_brl_rate._rate = rate
-    fetch_usd_brl_rate._at = now
-    return rate
+    for provider_name, url, extract_rate in providers:
+        try:
+            data = await _request_json(session, "GET", url, f"cotação USD/BRL ({provider_name})")
+            rate = extract_rate(data)
+            if rate > 0:
+                fetch_usd_brl_rate._rate = rate
+                fetch_usd_brl_rate._at = now
+                fetch_usd_brl_rate._provider = provider_name
+                log.info("Cotação USD/BRL obtida via %s: %.4f", provider_name, rate)
+                return rate
+        except Exception as exc:
+            log.warning("Falha na cotação USD/BRL via %s: %s", provider_name, exc)
+
+    # Se todas as fontes falharem, usa a última taxa válida em memória.
+    if cached_rate:
+        log.warning("Fontes de câmbio indisponíveis; usando última cotação válida em cache.")
+        return float(cached_rate)
+
+    return None
 
 
 async def fetch_cheapshark_stores(session: aiohttp.ClientSession) -> dict[str, str]:
