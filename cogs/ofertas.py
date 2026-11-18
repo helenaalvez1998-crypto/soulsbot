@@ -706,9 +706,15 @@ async def fetch_cheapshark_offers(
         },
     )
     if not isinstance(data, list):
+        log.warning(
+            "CheapShark API não retornou uma lista de ofertas (tipo=%s).",
+            type(data).__name__,
+        )
         return []
 
+    log.info("CheapShark API respondeu com %s registros brutos.", len(data))
     items: list[dict[str, Any]] = []
+    rejected_discount = 0
     for deal in data:
         try:
             title = str(deal.get("title") or "").strip()
@@ -718,7 +724,10 @@ async def fetch_cheapshark_offers(
             discount = int(float(deal.get("savings") or 0))
             if not title or not deal_id or sale_usd < 0 or normal_usd <= 0:
                 continue
-            if sale_usd >= normal_usd or discount < MIN_PROMO_DISCOUNT:
+            if sale_usd >= normal_usd:
+                continue
+            if discount < MIN_PROMO_DISCOUNT:
+                rejected_discount += 1
                 continue
         except (TypeError, ValueError):
             continue
@@ -745,6 +754,10 @@ async def fetch_cheapshark_offers(
             "kind": "promo",
             "via": f"CheapShark · conversão estimada (US$ 1 = {fmt_brl(usd_brl)})",
         })
+    log.info(
+        "CheapShark filtro: registros=%s | abaixo de %s%%=%s | aprovados=%s",
+        len(data), MIN_PROMO_DISCOUNT, rejected_discount, len(items),
+    )
     return items
 
 
@@ -1090,11 +1103,6 @@ class Ofertas(commands.Cog):
                 "Ofertas verificadas: %s; novas publicadas: %s | "
                 "CheapShark publicadas nesta coleta: %s",
                 len(unique), sent_this_cycle, cheapshark_sent_this_cycle,
-            )
-            log.info(
-                "Ofertas verificadas: %s; novas publicadas: %s | "
-                "CheapShark publicadas nesta coleta: %s",
-                len(unique), sent_this_cycle, cheapshark_sent,
             )
         except Exception:
             log.exception("Erro na rotina de ofertas.")
