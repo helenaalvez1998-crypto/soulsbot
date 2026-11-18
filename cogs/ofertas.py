@@ -783,12 +783,20 @@ async def fetch_cheapshark_offers(
         sale_brl = sale_usd * usd_brl
         normal_brl = normal_usd * usd_brl
         thumb = deal.get("thumb")
+        steam_app_id = str(deal.get("steamAppID") or "").strip()
+        # O thumbnail da CheapShark costuma ser 231x87; para jogos com AppID
+        # Steam usamos a arte de cabeçalho, que tem proporção e resolução maiores.
+        image = (
+            f"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/{steam_app_id}/header.jpg"
+            if steam_app_id and store_id == "1"
+            else thumb if isinstance(thumb, str) and thumb.startswith("https://") else None
+        )
         items.append({
             "key": f"cheapshark:{deal_id}",
             "source_id": "cheapshark",
             "title": title,
             "url": url,
-            "image": thumb if isinstance(thumb, str) and thumb.startswith("https://") else None,
+            "image": image,
             "store": store,
             "platform": "PC",
             "price": fmt_brl(sale_brl),
@@ -889,9 +897,9 @@ def cartao_texto(item: dict[str, Any]) -> str:
     rotulo = "🎁 JOGO GRÁTIS" if gratis else "🔥 PROMOÇÃO"
     store = str(item.get("store") or "").strip()
     linhas = [
-        f"-# {rotulo}" + (f"  ·  {_esc(store)}" if store else ""),
+        f"**{rotulo}**" + (f"  ·  **{_esc(store)}**" if store else ""),
         f"# {_esc(str(item.get('title') or 'Jogo'))[:240]}",
-        f"### {preco_linha(item)}",
+        f"## {preco_linha(item)}",
     ]
     meta = []
     plat = str(item.get("platform") or "").strip()
@@ -903,7 +911,7 @@ def cartao_texto(item: dict[str, Any]) -> str:
     if item.get("via"):
         meta.append(f"via {item['via']}")
     if meta:
-        linhas.append("-# " + "  ·  ".join(meta))
+        linhas.append("  ·  ".join(meta))
 
     gg_url, gg_retail, gg_keys = item.get("gg_deals_url"), item.get("gg_deals_retail"), item.get("gg_deals_keyshops")
     if gg_url and (gg_retail or gg_keys):
@@ -912,7 +920,7 @@ def cartao_texto(item: dict[str, Any]) -> str:
             partes.append(f"lojas oficiais {gg_retail}")
         if gg_keys:
             partes.append(f"keyshops {gg_keys}")
-        linhas.append(f"-# GG.deals: {' · '.join(partes)} · [comparar]({gg_url})")
+        linhas.append(f"**GG.deals:** {' · '.join(partes)} · [comparar]({gg_url})")
 
     if OFFERS_SHOW_DESCRIPTION and item.get("description"):
         linhas.append(str(item["description"])[:300].rstrip() + ("…" if len(str(item["description"])) > 300 else ""))
