@@ -1433,10 +1433,91 @@ class AdminCategoriaButton(discord.ui.Button):
         await interaction.response.edit_message(embed=embed, view=AdminCategoriaView(self.bot, self.categoria, self.user_id or interaction.user.id, admin))
 
 
+async def _eh_dono_global_bot(bot, user) -> bool:
+    """Valida o proprietário global do bot; cargos do servidor não concedem acesso."""
+    owner_id = int(getattr(config, "BOT_OWNER_ID", 0) or 0)
+    if owner_id and int(user.id) == owner_id:
+        return True
+    try:
+        return bool(await bot.is_owner(user))
+    except Exception:
+        log.exception("Não foi possível validar o proprietário global do bot no painel ADM.")
+        return False
+
+
+class RelacionamentoAdminUserSelectView(discord.ui.View):
+    """Seletor efêmero para o proprietário escolher a pessoa monitorada pela NARA."""
+
+    def __init__(self, bot, owner_id: int):
+        super().__init__(timeout=180)
+        self.bot = bot
+        self.owner_id = int(owner_id)
+        seletor = discord.ui.UserSelect(
+            placeholder="Escolha o usuário do relacionamento", min_values=1, max_values=1, row=0
+        )
+        seletor.callback = self.selecionar_usuario
+        self.add_item(seletor)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if int(interaction.user.id) != self.owner_id or not await _eh_dono_global_bot(self.bot, interaction.user):
+            await interaction.response.send_message(
+                "Somente o proprietário global do bot pode configurar o relacionamento da NARA.", ephemeral=True
+            )
+            return False
+        return True
+
+    async def selecionar_usuario(self, interaction: discord.Interaction):
+        # discord.py expõe os objetos selecionados pelo componente em .values.
+        seletor = next((item for item in self.children if isinstance(item, discord.ui.UserSelect)), None)
+        usuario = seletor.values[0] if seletor and seletor.values else None
+        if usuario is None:
+            return await interaction.response.send_message("Não consegui identificar o usuário selecionado.", ephemeral=True)
+        if getattr(usuario, "bot", False):
+            return await interaction.response.send_message("Escolha uma pessoa, não outro bot.", ephemeral=True)
+        cog = self.bot.get_cog("NaraIA")
+        if cog is None:
+            return await interaction.response.send_message(
+                "O módulo de IA da NARA não está carregado. Verifique os logs do bot.", ephemeral=True
+            )
+        await cog.abrir_painel_relacionamento(interaction, usuario, editar=True)
+
+    @discord.ui.button(label="Voltar ao ADM", emoji="↩️", style=discord.ButtonStyle.secondary, row=1)
+    async def voltar_adm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await _mostrar_painel_principal(interaction, self.bot)
+
+
+class RelacionamentoAdminButton(discord.ui.Button):
+    """Entrada do relacionamento no /adm; só é renderizada para o dono global."""
+
+    def __init__(self, bot, user_id: int):
+        super().__init__(
+            label="Relacionamento da NARA", emoji="💠", style=discord.ButtonStyle.primary,
+            custom_id="adm:nara:relacionamento", row=4,
+        )
+        self.bot = bot
+        self.user_id = int(user_id)
+
+    async def callback(self, interaction: discord.Interaction):
+        if int(interaction.user.id) != self.user_id or not await _eh_dono_global_bot(self.bot, interaction.user):
+            return await interaction.response.send_message(
+                "Somente o proprietário global do bot pode acessar esta configuração.", ephemeral=True
+            )
+        view = RelacionamentoAdminUserSelectView(self.bot, self.user_id)
+        embed = discord.Embed(
+            title="💠 Relacionamento da NARA",
+            description=(
+                "Escolha abaixo o usuário cujo relacionamento será administrado. "
+                "Somente você pode ver ou alterar afinidade, paciência e eventos."
+            ),
+            color=COR_PAINEL,
+        )
+        await interaction.response.edit_message(embed=embed, view=view)
+
+
 class AdminMainView(discord.ui.View):
     """Painel administrativo organizado por categorias de trabalho."""
 
-    def __init__(self, bot, user_id: int | None = None, is_admin: bool = True):
+    def __init__(self, bot, user_id: int | None = None, is_admin: bool = True, is_bot_owner: bool = False):
         super().__init__(timeout=None)
         self.bot = bot
         self.user_id = user_id
@@ -1458,10 +1539,14 @@ class AdminMainView(discord.ui.View):
             categorias = [c for c in categorias if c[0] not in CATEGORIAS_SO_ADMIN]
         for index, (key, label, emoji) in enumerate(categorias):
             self.add_item(AdminCategoriaButton(bot, key, label, emoji, row=index // 3, user_id=user_id))
+        if is_bot_owner:
+            self.add_item(RelacionamentoAdminButton(bot, int(user_id or 0)))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         from cogs.platinas import eh_moderador
-        if (self.user_id is not None and interaction.user.id != self.user_id) or not await eh_moderador(interaction.user, self.bot.db):
+        mesma_pessoa = self.user_id is None or interaction.user.id == self.user_id
+        autorizado = await eh_moderador(interaction.user, self.bot.db) or await _eh_dono_global_bot(self.bot, interaction.user)
+        if not mesma_pessoa or not autorizado:
             await interaction.response.send_message("Você não tem autorização para utilizar este painel. Use `/adm` com uma conta autorizada.", ephemeral=True)
             return False
         return True
@@ -1734,7 +1819,8 @@ async def _mostrar_painel_principal(interaction: discord.Interaction, bot):
         color=COR_PAINEL,
     )
     embed.set_footer(text="NARA • Escolha uma categoria • Valores não personalizados usam os padrões do bot")
-    view = AdminMainView(bot, interaction.user.id, eh_administrador(interaction.user))
+    is_bot_owner = await _eh_dono_global_bot(bot, interaction.user)
+    view = AdminMainView(bot, interaction.user.id, eh_administrador(interaction.user), is_bot_owner=is_bot_owner)
     if interaction.response.is_done():
         await interaction.edit_original_response(embed=embed, view=view)
     else:
@@ -2054,10 +2140,9 @@ class Admin(commands.Cog):
     async def adm(self, interaction: discord.Interaction):
         """Comando único de entrada para todo o painel administrativo."""
         from cogs.platinas import eh_moderador
-        if not await eh_moderador(interaction.user, self.bot.db):
+        if not await eh_moderador(interaction.user, self.bot.db) and not await _eh_dono_global_bot(self.bot, interaction.user):
             return await interaction.response.send_message(
-                "Este painel é restrito à equipe de moderação. Se você acredita que deveria ter acesso, procure um administrador.",
-                ephemeral=True,
+                "Este painel é restrito à equipe autorizada.", ephemeral=True,
             )
         embed = discord.Embed(
             title="⚙️ Painel Administrativo — Nara",

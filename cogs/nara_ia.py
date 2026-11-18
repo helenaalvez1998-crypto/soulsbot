@@ -122,7 +122,7 @@ class PainelRelacionamentoAdminView(discord.ui.View):
             self.guild_id, self.user_id
         ):
             await interaction.response.send_message(
-                "Este painel expirou ou o usuário configurado foi alterado. Abra `/nara_relacionamento` novamente.",
+                "Este painel expirou ou o usuário configurado foi alterado. Abra `/adm` e entre em Relacionamento da NARA novamente.",
                 ephemeral=True,
             )
             return False
@@ -298,7 +298,7 @@ class NaraIA(commands.Cog):
             except Exception:
                 log.exception("Falha ao fechar adaptadores de IA da Nara")
 
-    async def cog_load(self):
+    async def _inicializar_banco(self):
         await self.bot.db.conn.execute(
             """CREATE TABLE IF NOT EXISTS ia_uso (
                  user_id INTEGER NOT NULL, dia TEXT NOT NULL, qtd INTEGER NOT NULL DEFAULT 0,
@@ -604,65 +604,66 @@ class NaraIA(commands.Cog):
         try:
             return bool(await self.bot.is_owner(interaction.user))
         except Exception:
-            log.exception("Não foi possível validar o proprietário do bot em /nara_relacionamento.")
+            log.exception("Não foi possível validar o proprietário do bot no painel privado de relacionamento.")
             return False
 
-    @app_commands.command(
-        name="nara_relacionamento",
-        description="Abre o painel privado de relacionamento adaptativo da NARA.",
-    )
-    @app_commands.guild_only()
-    @app_commands.default_permissions(administrator=True)
-    @app_commands.describe(usuario="Opcional: escolha quem será monitorado neste servidor")
-    async def nara_relacionamento(
-        self, interaction: discord.Interaction, usuario: Optional[discord.Member] = None
+    async def abrir_painel_relacionamento(
+        self, interaction: discord.Interaction, usuario: discord.User | discord.Member, *, editar: bool = False
     ):
+        """Configura o alvo e abre o painel privado; chamado somente pelo botão restrito do /adm."""
         if not await self._interacao_e_dono_bot(interaction):
             return await interaction.response.send_message(
-                "Somente o proprietário do bot pode abrir ou alterar o painel de relacionamento.",
-                ephemeral=True,
+                "Somente o proprietário global do bot pode acessar o relacionamento da NARA.", ephemeral=True
             )
         if interaction.guild_id is None:
             return await interaction.response.send_message(
                 "Este painel só pode ser usado dentro de um servidor.", ephemeral=True
             )
+        if getattr(usuario, "bot", False):
+            return await interaction.response.send_message("Escolha uma pessoa, não outro bot.", ephemeral=True)
+
+        # Auto-reparo: garante o esquema mesmo em bancos antigos ou após atualização parcial.
+        await self.bot.db.conn.execute(
+            """CREATE TABLE IF NOT EXISTS nara_relacionamento_config (
+                 guild_id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL,
+                 configured_by INTEGER NOT NULL, updated_at INTEGER NOT NULL)"""
+        )
+        await self.bot.db.conn.execute(
+            """CREATE TABLE IF NOT EXISTS nara_relacionamento_perfil (
+                 guild_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+                 afinidade REAL NOT NULL DEFAULT 5.0, paciencia REAL NOT NULL DEFAULT 5.0,
+                 updated_at INTEGER NOT NULL, recovered_at INTEGER NOT NULL,
+                 PRIMARY KEY (guild_id, user_id))"""
+        )
+        await self.bot.db.conn.execute(
+            """CREATE TABLE IF NOT EXISTS nara_relacionamento_eventos (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER NOT NULL,
+                 user_id INTEGER NOT NULL, event_type TEXT NOT NULL, summary TEXT NOT NULL,
+                 afinidade_delta REAL NOT NULL DEFAULT 0, paciencia_delta REAL NOT NULL DEFAULT 0,
+                 created_at INTEGER NOT NULL)"""
+        )
+        await self.bot.db.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_nara_rel_eventos_scope ON nara_relacionamento_eventos(guild_id,user_id,created_at)"
+        )
 
         guild_id = int(interaction.guild_id)
-        anterior = int(self._relacionamento_alvos.get(guild_id, 0) or 0)
-        if usuario is not None:
-            if usuario.bot:
-                return await interaction.response.send_message(
-                    "Escolha uma pessoa, não outro bot.", ephemeral=True
-                )
-            novo_user_id = int(usuario.id)
-            agora = int(time.time())
-            await self.bot.db.conn.execute(
-                """INSERT INTO nara_relacionamento_config(guild_id,user_id,configured_by,updated_at)
-                   VALUES (?,?,?,?)
-                   ON CONFLICT(guild_id) DO UPDATE SET
-                     user_id=excluded.user_id,
-                     configured_by=excluded.configured_by,
-                     updated_at=excluded.updated_at""",
-                (guild_id, novo_user_id, int(interaction.user.id), agora),
-            )
-            # O servidor acompanha uma pessoa por vez. Ao trocar o alvo, o perfil
-            # anterior fica preservado para que o dono possa selecioná-lo novamente.
-            await self.bot.db.conn.commit()
-            self._relacionamento_alvos[guild_id] = novo_user_id
-            user_id = novo_user_id
-        else:
-            user_id = anterior
-            if not user_id:
-                return await interaction.response.send_message(
-                    "Nenhuma pessoa está configurada. Execute `/nara_relacionamento usuario:@membro` para escolher quem será monitorado.",
-                    ephemeral=True,
-                )
-
-        painel = PainelRelacionamentoAdminView(
-            self, guild_id, user_id, int(interaction.user.id)
+        user_id = int(usuario.id)
+        agora = int(time.time())
+        await self.bot.db.conn.execute(
+            """INSERT INTO nara_relacionamento_config(guild_id,user_id,configured_by,updated_at)
+               VALUES (?,?,?,?) ON CONFLICT(guild_id) DO UPDATE SET
+                 user_id=excluded.user_id, configured_by=excluded.configured_by, updated_at=excluded.updated_at""",
+            (guild_id, user_id, int(interaction.user.id), agora),
         )
+        await self.bot.db.conn.commit()
+        self._relacionamento_alvos[guild_id] = user_id
+
+        painel = PainelRelacionamentoAdminView(self, guild_id, user_id, int(interaction.user.id))
         embed = await painel._renderizar()
-        await interaction.response.send_message(embed=embed, view=painel, ephemeral=True)
+        if editar:
+            await interaction.response.edit_message(content=None, embed=embed, view=painel)
+        else:
+            await interaction.response.send_message(embed=embed, view=painel, ephemeral=True)
 
     async def _carregar_memoria(self, guild_id: int, user_id: int) -> str:
         """Carrega somente as últimas 12 mensagens de quem autorizou memória."""
@@ -1544,6 +1545,9 @@ class NaraIA(commands.Cog):
         return await self._enviar(message, texto, ctx)
 
     async def cog_load(self):
+        # Inicializa tabelas/migrações. Antes havia outro cog_load acima com o mesmo nome;
+        # ele era sobrescrito pelo Python e as tabelas relacionais nunca eram criadas.
+        await self._inicializar_banco()
         # Registra o botão persistente para continuar funcionando após reinícios.
         from nara_help_panel import PainelAjudaPublicoView
         self.bot.add_view(PainelAjudaPublicoView(self.bot))
