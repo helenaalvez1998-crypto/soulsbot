@@ -977,6 +977,18 @@ class Ofertas(commands.Cog):
             cheapshark = await fetch_cheapshark_offers(
                 self.http_session, self.cheapshark_stores, usd_brl
             )
+            cheapshark_eligible = sum(
+                1 for offer in cheapshark
+                if (offer.get("discount") or 0) >= MIN_PROMO_DISCOUNT
+            )
+            log.info(
+                "CheapShark: lojas=%s | ofertas recebidas=%s | "
+                "descontos >= %s%%=%s",
+                len(self.cheapshark_stores),
+                len(cheapshark),
+                MIN_PROMO_DISCOUNT,
+                cheapshark_eligible,
+            )
             items.extend(cheapshark)
         except Exception:
             log.exception("Erro na fonte CheapShark.")
@@ -1037,7 +1049,16 @@ class Ofertas(commands.Cog):
             # Jogos grátis primeiro; depois as promoções de maior desconto.
             novos.sort(key=lambda i: (i["kind"] != "game", -(i.get("discount") or 0)))
 
+            cheapshark_total = sum(1 for i in unique.values() if i.get("source_id") == "cheapshark")
+            cheapshark_new = sum(1 for i in novos if i.get("source_id") == "cheapshark")
+            log.info(
+                "CheapShark pipeline: coletadas=%s | novas após deduplicação/filtros=%s",
+                cheapshark_total,
+                cheapshark_new,
+            )
+
             sent_this_cycle = 0
+            cheapshark_sent_this_cycle = 0
             guild_id = self.bot.guilds[0].id if self.bot.guilds else 0
             for item in novos:
                 if item["kind"] == "game":
@@ -1058,12 +1079,23 @@ class Ofertas(commands.Cog):
                     if item["kind"] == "game":
                         await asyncio.to_thread(mark_free_title, item.get("norm", ""))
                     sent_this_cycle += 1
+                    if item.get("source_id") == "cheapshark":
+                        cheapshark_sent_this_cycle += 1
                     await asyncio.sleep(1.2)
                     if sent_this_cycle >= MAX_OFFERS_PER_CHECK:
                         break
                 except discord.HTTPException:
                     log.exception("Falha publicando oferta: %s", item.get("title"))
-            log.info("Ofertas verificadas: %s; novas publicadas: %s", len(unique), sent_this_cycle)
+            log.info(
+                "Ofertas verificadas: %s; novas publicadas: %s | "
+                "CheapShark publicadas nesta coleta: %s",
+                len(unique), sent_this_cycle, cheapshark_sent_this_cycle,
+            )
+            log.info(
+                "Ofertas verificadas: %s; novas publicadas: %s | "
+                "CheapShark publicadas nesta coleta: %s",
+                len(unique), sent_this_cycle, cheapshark_sent,
+            )
         except Exception:
             log.exception("Erro na rotina de ofertas.")
 
