@@ -6,7 +6,7 @@ Fontes (todas consultadas em região BR / preços em reais quando a loja informa
   • GOG                 – promoções e jogos grátis em BRL                (sem chave)
   • GamerPower          – giveaways de várias lojas                      (sem chave)
   • IsThereAnyDeal      – Nuuvem e outras lojas em BRL + giveaways       (ITAD_API_KEY, opcional)
-  • GG.deals            – comparação de preço da Steam em BRL            (GG_DEALS_API_KEY, opcional)
+  • GG.deals            – comparação prioritária de preços BRL da Steam (GG_DEALS_API_KEY)
 
 Cada oferta vira um cartão limpo: imagem grande, nome grande, preço original riscado
 e preço de agora. Nenhuma fonte é obrigatória: se uma falhar, as outras continuam.
@@ -425,17 +425,25 @@ async def fetch_gog_offers(session: aiohttp.ClientSession) -> list[dict[str, Any
     """Catálogo público da GOG, região BR, preços em BRL (sem chave)."""
     if not OFFERS_GOG_ENABLED:
         return []
-    data = await _request_json(
-        session, "GET", "https://catalog.gog.com/v1/catalog", "GOG",
-        params={
-            "limit": 48, "order": "desc:trending", "discounted": "eq:true",
-            "productType": "in:game,pack", "page": 1,
-            "countryCode": "BR", "locale": "pt-BR", "currencyCode": "BRL",
-        },
-    )
-    products = data.get("products") if isinstance(data, dict) else None
+    # Pagina resultados para não ficar restrito aos primeiros 48 jogos em tendência.
+    products: list[dict[str, Any]] = []
+    for page in range(1, 4):
+        data = await _request_json(
+            session, "GET", "https://catalog.gog.com/v1/catalog", "GOG",
+            params={
+                "limit": 48, "order": "desc:trending", "discounted": "eq:true",
+                "productType": "in:game,pack", "page": page,
+                "countryCode": "BR", "locale": "pt-BR", "currencyCode": "BRL",
+            },
+        )
+        page_products = data.get("products") if isinstance(data, dict) else None
+        if not isinstance(page_products, list) or not page_products:
+            break
+        products.extend(page_products)
+        if len(page_products) < 48:
+            break
     items: list[dict[str, Any]] = []
-    for p in products if isinstance(products, list) else []:
+    for p in products:
         title, pid = p.get("title"), p.get("id")
         price = p.get("price") or {}
         final, base = _gog_amount(price.get("finalMoney")), _gog_amount(price.get("baseMoney"))
@@ -619,9 +627,14 @@ async def fetch_itad_giveaways(session: aiohttp.ClientSession) -> list[dict[str,
     return items
 
 
-# ---- GG.deals (comparação opcional, só Steam) -----------------------------------
+# ---- GG.deals (comparador prioritário; API oficial consulta IDs Steam) ---------
 async def enrich_with_gg_deals_prices(session: aiohttp.ClientSession, items: list[dict[str, Any]]) -> None:
-    """Acrescenta comparação GG.deals em BRL sem substituir o preço regional da Steam."""
+    """Enriquece candidatos com preços GG.deals BR; preserva preço de compra da loja de origem.
+
+    A API pública oficial do GG.deals não oferece feed/listagem de promoções: ela consulta
+    preços por Steam App ID (até 100 registros/minuto). Por isso, Steam/GOG/Epic/ITAD
+    continuam descobrindo ofertas; GG.deals é a referência prioritária de comparação.
+    """
     if not GG_DEALS_API_KEY:
         return
     app_ids = sorted({int(item["steam_app_id"]) for item in items if item.get("steam_app_id")})
@@ -672,6 +685,8 @@ async def enrich_with_gg_deals_prices(session: aiohttp.ClientSession, items: lis
             item["gg_deals_url"] = game.get("url") or "https://gg.deals/"
             item["gg_deals_retail"] = money_decimal_brl(prices.get("currentRetail"))
             item["gg_deals_keyshops"] = money_decimal_brl(prices.get("currentKeyshops"))
+            item["gg_deals_match"] = bool(item["gg_deals_retail"] or item["gg_deals_keyshops"])
+            item["gg_deals_currency"] = prices.get("currency")
 
 
 # ===================================================================== cartão
@@ -722,10 +737,10 @@ def cartao_texto(item: dict[str, Any]) -> str:
     if gg_url and (gg_retail or gg_keys):
         partes = []
         if gg_retail:
-            partes.append(f"lojas oficiais {gg_retail}")
+            partes.append(f"menor preço em lojas oficiais {gg_retail}")
         if gg_keys:
             partes.append(f"keyshops {gg_keys}")
-        linhas.append(f"-# GG.deals: {' · '.join(partes)} · [comparar]({gg_url})")
+        linhas.append(f"-# **Comparação principal GG.deals:** {' · '.join(partes)} · [ver no GG.deals]({gg_url})")
 
     if OFFERS_SHOW_DESCRIPTION and item.get("description"):
         linhas.append(str(item["description"])[:300].rstrip() + ("…" if len(str(item["description"])) > 300 else ""))
@@ -888,8 +903,13 @@ class Ofertas(commands.Cog):
                 if item["kind"] == "promo" and (item.get("discount") or 0) < MIN_PROMO_DISCOUNT:
                     continue
                 novos.append(item)
-            # Jogos grátis primeiro; depois as promoções de maior desconto.
-            novos.sort(key=lambda i: (i["kind"] != "game", -(i.get("discount") or 0)))
+            # Jogos grátis primeiro; depois ofertas com comparação GG.deals validada;
+            # em seguida, maiores descontos. O GG.deals não fornece feed de descoberta.
+            novos.sort(key=lambda i: (
+                i["kind"] != "game",
+                not bool(i.get("gg_deals_match")),
+                -(i.get("discount") or 0),
+            ))
 
             sent_this_cycle = 0
             guild_id = self.bot.guilds[0].id if self.bot.guilds else 0
@@ -939,13 +959,17 @@ class Ofertas(commands.Cog):
             itad = f"✅ IsThereAnyDeal — lojas {', '.join(map(str, ITAD_SHOPS))} (50 = Nuuvem)"
         else:
             itad = "⚪ IsThereAnyDeal — defina ITAD_API_KEY para ativar a Nuuvem"
-        gg = "✅ GG.deals (comparação de preços)" if GG_DEALS_API_KEY else "⚪ GG.deals — defina GG_DEALS_API_KEY (opcional)"
+        gg = (
+            "✅ GG.deals prioritário para comparação de preços BR (API oficial)"
+            if GG_DEALS_API_KEY else
+            "⚠️ GG.deals sem chave: adicione GG_DEALS_API_KEY para ativar a comparação prioritária"
+        )
         layout = "Components V2 (imagem grande)" if HAS_LAYOUT_VIEW else "embed (atualize o discord.py para >= 2.6)"
         await interaction.response.send_message(
             f"**Jogos grátis:** {games}\n**Promoções:** {promos}\n"
             f"**Verificação:** a cada {OFFERS_CHECK_MINUTES} minutos · desconto mínimo {MIN_PROMO_DISCOUNT}%\n"
             f"**Layout:** {layout}\n\n"
-            "**Fontes**\n✅ Steam Brasil\n✅ Epic Games Store (BR)\n✅ GamerPower\n"
+            "**Descoberta de ofertas (fontes complementares)**\n✅ Steam Brasil\n✅ Epic Games Store (BR)\n✅ GamerPower\n"
             f"{gog}\n{itad}\n{gg}",
             ephemeral=True,
         )
