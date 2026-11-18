@@ -39,6 +39,9 @@ from ia_provedores import gerar_texto_com_failover
 
 log = logging.getLogger("ofertas")
 
+# Limite temporário de teste exclusivo do CheapShark.
+CHEAPSHARK_MIN_PROMO_DISCOUNT = 10
+
 HAS_LAYOUT_VIEW = hasattr(discord.ui, "LayoutView") and hasattr(discord.ui, "MediaGallery")
 
 COR_GRATIS = 0x2ECC71
@@ -773,7 +776,7 @@ async def fetch_cheapshark_offers(
                 continue
 
             discount = round(((normal_usd - sale_usd) / normal_usd) * 100)
-            if discount < MIN_PROMO_DISCOUNT:
+            if discount < CHEAPSHARK_MIN_PROMO_DISCOUNT:
                 rejected_discount += 1
                 continue
         except (TypeError, ValueError):
@@ -805,7 +808,7 @@ async def fetch_cheapshark_offers(
         "CheapShark filtro: registros=%s | isOnSale!=1=%s | "
         "preço sem redução=%s | desconto abaixo de %s%%=%s | aprovados=%s",
         len(data), rejected_not_flagged, rejected_not_on_sale,
-        MIN_PROMO_DISCOUNT, rejected_discount, len(items),
+        CHEAPSHARK_MIN_PROMO_DISCOUNT, rejected_discount, len(items),
     )
     return items
 
@@ -1041,14 +1044,14 @@ class Ofertas(commands.Cog):
             )
             cheapshark_eligible = sum(
                 1 for offer in cheapshark
-                if (offer.get("discount") or 0) >= MIN_PROMO_DISCOUNT
+                if (offer.get("discount") or 0) >= CHEAPSHARK_MIN_PROMO_DISCOUNT
             )
             log.info(
                 "CheapShark: lojas=%s | ofertas recebidas=%s | "
                 "descontos >= %s%%=%s",
                 len(self.cheapshark_stores),
                 len(cheapshark),
-                MIN_PROMO_DISCOUNT,
+                CHEAPSHARK_MIN_PROMO_DISCOUNT,
                 cheapshark_eligible,
             )
             items.extend(cheapshark)
@@ -1105,7 +1108,12 @@ class Ofertas(commands.Cog):
                     continue
                 if item["kind"] == "game" and await asyncio.to_thread(free_title_recently_sent, item.get("norm", "")):
                     continue
-                if item["kind"] == "promo" and (item.get("discount") or 0) < MIN_PROMO_DISCOUNT:
+                item_min_discount = (
+                    CHEAPSHARK_MIN_PROMO_DISCOUNT
+                    if item.get("source_id") == "cheapshark"
+                    else MIN_PROMO_DISCOUNT
+                )
+                if item["kind"] == "promo" and (item.get("discount") or 0) < item_min_discount:
                     continue
                 novos.append(item)
             # Jogos grátis primeiro; depois as promoções de maior desconto.
