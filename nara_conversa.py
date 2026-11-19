@@ -58,7 +58,7 @@ LIMITE_GLOBAL_DIA = _int_env("NARA_CONVERSA_LIMITE_GLOBAL", 250)    # 0 = sem li
 COOLDOWN_SEG = _int_env("NARA_CONVERSA_COOLDOWN", 6)
 MAX_TOKENS = max(64, _int_env("NARA_CONVERSA_MAX_TOKENS", 320))
 MAX_ENTRADA = 500        # caracteres da mensagem enviados à IA
-MAX_CONTEXTO = 240       # caracteres da resposta anterior da Nara (quando o usuário responde a ela)
+MAX_CONTEXTO = 800       # contexto suficiente para compreender a resposta anterior da Nara
 MAX_SAIDA = 1200         # corte final da resposta no Discord
 CACHE_MAX = 200
 CACHE_TTL = 6 * 3600
