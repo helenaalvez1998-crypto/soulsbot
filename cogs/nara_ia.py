@@ -253,6 +253,8 @@ class NaraIA(commands.Cog):
             log.exception("Não foi possível carregar prompts/nara_manual.md; a Nara ensinará sem o manual oficial.")
         self.conv_cache = conv.CacheConversa()
         self.conv_cooldown = conv.Cooldown()
+        # Últimas respostas por canal: contexto efêmero para variar a escrita sem persistir dados.
+        self._respostas_recentes_nara: dict[int, list[str]] = {}
         try:
             prompt_especializado = PROMPT_PESQUISA_PATH.read_text(encoding="utf-8").strip()
             identidade_curta = conv.extrair_identidade(self.prompt_identidade)
@@ -992,6 +994,22 @@ class NaraIA(commands.Cog):
             await self._atualizar_relacionamento(guild_id, autor.id, texto)
         prompt = (self.prompt_conversa + nara_social.contexto_especialista(texto)
                   + nara_social.instrucoes_tom(texto))
+        # Histórico efêmero das respostas da Nara neste canal: ajuda a variar sem persistir mensagens.
+        canal_id = int(getattr(message.channel, "id", 0) or 0)
+        respostas_recentes = self._respostas_recentes_nara.get(canal_id, [])[-4:]
+        if respostas_recentes:
+            bloco_recentes = "\n".join(
+                f"{i}. {resposta[:520]}" for i, resposta in enumerate(respostas_recentes, 1)
+            )
+            prompt += (
+                "\n\nHISTÓRICO DE RESPOSTAS RECENTES DA NARA NESTE CANAL — APENAS REFERÊNCIA:\n"
+                + bloco_recentes
+                + "\nUse esse histórico para perceber o que já foi dito e variar a construção. "
+                  "Não copie frases, aberturas, bordões, comparações, argumentos ou encerramentos. "
+                  "Não responda novamente à mesma ideia quando a conversa já avançou. "
+                  "Alterne naturalmente entre resposta direta, pergunta, opinião, reconhecimento, "
+                  "explicação curta e humor contextual. Não escolha um formato fixo."
+            )
         if contexto_local:
             prompt += (
                 "\n\nCONTEXTO FACTUAL VERIFICADO PELO CÓDIGO — fonte de verdade para esta resposta:\n"
@@ -1069,6 +1087,14 @@ class NaraIA(commands.Cog):
             log.exception("Não foi possível registrar o uso da conversa da Nara.")
         if not contexto and not memoria_ativa and not imagens and not contexto_local and nome.lower() not in resposta.lower():
             self.conv_cache.guardar(chave, resposta)
+        if resposta:
+            recentes = self._respostas_recentes_nara.setdefault(canal_id, [])
+            recentes.append(resposta[:650])
+            del recentes[:-4]
+            # Limita canais mantidos em memória para evitar crescimento indefinido.
+            if len(self._respostas_recentes_nara) > 300:
+                primeiro_canal = next(iter(self._respostas_recentes_nara))
+                self._respostas_recentes_nara.pop(primeiro_canal, None)
         return resposta
 
     async def _responder_local(self, message: discord.Message, intent: str) -> str:
