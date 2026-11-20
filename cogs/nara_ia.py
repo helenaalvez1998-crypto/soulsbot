@@ -5,6 +5,7 @@ como contexto factual. O nome escrito sem menção ativa somente respostas locai
 de ação mantêm as ferramentas registradas e as guardas do núcleo Python.
 """
 import asyncio
+import difflib
 import logging
 import mimetypes
 import os
@@ -38,6 +39,7 @@ import nara_social
 import nara_relacionamento
 import nara_estilo_textual
 import nara_respostas
+from nara_local import normalizar
 
 log = logging.getLogger("nara.ia")
 
@@ -541,6 +543,50 @@ class NaraIA(commands.Cog):
             (guild_id, user_id, agora - 90 * 86400),
         )
         await self.bot.db.conn.commit()
+
+    async def _carregar_contexto_alvo_opiniao(self, message: discord.Message, texto: str) -> str:
+        """Carrega o relacionamento da pessoa avaliada, não o de quem fez a pergunta."""
+        guild = getattr(message, "guild", None)
+        guild_id = int(getattr(guild, "id", 0) or 0)
+        alvo_id = int(self._relacionamento_alvos.get(guild_id, 0) or 0)
+        if not guild_id or not alvo_id:
+            return ""
+
+        membro = guild.get_member(alvo_id) if guild else None
+        if membro is None:
+            try:
+                membro = await self.bot.fetch_user(alvo_id)
+            except Exception:
+                membro = None
+
+        nomes = []
+        if membro is not None:
+            for atributo in ("display_name", "name", "global_name"):
+                valor = getattr(membro, atributo, None)
+                if valor:
+                    nomes.append(str(valor))
+        mencionado = any(int(getattr(usuario, "id", 0) or 0) == alvo_id
+                         for usuario in (getattr(message, "mentions", None) or []))
+        if not nara_relacionamento.detectar_consulta_opiniao(
+            texto, nomes, mencionado=mencionado
+        ):
+            return ""
+        if not await self._relacionamento_ativo(guild_id, alvo_id):
+            return ""
+
+        contexto = await self._carregar_contexto_relacionamento(guild_id, alvo_id)
+        if not contexto:
+            return ""
+        nome_alvo = (getattr(membro, "display_name", None)
+                     or getattr(membro, "name", None) or str(alvo_id))
+        return (
+            "[ALVO DA OPINIAO — pessoa sobre quem a pergunta foi feita: "
+            + str(nome_alvo)[:80] + "]\\n"
+            + contexto
+            + "\\nREGRA DE ESCOPO: esta avaliação pertence ao ALVO acima. "
+              "Não substitua pelas notas de quem perguntou. Não transfira sentimentos "
+              "ou histórico de outra pessoa para este alvo."
+        )
 
     async def _carregar_contexto_relacionamento(self, guild_id: int, user_id: int) -> str:
         """Fornece afinidade, paciência e eventos importantes ao prompt da NARA."""
