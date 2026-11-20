@@ -1071,6 +1071,19 @@ class NaraIA(commands.Cog):
             contexto_relacionamento = await self._carregar_contexto_relacionamento(guild_id, autor.id)
             if contexto_relacionamento:
                 prompt += "\n\n" + contexto_relacionamento
+        # O alvo da pergunta pode ser diferente de quem escreveu a mensagem.
+        # Anexa o perfil do alvo DEPOIS do perfil do autor para governar a avaliação.
+        contexto_alvo_opiniao = await self._carregar_contexto_alvo_opiniao(message, texto)
+        if contexto_alvo_opiniao:
+            prompt += (
+                "\\n\\n" + contexto_alvo_opiniao
+                + "\\nINSTRUÇÃO FINAL DE AVALIAÇÃO: a pergunta solicita sua opinião sobre o ALVO DA OPINIAO. "
+                  "Use o relacionamento do alvo acima como referência decisiva. Não transfira para ele "
+                  "a afinidade, paciência, memória ou sentimentos do autor da pergunta. "
+                  "Não compense uma avaliação reservada com elogio, saudade, apego ou frase positiva "
+                  "inventada no encerramento. Se os dados indicarem afinidade baixa, mantenha a avaliação "
+                  "reservada ou desfavorável, sem transformar deboche em elogio disfarçado."
+            )
         norm = texto.casefold()
         termos_bot = (
             "nara", "servidor", "comando", "painel", "santuario", "platina", "zerado",
