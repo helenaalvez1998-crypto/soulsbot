@@ -1185,8 +1185,10 @@ class NaraIA(commands.Cog):
                   + contexto_alvo_opiniao["nome"] + ". A faixa de afinidade acima determina a avaliação, não apenas o tom. "
                   "Não use histórico, memória, afinidade ou sentimentos do autor da pergunta. "
                   "Não acrescente elogios de cortesia, ressalvas positivas, saudade ou apego para suavizar uma avaliação baixa. "
-                  "Se a afinidade for baixa, diga com clareza que a relação é distante ou que há pouca simpatia. "
-                  "Não invente condutas negativas: sem eventos, descreva apenas a baixa afinidade. "
+                  "A faixa deve aparecer no comportamento e na escolha de palavras, não em uma explicação repetida sobre a relação. "
+                  "Não diga automaticamente que a relação é distante, fria, neutra ou reservada; só mencione isso se a pergunta "
+                  "for sobre a relação em si ou se a informação for necessária. Não invente condutas negativas: sem eventos, "
+                  "expresse somente uma impressão subjetiva compatível com a afinidade. Varie a construção e não use frases prontas. "
                   "Não revele pontuação ou dados privados."
             )
             log.info(
