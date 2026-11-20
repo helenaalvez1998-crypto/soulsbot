@@ -23,7 +23,6 @@ from nara_local import normalizar
 PROMPT_PATH = Path(__file__).resolve().parent / "prompts" / "nara_conversa.md"
 PROMPT_IDENTIDADE_PATH = Path(__file__).resolve().parent / "prompts" / "nara.md"
 PROMPT_PERSONALIDADE_PATH = Path(__file__).resolve().parent / "prompts" / "nara_personalidade_runtime.md"
-PROMPT_PERSONA_PATH = Path(__file__).resolve().parent / "prompts" / "nara_persona.md"
 PROMPT_MINIMO = (
     "Você é Nara, a personalidade virtual da comunidade Souls | Quase Pro no Discord: "
     "espontânea, confiante, observadora, brincalhona, competitiva e leal à comunidade. "
@@ -71,16 +70,14 @@ def extrair_identidade(texto: str) -> str:
 
 
 def carregar_personalidade() -> str:
-    """Carrega a personalidade adaptativa oficial compartilhada por todas as rotas de IA."""
-    blocos = []
-    for caminho in (PROMPT_PERSONA_PATH, PROMPT_PERSONALIDADE_PATH):
-        try:
-            texto = caminho.read_text(encoding="utf-8").strip()
-        except (OSError, UnicodeError):
-            continue
-        if texto:
-            blocos.append(texto)
-    return "\n\n---\n\n".join(blocos)
+    """Carrega apenas a personalidade compacta de runtime, evitando regras duplicadas e conflito de prompts."""
+    try:
+        texto = PROMPT_PERSONALIDADE_PATH.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError):
+        texto = ""
+    # nara_persona.md é a referência documental extensa; não deve ser injetada inteira
+    # junto do runtime, pois duplica instruções e ultrapassa o orçamento de prompt.
+    return texto or PROMPT_MINIMO
 
 
 def carregar_prompt() -> str:
