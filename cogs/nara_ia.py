@@ -376,6 +376,10 @@ class NaraIA(commands.Cog):
             int(row["guild_id"]): int(row["user_id"])
             for row in (alvos_configurados or [])
         }
+        log.info(
+            "Relacionamento: configuração carregada para %s servidor(es).",
+            len(self._relacionamento_alvos),
+        )
         if NARA_DUVIDAS_LIMPEZA_ENABLED and IA_CANAIS_LIVRES and NARA_DUVIDAS_LIMPEZA_INTERVALO_MINUTOS > 0:
             self._limpeza_duvidas_task = asyncio.create_task(self._loop_limpeza_automatica_duvidas())
 
@@ -549,7 +553,13 @@ class NaraIA(commands.Cog):
         guild = getattr(message, "guild", None)
         guild_id = int(getattr(guild, "id", 0) or 0)
         alvo_id = int(self._relacionamento_alvos.get(guild_id, 0) or 0)
-        if not guild_id or not alvo_id:
+        if not guild_id:
+            return ""
+        if not alvo_id:
+            log.warning(
+                "Opinião sobre membro: não há alvo de relacionamento configurado para guild=%s.",
+                guild_id,
+            )
             return ""
 
         membro = guild.get_member(alvo_id) if guild else None
@@ -567,18 +577,42 @@ class NaraIA(commands.Cog):
                     nomes.append(str(valor))
         mencionado = any(int(getattr(usuario, "id", 0) or 0) == alvo_id
                          for usuario in (getattr(message, "mentions", None) or []))
-        if not nara_relacionamento.detectar_consulta_opiniao(
+        consulta_detectada = nara_relacionamento.detectar_consulta_opiniao(
             texto, nomes, mencionado=mencionado
-        ):
+        )
+        if not consulta_detectada:
             return ""
-        if not await self._relacionamento_ativo(guild_id, alvo_id):
+
+        memoria_ativa = await self._relacionamento_ativo(guild_id, alvo_id)
+        if not memoria_ativa:
+            log.warning(
+                "Opinião sobre membro detectada, mas memória/relacionamento desativado: "
+                "guild=%s alvo_id=%s menção_real=%s nomes_disponíveis=%s.",
+                guild_id, alvo_id, mencionado, len(nomes),
+            )
             return ""
 
         contexto = await self._carregar_contexto_relacionamento(guild_id, alvo_id)
         if not contexto:
+            log.error(
+                "Opinião sobre membro detectada, mas contexto relacional vazio: "
+                "guild=%s alvo_id=%s.", guild_id, alvo_id,
+            )
             return ""
         nome_alvo = (getattr(membro, "display_name", None)
                      or getattr(membro, "name", None) or str(alvo_id))
+        afinidade_match = re.search(r"Afinidade:\s*([0-9]+(?:\.[0-9]+)?)/10", contexto)
+        afinidade_log = afinidade_match.group(1) if afinidade_match else "não identificada"
+        log.info(
+            "Opinião sobre membro: contexto carregado; guild=%s autor_id=%s alvo_id=%s "
+            "nome=%r menção_real=%s afinidade=%s.",
+            guild_id,
+            int(getattr(getattr(message, "author", None), "id", 0) or 0),
+            alvo_id,
+            str(nome_alvo)[:80],
+            mencionado,
+            afinidade_log,
+        )
         return (
             "[ALVO DA OPINIAO — pessoa sobre quem a pergunta foi feita: "
             + str(nome_alvo)[:80] + "]\\n"
@@ -1075,6 +1109,11 @@ class NaraIA(commands.Cog):
         # Anexa o perfil do alvo DEPOIS do perfil do autor para governar a avaliação.
         contexto_alvo_opiniao = await self._carregar_contexto_alvo_opiniao(message, texto)
         if contexto_alvo_opiniao:
+            log.info(
+                "Opinião sobre membro: contexto do alvo anexado ao prompt; guild=%s autor_id=%s.",
+                guild_id,
+                int(getattr(autor, "id", 0) or 0),
+            )
             prompt += (
                 "\\n\\n" + contexto_alvo_opiniao
                 + "\\nINSTRUÇÃO FINAL DE AVALIAÇÃO: a pergunta solicita sua opinião sobre o ALVO DA OPINIAO. "
