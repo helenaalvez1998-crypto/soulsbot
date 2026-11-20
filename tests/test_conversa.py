@@ -135,9 +135,10 @@ class PedidoTests(unittest.TestCase):
         txt = conv.carregar_prompt()
         self.assertIn("Nara", txt)
         self.assertNotIn("/jogo_buscar", txt)  # comando removido
-        self.assertLess(len(txt), 8500)  # personalidade compacta (inclui a persona humana) para conter custo por chamada
-        self.assertIn("apenas por texto no Discord", txt)
-        self.assertIn("não fala nem envia áudio", txt)
+        self.assertLess(len(txt), 40000)  # inclui a persona completa e o filtro runtime final
+        self.assertIn("mensagens escritas no discord", txt.lower())
+        self.assertIn("ela não fala, não possui voz", txt.lower())
+        self.assertNotIn("FILTRO FINAL DE MENSAGEM", txt)  # runtime entra só depois dos contextos dinâmicos
 
 
 class CacheCooldownTests(unittest.TestCase):
@@ -384,6 +385,8 @@ class CogConversaTests(unittest.TestCase):
         self.assertTrue(resposta)
         system, pedido, _tokens = self.cog.ia.chamadas[0]
         self.assertIn("ALVO DA OPINIÃO", system)
+        self.assertIn("FILTRO FINAL DE MENSAGEM", system)
+        self.assertTrue(system.rstrip().endswith(self.cog.prompt_filtro_runtime))
         self.assertNotIn("HISTÓRICO DE RESPOSTAS RECENTES", system)
         self.assertNotIn("resposta antiga", system)
         self.assertNotIn("FAQ RELACIONADA", system)
@@ -397,6 +400,7 @@ class CogConversaTests(unittest.TestCase):
         self.assertEqual(self.bot.db.uso[(0, "chat:2026-11-10")], 1)
         system, pedido, max_tokens = self.cog.ia.chamadas[0]
         self.assertIn("Nara", system)
+        self.assertTrue(system.rstrip().endswith(self.cog.prompt_filtro_runtime))
         self.assertEqual(max_tokens, conv.MAX_TOKENS)
         self.assertNotIn("saldo", pedido.lower())
 
@@ -452,7 +456,8 @@ if __name__ == "__main__":
 def test_prompt_carrega_personalidade_canonica_completa_e_regras_da_conversa():
     txt = conv.carregar_prompt()
     personalidade = conv.carregar_personalidade()
-    assert personalidade in txt
+    assert "PERSONALIDADE-BASE" in txt
+    assert "FILTRO FINAL DE MENSAGEM" not in txt  # runtime é anexado pelo cog somente no fim do prompt
     assert "Administradora implacável" in personalidade
     assert "Especialista técnica" in personalidade
     assert "Souls" in personalidade and "criador" in personalidade
@@ -460,6 +465,18 @@ def test_prompt_carrega_personalidade_canonica_completa_e_regras_da_conversa():
     assert "afinidade baixa" in personalidade
     assert "ESCOPO DESTA ROTA: CONVERSA TEXTUAL" in txt
     assert "Não invente fatos" in txt
+    assert "[PERSONALIDADE-BASE" in personalidade
+    assert "[FILTRO FINAL DE MENSAGEM" in personalidade
+    assert personalidade.index("[PERSONALIDADE-BASE") < personalidade.index("[FILTRO FINAL DE MENSAGEM")
+    assert "ESCOPO DESTA ROTA: CONVERSA TEXTUAL" in txt
+    assert "revisar silenciosamente" in personalidade.lower()
+    assert "nunca inverter a opinião" in personalidade.lower()
+
+
+def test_filtro_runtime_e_anexado_depois_de_todos_os_contextos():
+    prompt = conv.aplicar_filtro_runtime("BASE\nCONTEXTO DO ALVO", "FILTRO DE REDAÇÃO")
+    assert prompt.index("CONTEXTO DO ALVO") < prompt.index("FILTRO FINAL DE MENSAGEM")
+    assert prompt.rstrip().endswith("FILTRO DE REDAÇÃO")
 
 
 def test_pedido_de_acao_e_separado_de_pergunta_explicativa():
