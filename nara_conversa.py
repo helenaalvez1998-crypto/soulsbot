@@ -23,6 +23,7 @@ from nara_local import normalizar
 PROMPT_PATH = Path(__file__).resolve().parent / "prompts" / "nara_conversa.md"
 PROMPT_IDENTIDADE_PATH = Path(__file__).resolve().parent / "prompts" / "nara.md"
 PROMPT_PERSONALIDADE_PATH = Path(__file__).resolve().parent / "prompts" / "nara_personalidade_runtime.md"
+PROMPT_PERSONA_PATH = Path(__file__).resolve().parent / "prompts" / "nara_persona.md"
 PROMPT_MINIMO = (
     "Você é Nara, a personalidade virtual da comunidade Souls | Quase Pro no Discord: "
     "espontânea, confiante, observadora, brincalhona, competitiva e leal à comunidade. "
@@ -69,36 +70,89 @@ def extrair_identidade(texto: str) -> str:
     return match.group(0).strip() if match else ""
 
 
-def carregar_personalidade() -> str:
-    """Carrega apenas a personalidade compacta de runtime, evitando regras duplicadas e conflito de prompts."""
+def _ler_prompt_personalidade(caminho: Path) -> str:
+    """Lê um arquivo de personalidade sem impedir a inicialização se ele estiver ausente."""
     try:
-        texto = PROMPT_PERSONALIDADE_PATH.read_text(encoding="utf-8").strip()
+        return caminho.read_text(encoding="utf-8").strip()
     except (OSError, UnicodeError):
-        texto = ""
-    # nara_persona.md é a referência documental extensa; não deve ser injetada inteira
-    # junto do runtime, pois duplica instruções e ultrapassa o orçamento de prompt.
-    return texto or PROMPT_MINIMO
+        return ""
+
+
+def carregar_personalidade_base() -> str:
+    """Carrega a personalidade completa: identidade, caráter, opiniões e relações."""
+    return _ler_prompt_personalidade(PROMPT_PERSONA_PATH)
+
+
+def carregar_filtro_runtime() -> str:
+    """Carrega a camada final que adapta a redação sem substituir a personalidade-base."""
+    return _ler_prompt_personalidade(PROMPT_PERSONALIDADE_PATH)
+
+
+def carregar_personalidade_base() -> str:
+    """Carrega o prompt completo de identidade, personalidade, opiniões e relações."""
+    try:
+        return PROMPT_PERSONA_PATH.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError):
+        return ""
+
+
+def carregar_filtro_runtime() -> str:
+    """Carrega o filtro de redação, aplicado depois de todos os outros contextos."""
+    try:
+        return PROMPT_PERSONALIDADE_PATH.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError):
+        return ""
+
+
+def carregar_personalidade() -> str:
+    """Retorna os dois prompts em ordem: personalidade-base primeiro, runtime depois."""
+    base = carregar_personalidade_base()
+    filtro = carregar_filtro_runtime()
+    blocos = []
+    if base:
+        blocos.append(
+            "[PERSONALIDADE-BASE — fonte principal de identidade, caráter, opiniões e relações]\n" + base
+        )
+    if filtro:
+        blocos.append(
+            "[FILTRO FINAL DE MENSAGEM — aplicar depois da personalidade-base]\n" + filtro
+        )
+    return "\n\n---\n\n".join(blocos) or PROMPT_MINIMO
+
+
+def aplicar_filtro_runtime(prompt: str, filtro: str | None = None) -> str:
+    """Anexa o runtime por último, depois dos prompts de rota e dos contextos dinâmicos."""
+    filtro = (filtro if filtro is not None else carregar_filtro_runtime()) or ""
+    filtro = filtro.strip()
+    prompt = (prompt or "").rstrip()
+    if not filtro:
+        return prompt
+    bloco = (
+        "[FILTRO FINAL DE MENSAGEM — última camada de instrução; adapte somente a redação]\n"
+        + filtro
+    )
+    return f"{prompt}\n\n{bloco}" if prompt else bloco
 
 
 def carregar_prompt() -> str:
-    """Combina personalidade canônica e regras da conversa aberta."""
+    """Monta a personalidade-base e o escopo da conversa; o runtime será anexado após os contextos."""
     partes = []
-    personalidade = carregar_personalidade()
+    personalidade = carregar_personalidade_base()
     if personalidade:
         partes.append(
-            "PERSONALIDADE CANÔNICA — prevalece para identidade, temperamento e tom.\n"
+            "PERSONALIDADE-BASE — fonte principal para identidade, temperamento, opiniões, relações e limites.\n"
             + personalidade
         )
+    else:
+        partes.append(PROMPT_MINIMO)
     try:
-        # A identidade completa já está na personalidade canônica; repetir nara.md
-        # aqui aumenta tokens sem acrescentar regra nova à rota de conversa.
         regras_rota = PROMPT_PATH.read_text(encoding="utf-8").strip()
         if regras_rota:
             partes.append("ESCOPO DESTA ROTA: CONVERSA TEXTUAL\n" + regras_rota)
     except (OSError, UnicodeError):
         # A personalidade continua disponível mesmo se um prompt secundário falhar.
         pass
-    return "\n\n---\n\n".join(partes) or PROMPT_MINIMO
+    return "\n\n---\n\n".join(partes)
 
 
 def montar_pedido(autor: str, texto: str, contexto_nara: str = "") -> str:
