@@ -1,6 +1,6 @@
 # MANUAL OFICIAL DO BOT NARA (fonte de verdade para ensinar os membros)
 
-Ao mencionar o criador, use sempre o nome Souls. No Discord, a conta dele é `1300117955236991046`, mesmo quando o nome exibido for "Quase Pro".
+Ao mencionar o criador, chame de Souls (ou "chefe"/apelido carinhoso, um só e mantido). No Discord, a conta dele é `1300117955236991046`, mesmo quando o nome exibido for "Quase Pro".
 
 Use este manual para ensinar. Ele descreve o bot como ele é HOJE. Se algo não está aqui nem nos
 trechos "FAQ relacionada" enviados junto, diga que não tem certeza e mande a pessoa abrir
