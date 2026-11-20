@@ -1,6 +1,6 @@
 # Relacionamento adaptativo da NARA
 
-O relacionamento adaptativo mantém **afinidade**, **paciência** e eventos sociais resumidos para a pessoa escolhida no painel. A personalidade original da NARA continua sendo a base; os indicadores apenas ajustam proximidade e tom.
+O relacionamento adaptativo mantém **afinidade**, **paciência** e eventos sociais resumidos para a pessoa escolhida no painel. A personalidade original da NARA continua sendo a base. Os indicadores afetam tanto a proximidade e o tom quanto a avaliação social que ela faz da pessoa: confiança, boa vontade, reserva e familiaridade devem refletir o histórico.
 
 ## Acesso e privacidade administrativa
 
@@ -30,8 +30,10 @@ O membro continua podendo desativar ou apagar sua própria memória em `/nara_me
 
 ## Funcionamento
 
-- **Afinidade** representa o vínculo duradouro e muda lentamente.
-- **Paciência** representa a tolerância momentânea e recupera-se mais rápido com o tempo.
+- **Afinidade** representa o vínculo duradouro, a confiança e a consideração conquistadas; muda lentamente e influencia a opinião geral da NARA sobre a pessoa.
+- **Paciência** representa a tolerância momentânea e recupera-se mais rápido com o tempo; influencia sobretudo o quanto a NARA está disposta a tolerar naquele momento.
+- Afinidade baixa exige reserva e ausência de simpatia presumida; afinidade alta permite familiaridade e consideração proporcionais ao histórico. A faixa neutra mantém avaliação equilibrada.
+- A NARA não deve ser automaticamente boazinha nem automaticamente hostil. Ela avalia atitudes concretas, não discordâncias ou críticas legítimas. Os indicadores nunca alteram fatos, regras, justiça ou a qualidade da ajuda.
 - A avaliação de mensagens é feita localmente em Python; não cria chamada adicional à API.
 - A NARA recebe os indicadores na mesma chamada de IA que já seria realizada.
 - Apenas eventos resumidos são registrados; o texto original da provocação não é duplicado no histórico relacional.
