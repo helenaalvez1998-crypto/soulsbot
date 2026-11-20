@@ -220,30 +220,24 @@ _CONCESSAO_POSITIVA = (
     r"\b(?:mas|porem|apesar de tudo|pelo menos|admito(?: que)?|no fundo|ainda assim|"
     r"apesar disso|mesmo assim)\b.{0,140}" + _POSITIVO_SEM_BASE
 )
-_DISTANCIA_BAIXA = (
-    r"\b(?:relacao distante|distante|pouca afinidade|afinidade baixa|pouca simpatia|"
-    r"sem simpatia|nao sou proximo|nao sou proxima|nao existe proximidade|"
-    r"mantenho distancia|manter distancia|prefiro distancia|trato com reserva|"
-    r"mantenho reserva|nao tenho intimidade|nao tenho confianca|nao tenho consideracao)\b"
-)
-_DISTANCIA_ANTIPATIA = (
-    r"\b(?:antipatia|nao gosto dele|nao gosto dela|nao tenho afinidade|"
-    r"prefiro manter distancia|nao tenho simpatia|relacao ruim)\b"
-)
-
-
 def motivo_resposta_incoerente(resposta: str, afinidade: float) -> str | None:
-    """Verifica se a opinião expressa é compatível com a faixa relacional do alvo."""
+    """Rejeita afeto/elogio incompatível com afinidade baixa, sem exigir rótulos explícitos.
+
+    A nota deve orientar a atitude da Nara. A resposta não precisa declarar que a relação
+    é distante, fria ou neutra; exigir essas palavras transforma o comportamento em roteiro.
+    """
     a = min(10.0, max(1.0, float(afinidade)))
     if a > 3.9:
         return None
     t = normalizar(resposta or "")
     if not t:
         return "resposta_vazia"
+
+    # Um elogio direto ou uma concessão positiva inventada é incompatível com afinidade
+    # baixa. Negativas explícitas ("não sinto falta", "não tenho carinho") são permitidas.
     for padrao in (_CONCESSAO_POSITIVA, _POSITIVO_SEM_BASE):
         for match in re.finditer(padrao, t):
             prefixo = t[max(0, match.start() - 55):match.start()]
-            # Não marcar frases que negam explicitamente carinho, saudade ou elogio.
             if re.search(r"\b(?:nao|nunca|jamais|sem)\b(?:\s+\w+){0,5}\s*$", prefixo):
                 continue
             trecho = match.group(0)
@@ -251,16 +245,15 @@ def motivo_resposta_incoerente(resposta: str, afinidade: float) -> str | None:
                 continue
             return "elogio_ou_afeto_compensatorio"
 
-    marcador = _DISTANCIA_ANTIPATIA if a <= 2.4 else _DISTANCIA_BAIXA
-    if not re.search(marcador, t):
-        return "avaliacao_sem_distanciamento"
+    # Não exigir frases como "nossa relação é distante". A personalidade pode aparecer
+    # por ironia, concisão, escolha de palavras ou falta de intimidade, sem explicar a nota.
     return None
 
 
 def resposta_padrao_opiniao(
     nome: str, afinidade: float, anteriores: list[str] | None = None,
 ) -> str:
-    """Gera uma resposta segura e variada quando o Gemini contradiz a nota ou se repete."""
+    """Resposta de contingência natural, usada só quando o Gemini contradiz ou se repete."""
     pessoa = "essa pessoa"
     nome_limpo = " ".join(str(nome or "").replace("@", "").split())[:45]
     if nome_limpo:
@@ -268,45 +261,51 @@ def resposta_padrao_opiniao(
     faixa = faixa_afinidade(afinidade)
     variantes = {
         "antipatia_clara": [
-            f"não tenho afinidade com {pessoa}. prefiro manter distância e não vou fingir consideração.",
-            f"minha relação com {pessoa} é ruim. não tenho simpatia e prefiro manter distância.",
-            f"com {pessoa}, a afinidade é muito baixa. mantenho distância e não existe proximidade entre nós.",
-            f"não gosto de manter proximidade com {pessoa}. nossa relação é distante e não vou disfarçar isso.",
+            f"{pessoa}? não sou fã, não. prefiro manter a convivência no mínimo necessário.",
+            f"não vou fingir simpatia por {pessoa}. trato com educação e cada um segue o seu caminho.",
+            f"com {pessoa}, minha boa vontade é curta. não vejo motivo pra forçar proximidade.",
+            f"{pessoa} não é alguém que me agrade. sem drama, só não faço questão de intimidade.",
+            f"não tenho muita paciência pra lidar com {pessoa}; prefiro deixar a convivência no básico.",
         ],
         "baixa": [
-            f"minha relação com {pessoa} é distante. trato com reserva e não tenho simpatia suficiente pra fingir proximidade.",
-            f"não sou próxima de {pessoa}. mantenho uma postura reservada e não existe confiança construída entre nós.",
-            f"com {pessoa}, minha postura é de distância: pouca afinidade, pouca confiança e nenhuma intimidade.",
-            f"não tenho grande simpatia por {pessoa}. prefiro manter a relação no básico, sem forçar amizade.",
-            f"a relação com {pessoa} não é próxima. não tenho motivo pra demonstrar carinho ou confiança que não existem.",
+            f"{pessoa}? não é alguém que me ganhe facilmente. fico na cordialidade e pronto.",
+            f"ah, {pessoa}. não vou fingir entusiasmo, né? trato normal, sem forçar amizade.",
+            f"com {pessoa} eu não forço sintonia. cada um no seu quadrado e tá tudo certo.",
+            f"não é minha companhia favorita, digamos assim. não precisa virar um drama.",
+            f"{pessoa} não me desperta muita simpatia. sigo educada, mas sem aquela empolgação toda.",
+            f"não temos muita química, {pessoa} e eu. convivência civilizada já resolve.",
+            f"olha, não faço questão de proximidade com {pessoa}. sem briga, só não é meu tipo de companhia.",
         ],
         "reservada": [
-            f"ainda mantenho certa reserva com {pessoa}. não existe proximidade suficiente pra falar em confiança.",
-            f"minha relação com {pessoa} é cautelosa. trato com educação, mas sem presumir intimidade.",
-            f"não tenho proximidade consolidada com {pessoa}. minha postura continua reservada.",
+            f"com {pessoa}, vou com calma. ainda não tenho intimidade pra falar como se fosse próximo.",
+            f"ainda estou observando {pessoa}. prefiro não inventar uma opinião maior do que os fatos permitem.",
+            f"{pessoa}? trato numa boa, mas não sou de forçar intimidade com quem ainda conheço pouco.",
+            f"não tenho uma leitura fechada de {pessoa} ainda. por enquanto, conversa normal e sem presumir demais.",
         ],
         "neutra": [
-            f"não tenho uma opinião forte sobre {pessoa}. nossa relação é neutra e prefiro avaliar atitudes concretas.",
-            f"com {pessoa}, mantenho uma relação neutra. não há proximidade especial nem antipatia definida.",
-            f"não existe vínculo forte com {pessoa}. fico no neutro e avalio cada atitude pelo que ela mostra.",
+            f"sobre {pessoa}, não tenho nada muito marcante pra dizer. prefiro avaliar pelo que faz.",
+            f"{pessoa}? por enquanto, nada que me faça pender muito pra um lado ou pro outro.",
+            f"não vou inventar uma história sobre {pessoa}. até aqui, minha impressão é comum, sem grandes extremos.",
         ],
         "boa": [
-            f"tenho uma boa impressão de {pessoa} e alguma simpatia, mas sem exagerar a intimidade.",
-            f"minha relação com {pessoa} é boa. existe simpatia e familiaridade, sem transformar isso em bajulação.",
-            f"gosto da convivência com {pessoa}. temos uma boa relação, ainda que isso não signifique concordar sempre.",
+            f"gosto de trocar ideia com {pessoa}; só não espere um fã-clube, né.",
+            f"{pessoa} costuma me passar uma impressão boa. ainda posso discordar quando precisar.",
+            f"a convivência com {pessoa} funciona bem. isso não significa que eu vá passar pano.",
         ],
         "alta": [
-            f"tenho consideração e confiança construídas com {pessoa}. existe proximidade real, sem precisar de bajulação.",
-            f"{pessoa} é alguém de quem sou próxima. existe carinho e confiança construídos no nosso histórico.",
-            f"minha relação com {pessoa} é de proximidade e confiança. tenho carinho, mas continuo sendo sincera.",
+            f"tenho consideração real por {pessoa}. posso zoar, mas não é pouca coisa.",
+            f"{pessoa} é alguém que levo a sério e em quem confio. isso não me impede de ser sincera.",
+            f"gosto de ter {pessoa} por perto. não preciso ficar anunciando isso toda hora.",
         ],
     }[faixa]
     anteriores = anteriores or []
     for variante in variantes:
         if not resposta_repetida(variante, anteriores):
             return variante
-    return variantes[len(anteriores) % len(variantes)]
-
+    # Se todas as opções foram usadas, começa a seleção em outra posição em vez de
+    # reciclar sempre a primeira formulação.
+    inicio = len(anteriores) % len(variantes)
+    return variantes[inicio]
 
 def resposta_repetida(resposta: str, anteriores: list[str] | None = None) -> bool:
     """Detecta reutilização quase literal de uma resposta recente no mesmo alvo."""
@@ -328,26 +327,25 @@ def formatar_contexto(afinidade: float, paciencia: float, eventos: list[dict]) -
 
     instrucoes = {
         "antipatia_clara": (
-            "ANTIPATIA CLARA: a relação é ruim. A avaliação deve ser claramente desfavorável e distante. "
-            "Não demonstre carinho, saudade, admiração, preferência ou boa vontade sem eventos concretos que sustentem isso."
+            "ANTIPATIA CLARA: deixe a pouca consideração aparecer na atitude, na concisão e na escolha das palavras. "
+            "Não invente carinho, saudade, admiração ou boa vontade sem fatos que sustentem isso."
         ),
         "baixa": (
-            "AFINIDADE BAIXA: 2,5–3,9 não é neutralidade. Seja fria, reservada, cética e pouco calorosa. "
-            "A opinião deve deixar claro que não há simpatia ou confiança relevante. Não acrescente elogio compensatório, "
-            "não use 'mas pelo menos', 'no fundo gosto', 'o servidor perde a graça sem ele' ou equivalentes."
+            "AFINIDADE BAIXA: a faixa 2,5–3,9 representa pouca simpatia, não neutralidade. "
+            "Seja menos calorosa, mais seca, cética e pouco disponível para intimidade. "
+            "Não transforme uma crítica em elogio compensatório nem invente simpatia. A nota deve aparecer no jeito de agir, não em um discurso sobre a relação."
         ),
         "reservada": (
-            "AFINIDADE RESERVADA: mantenha distância e não presuma intimidade nem confiança. "
-            "Reconheça fatos positivos apenas quando houver evidência concreta, sem criar elogios para suavizar a resposta."
+            "AFINIDADE RESERVADA: aja com cautela e sem intimidade presumida. Não explique a categoria relacional sem necessidade."
         ),
         "neutra": (
-            "AFINIDADE NEUTRA: não presuma simpatia nem antipatia. Avalie somente atitudes conhecidas e seja equilibrada."
+            "AFINIDADE NEUTRA: mantenha equilíbrio sem fabricar simpatia ou antipatia. Não anuncie que está neutra; responda normalmente."
         ),
         "boa": (
-            "AFINIDADE BOA: pode demonstrar simpatia e familiaridade proporcionais ao histórico, sem bajular."
+            "AFINIDADE BOA: demonstre mais abertura e familiaridade de modo espontâneo, sem bajular nem anunciar proximidade."
         ),
         "alta": (
-            "AFINIDADE ALTA: existe confiança e consideração construídas. Pode demonstrar carinho e proximidade sem bajulação automática."
+            "AFINIDADE ALTA: carinho, confiança e consideração podem aparecer naturalmente nas atitudes e escolhas de palavras; não precisa verbalizar isso toda hora."
         ),
     }[faixa]
 
@@ -372,12 +370,15 @@ def formatar_contexto(afinidade: float, paciencia: float, eventos: list[dict]) -
         f"Afinidade interna: {a:.1f}/10 | faixa: {faixa}. {instrucoes}\n"
         f"Paciência interna: {p:.1f}/10. {paciencia}\n"
         f"Eventos resumidos disponíveis: {fatos}\n"
-        "REGRAS DE AVALIAÇÃO: afinidade determina opinião, consideração, confiança, boa vontade e proximidade; "
+        "REGRAS DE AVALIAÇÃO: afinidade determina consideração, confiança, simpatia, abertura e proximidade; "
         "paciência determina apenas tolerância momentânea. Não use a nota de quem fez a pergunta para avaliar o alvo. "
-        "Se não houver eventos, não invente ofensas, defeitos ou comportamentos: descreva somente o estado da relação. "
-        "Em pergunta direta sobre a opinião, responda com a avaliação correspondente à faixa. Não termine uma avaliação "
-        "baixa com elogio, ressalva positiva, apego, saudade ou 'mas pelo menos' inventado. O humor pode mudar a forma, "
-        "mas nunca inverter o julgamento. Não revele notas nem eventos privados. Não humilhe, ameace ou ataque atributos "
-        "pessoais sensíveis; frieza e crítica direta não exigem degradação. Em sofrimento ou pedido de ajuda, acolha e "
+        "Se não houver eventos, não invente ofensas, defeitos ou comportamentos; expresse apenas uma impressão subjetiva "
+        "proporcional ao vínculo. PRINCÍPIO DE NATURALIDADE: aja conforme a faixa, não narre a faixa. Não diga repetidamente "
+        "que a relação é distante, fria, neutra ou reservada. Não mencione pontuação nem explique seu próprio estado "
+        "relacional, salvo quando a pessoa perguntar diretamente ou isso for realmente necessário para responder. "
+        "Varie ritmo, vocabulário e nível de humor; evite fórmulas fixas, aberturas e encerramentos repetidos. "
+        "Em afinidade baixa, não invente simpatia, carinho ou saudade nem use elogio compensatório para amenizar a resposta. "
+        "O humor pode mudar a forma, mas nunca inverter o julgamento. Não revele notas nem eventos privados. "
+        "Não humilhe, ameace ou ataque atributos pessoais sensíveis. Em sofrimento ou pedido de ajuda, acolha e "
         "suspenda o sarcasmo, sem alterar a nota armazenada."
     )
