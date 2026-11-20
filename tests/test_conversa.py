@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import nara_conversa as conv  # noqa: E402
 import nara_social  # noqa: E402
+import nara_relacionamento  # noqa: E402
 from gemini_resilience import GeminiUnavailableError, _state_path, _register_block, _reset_for_tests  # noqa: E402
 from ia_multi import RoteadorIA, TodosProvedoresIndisponiveis  # noqa: E402
 from nara_local import (
@@ -159,6 +160,10 @@ class CacheCooldownTests(unittest.TestCase):
         self.assertTrue(cd.liberar(1))
 
 
+async def _async_value(value):
+    return value
+
+
 class FakeAdaptador:
     def __init__(self, resposta=None, erro=None):
         self.resposta, self.erro, self.chamadas = resposta, erro, []
@@ -259,8 +264,28 @@ def _carregar_cog():
     discord = types.ModuleType("discord")
     discord.Message = Message
     discord.Member = type("Member", (), {})
+    discord.User = type("User", (), {})
     discord.Interaction = object
     discord.AllowedMentions = SimpleNamespace(none=lambda: None)
+
+    class View:
+        def __init__(self, *args, **kwargs):
+            self.children = []
+
+        def add_item(self, item):
+            self.children.append(item)
+
+    class Button:
+        def __init__(self, *args, **kwargs):
+            self.disabled = False
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
+    discord.ui = SimpleNamespace(
+        View=View, Button=Button,
+        button=lambda **kwargs: (lambda f: f),
+    )
+    discord.ButtonStyle = SimpleNamespace(success=1, danger=2, secondary=3, primary=4)
     discord.app_commands = SimpleNamespace(
         command=identidade, default_permissions=identidade, Group=Group,
         guild_only=lambda: (lambda f: f), describe=identidade)
@@ -316,7 +341,51 @@ class CogConversaTests(unittest.TestCase):
         m = self.Message()
         m.author = SimpleNamespace(id=uid, display_name=nome, bot=False)
         m.reference = None
+        m.channel = SimpleNamespace(id=123)
+        m.guild = None
+        m.attachments = []
         return m
+
+    def test_opiniao_sobre_membro_usa_nota_do_alvo_e_substitui_resposta_amena(self):
+        resposta_gemini = (
+            "olha, o davis testa a paciência da moderação, mas pelo menos movimenta o servidor. "
+            "o caos dele já faz parte da mobília daqui."
+        )
+        self.cog.ia = FakeAdaptador(resposta_gemini)
+        alvo = SimpleNamespace(id=337010644186300446, display_name="davisg95", name="davisg95", global_name="davisg95")
+        guild = SimpleNamespace(id=999, members=[alvo], get_member=lambda uid: alvo if uid == alvo.id else None)
+        msg = self.msg()
+        msg.guild = guild
+        msg.mentions = [alvo]
+        self.cog._relacionamento_ativo = lambda guild_id, user_id: _async_value(True)
+        self.cog._carregar_contexto_relacionamento = lambda guild_id, user_id: _async_value(
+            nara_relacionamento.formatar_contexto(3.1, 3.0, [])
+        )
+        original_one = self.bot.db._one
+
+        async def db_one(sql, params):
+            if "SELECT afinidade, paciencia FROM nara_relacionamento_perfil" in sql:
+                return {"afinidade": 3.1, "paciencia": 3.0}
+            return await original_one(sql, params)
+
+        self.bot.db._one = db_one
+        self.cog._respostas_recentes_nara[123] = ["resposta antiga que não deve entrar no contexto"]
+
+        async def memoria_proibida(*_args):
+            raise AssertionError("opinião sobre terceiro não pode carregar a memória do autor")
+
+        self.cog._carregar_memoria = memoria_proibida
+        resposta = run(self.cog._conversar(msg, "qual sua opnião sobre @davisg95?"))
+
+        self.assertNotEqual(resposta, resposta_gemini)
+        self.assertIn("distante", resposta)
+        self.assertNotIn("movimenta", resposta)
+        system, pedido, _tokens = self.cog.ia.chamadas[0]
+        self.assertIn("ALVO DA OPINIÃO", system)
+        self.assertNotIn("HISTÓRICO DE RESPOSTAS RECENTES", system)
+        self.assertNotIn("resposta antiga", system)
+        self.assertNotIn("FAQ RELACIONADA", system)
+        self.assertIn("@davisg95", pedido)
 
     def test_responde_com_ia_e_registra_uso(self):
         self.cog.ia = FakeAdaptador("Transmissão é no canal de voz, clique em Compartilhar tela.")
@@ -386,6 +455,7 @@ def test_prompt_carrega_personalidade_canonica_completa_e_regras_da_conversa():
     assert "Especialista técnica" in personalidade
     assert "Souls" in personalidade and "criador" in personalidade
     assert "1300117955236991046" in personalidade
+    assert "afinidade baixa" in personalidade
     assert "ESCOPO DESTA ROTA: CONVERSA TEXTUAL" in txt
     assert "Não invente fatos" in txt
 

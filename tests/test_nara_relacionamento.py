@@ -71,10 +71,108 @@ class AvaliacaoRelacionamentoTests(unittest.TestCase):
         self.assertAlmostEqual(limitado.afinidade_delta, 0.05, places=3)
         self.assertAlmostEqual(limitado.paciencia_delta, 0.1, places=3)
 
+
+    def test_contexto_define_afinidade_como_opiniao_e_confianca(self):
+        contexto = rel.formatar_contexto(3.1, 5.0, [])
+        self.assertIn("afinidade determina opinião", contexto)
+        self.assertIn("2,5–3,9 não é neutralidade", contexto)
+        self.assertIn("afinidade determina opinião", contexto)
+        contexto_alto = rel.formatar_contexto(9.0, 5.0, [])
+        self.assertIn("confiança e consideração construídas", contexto_alto)
+
     def test_contexto_nao_autoriza_revelar_pontuacoes_ou_eventos(self):
         contexto = rel.formatar_contexto(2.5, 3.0, [{"summary": "Desrespeito explícito"}])
-        self.assertIn("Não revele valores numéricos", contexto)
-        self.assertIn("sem expor o painel administrativo", contexto)
+        self.assertIn("Não revele notas nem eventos privados", contexto)
+        self.assertIn("Não humilhe, ameace ou ataque atributos pessoais sensíveis", contexto)
+
+
+    def test_opiniao_sobre_alvo_configurado(self):
+        self.assertTrue(rel.detectar_consulta_opiniao(
+            "qual sua opiniao sobre davis95?", ["davisg95"]
+        ))
+
+    def test_pergunta_generica_nao_puxa_relacionamento_do_alvo(self):
+        self.assertFalse(rel.detectar_consulta_opiniao(
+            "qual sua opiniao sobre esse jogo?", ["davisg95"]
+        ))
+
+    def test_mencao_discord_identifica_alvo_sem_nome_no_texto(self):
+        self.assertTrue(rel.detectar_consulta_opiniao(
+            "o que acha dele?", [], mencionado=True
+        ))
+
+
+    def test_opiniao_com_erro_de_digitacao_opniao(self):
+        self.assertTrue(rel.detectar_consulta_opiniao(
+            "qual sua opnião sobre davisg95?", ["davisg95"]
+        ))
+
+    def test_opiniao_com_mencao_real_do_discord(self):
+        self.assertTrue(rel.detectar_consulta_opiniao(
+            "qual sua opnião sobre <@337010644186300446>?",
+            [], mencionado=True
+        ))
+
+
+    def test_opniao_com_erro_de_digitacao_e_detectada(self):
+        self.assertTrue(rel.eh_consulta_opiniao("qual sua opnião sobre @davisg95?"))
+        self.assertTrue(rel.eh_consulta_opiniao("qual sua opinião sobre Davis?"))
+
+    def test_mencao_isolada_nao_e_pergunta_de_opiniao(self):
+        self.assertFalse(rel.eh_consulta_opiniao("bom dia @davisg95"))
+        self.assertFalse(rel.detectar_consulta_opiniao("bom dia", [], mencionado=True))
+
+    def test_faixas_de_afinidade_tem_semantica_deterministica(self):
+        self.assertEqual(rel.faixa_afinidade(1.0), "antipatia_clara")
+        self.assertEqual(rel.faixa_afinidade(3.1), "baixa")
+        self.assertEqual(rel.faixa_afinidade(4.5), "reservada")
+        self.assertEqual(rel.faixa_afinidade(5.5), "neutra")
+        self.assertEqual(rel.faixa_afinidade(7.0), "boa")
+        self.assertEqual(rel.faixa_afinidade(9.5), "alta")
+
+    def test_validador_rejeita_elogio_compensatorio_da_resposta_real(self):
+        resposta = (
+            "o davis testa a paciência da moderação, mas pelo menos movimenta o servidor. "
+            "o caos dele já faz parte da mobília daqui."
+        )
+        self.assertEqual(
+            rel.motivo_resposta_incoerente(resposta, 3.1),
+            "elogio_ou_afeto_compensatorio",
+        )
+
+    def test_validador_nao_rejeita_negacao_de_afeto(self):
+        resposta = "não tenho carinho nem sinto falta dele; prefiro manter distância."
+        self.assertIsNone(rel.motivo_resposta_incoerente(resposta, 3.1))
+
+    def test_validador_nao_aplica_regra_de_baixa_afinidade_a_nota_alta(self):
+        resposta = "gosto dele e é bom ter por perto."
+        self.assertIsNone(rel.motivo_resposta_incoerente(resposta, 9.0))
+
+    def test_resposta_deterministica_para_afinidade_3_1(self):
+        resposta = rel.resposta_padrao_opiniao("davisg95", 3.1)
+        self.assertIn("relação", resposta)
+        self.assertIn("distante", resposta)
+        self.assertNotIn("movimenta", resposta)
+
+    def test_resposta_quase_igual_a_anterior_e_detectada(self):
+        atual = "o davis testa a paciência da moderação, mas movimenta o servidor de vez em quando."
+        anterior = "o davis testa a paciencia da moderacao mas movimenta o servidor de vez em quando"
+        self.assertTrue(rel.resposta_repetida(atual, [anterior]))
+
+
+    def test_resposta_sem_marcador_de_distancia_e_barrada(self):
+        self.assertEqual(
+            rel.motivo_resposta_incoerente(
+                "davis é aquela figura que testa a paciência da moderação.", 3.1
+            ),
+            "avaliacao_sem_distanciamento",
+        )
+
+    def test_resposta_padrao_varia_quando_a_anterior_ja_foi_usada(self):
+        primeira = rel.resposta_padrao_opiniao("davisg95", 3.1)
+        segunda = rel.resposta_padrao_opiniao("davisg95", 3.1, [primeira])
+        self.assertNotEqual(primeira, segunda)
+        self.assertIsNone(rel.motivo_resposta_incoerente(segunda, 3.1))
 
 
 if __name__ == "__main__":
