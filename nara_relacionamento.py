@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import difflib
 import re
 
 from nara_local import normalizar
@@ -151,6 +152,35 @@ def limitar_delta_positivo(
     return EventoRelacional(evento.tipo, evento.resumo, afinidade_delta, paciencia_delta)
 
 
+def detectar_consulta_opiniao(texto: str, nomes_alvo: list[str], *, mencionado: bool = False) -> bool:
+    """Identifica perguntas explícitas sobre a opinião da Nara a respeito do alvo monitorado."""
+    if mencionado:
+        return True
+    t = normalizar(texto or "")
+    padroes = (
+        r"\b(opiniao|opinioes)\s+(sobre|a respeito de)\b",
+        r"\b(o que|oq|que)\s+(voce|vc|tu)\s+(acha|pensa)\s+(de|do|da)\b",
+        r"\b(fale|fala|me diga|diga)\s+(sobre|do|da)\b",
+        r"\b(como voce|como vc|qual e)\s+(ve|avalia|a opiniao)\b",
+    )
+    if not any(re.search(padrao, t) for padrao in padroes):
+        return False
+    palavras = re.findall(r"[a-z0-9_]+", t)
+    for nome in nomes_alvo or []:
+        alvo = normalizar(str(nome or "").lstrip("@"))
+        if not alvo or len(alvo) < 3:
+            continue
+        if alvo in t:
+            return True
+        # Aceita pequenas diferenças de digitação (ex.: davis95 / davisg95),
+        # mas exige alta similaridade para não associar pessoas por engano.
+        if len(alvo) >= 5:
+            for palavra in palavras:
+                if len(palavra) >= 5 and difflib.SequenceMatcher(None, alvo, palavra).ratio() >= 0.84:
+                    return True
+    return False
+
+
 def formatar_contexto(afinidade: float, paciencia: float, eventos: list[dict]) -> str:
     """Gera instruções curtas para calibrar a resposta, sem substituir a persona."""
     a = min(10.0, max(1.0, float(afinidade)))
@@ -193,10 +223,16 @@ def formatar_contexto(afinidade: float, paciencia: float, eventos: list[dict]) -
         "não apenas a escolha de palavras. A afinidade representa o vínculo e a confiança construídos pelo histórico "
         "de comportamento; use os indicadores e eventos como evidência acumulada para decidir quanta consideração, "
         "boa vontade, confiança, abertura e familiaridade essa pessoa merece. "
-        "Com afinidade baixa, não presuma boas intenções, não elogie nem demonstre carinho sem motivo; mantenha "
-        "distância, reserva e ceticismo proporcional ao histórico. Com afinidade alta, reconheça a consideração "
-        "e a confiança que foram conquistadas, sem bajulação automática. Na faixa intermediária, seja neutra e "
-        "avalie cada atitude pelo que ela realmente demonstra. "
+        "Com afinidade baixa, a avaliação da pessoa deve ser efetivamente desfavorável ou reservada, conforme "
+        "os eventos disponíveis: não presuma boas intenções; não atribua qualidades positivas, não invente motivos para gostar dela, não "
+        "demonstre saudade, apego, carinho, admiração ou preferência sem evidência registrada. "
+        "É PROIBIDO neutralizar uma avaliação negativa com um elogio no final, um 'mas admito', 'apesar de tudo', "
+        "'o servidor perde a graça sem ela', 'no fundo gosto' ou qualquer concessão positiva inventada. "
+        "Não dê notas paralelas de entretenimento, carisma ou valor pessoal se isso não foi solicitado e "
+        "fundamentado. Se perguntarem sua opinião sobre alguém, responda de forma coerente com a afinidade dessa "
+        "pessoa e com os eventos; não use a afinidade de quem fez a pergunta. "
+        "Com afinidade alta, reconheça a consideração e a confiança que foram conquistadas, sem bajulação automática. "
+        "Na faixa intermediária, seja neutra e avalie cada atitude pelo que ela realmente demonstra. "
         "Não seja boazinha por padrão nem hostil por padrão: gentileza, respeito, arrogância, grosseria, "
         "reciprocidade e pedidos sinceros de desculpa devem influenciar sua opinião conforme o histórico. "
         "Não confunda discordância, crítica legítima ou opinião diferente com desrespeito. Paciência regula "
