@@ -5,7 +5,6 @@ como contexto factual. O nome escrito sem menção ativa somente respostas locai
 de ação mantêm as ferramentas registradas e as guardas do núcleo Python.
 """
 import asyncio
-import difflib
 import logging
 import mimetypes
 import os
@@ -257,6 +256,8 @@ class NaraIA(commands.Cog):
         self.conv_cooldown = conv.Cooldown()
         # Últimas respostas por canal: contexto efêmero para variar a escrita sem persistir dados.
         self._respostas_recentes_nara: dict[int, list[str]] = {}
+        # Últimas opiniões por alvo, usadas somente para detectar repetição; nunca entram no prompt.
+        self._ultimas_opinioes_nara: dict[tuple[int, int], list[str]] = {}
         try:
             prompt_especializado = PROMPT_PESQUISA_PATH.read_text(encoding="utf-8").strip()
             identidade_curta = conv.extrair_identidade(self.prompt_identidade)
@@ -548,79 +549,125 @@ class NaraIA(commands.Cog):
         )
         await self.bot.db.conn.commit()
 
-    async def _carregar_contexto_alvo_opiniao(self, message: discord.Message, texto: str) -> str:
-        """Carrega o relacionamento da pessoa avaliada, não o de quem fez a pergunta."""
+    async def _carregar_contexto_alvo_opiniao(self, message: discord.Message, texto: str) -> dict | None:
+        """Resolve a pessoa efetivamente mencionada e busca somente o relacionamento dela."""
+        if not nara_relacionamento.eh_consulta_opiniao(texto):
+            return None
+
         guild = getattr(message, "guild", None)
         guild_id = int(getattr(guild, "id", 0) or 0)
-        alvo_id = int(self._relacionamento_alvos.get(guild_id, 0) or 0)
         if not guild_id:
-            return ""
-        if not alvo_id:
+            return {"status": "sem_servidor", "nome": "essa pessoa"}
+
+        autor = getattr(message, "author", None)
+        autor_id = int(getattr(autor, "id", 0) or 0)
+        bot_id = int(getattr(getattr(self.bot, "user", None), "id", 0) or 0)
+        configurado_id = int(self._relacionamento_alvos.get(guild_id, 0) or 0)
+        texto_norm = normalizar(texto)
+
+        # "o que você acha de mim?" deve consultar o próprio autor.
+        fala_sobre_autor = bool(re.search(r"\b(?:sobre mim|de mim|a meu respeito)\b", texto_norm))
+        alvo = autor if fala_sobre_autor else None
+
+        # A menção do bot (@Nara) não é o alvo da opinião; outras menções são identidades exatas.
+        mencoes = []
+        vistos = set()
+        for pessoa in (getattr(message, "mentions", None) or []):
+            uid = int(getattr(pessoa, "id", 0) or 0)
+            if not uid or uid == bot_id or uid in vistos:
+                continue
+            vistos.add(uid)
+            mencoes.append(pessoa)
+
+        if alvo is None and len(mencoes) == 1:
+            alvo = mencoes[0]
+        elif alvo is None and len(mencoes) > 1:
+            configurados_mencionados = [p for p in mencoes if int(getattr(p, "id", 0) or 0) == configurado_id]
+            if len(configurados_mencionados) == 1:
+                alvo = configurados_mencionados[0]
+            else:
+                log.warning(
+                    "Opinião sobre membro ambígua: múltiplas menções sem alvo único; guild=%s autor_id=%s quantidade=%s.",
+                    guild_id, autor_id, len(mencoes),
+                )
+                return {"status": "alvo_ambiguo", "nome": "essas pessoas"}
+
+        # Sem menção, tenta identificar um nome literal na lista de membros em cache.
+        if alvo is None:
+            candidatos = {}
+            for membro in (getattr(guild, "members", None) or []):
+                uid = int(getattr(membro, "id", 0) or 0)
+                if not uid or uid == bot_id:
+                    continue
+                for atributo in ("display_name", "name", "global_name"):
+                    nome_membro = getattr(membro, atributo, None)
+                    nome_norm = normalizar(str(nome_membro or ""))
+                    if nome_norm and re.search(rf"(?<![a-z0-9]){re.escape(nome_norm)}(?![a-z0-9])", texto_norm):
+                        candidatos[uid] = membro
+                        break
+            if len(candidatos) == 1:
+                alvo = next(iter(candidatos.values()))
+            elif len(candidatos) > 1:
+                configurado = candidatos.get(configurado_id)
+                if configurado is not None:
+                    alvo = configurado
+                else:
+                    log.warning(
+                        "Opinião sobre membro ambígua por nome: guild=%s autor_id=%s candidatos=%s.",
+                        guild_id, autor_id, len(candidatos),
+                    )
+                    return {"status": "alvo_ambiguo", "nome": "essas pessoas"}
+
+        # O membro escolhido no painel continua sendo o fallback para perguntas sem nome/menção.
+        if alvo is None and configurado_id:
+            alvo = guild.get_member(configurado_id) if guild else None
+            if alvo is None:
+                try:
+                    alvo = await self.bot.fetch_user(configurado_id)
+                except Exception:
+                    alvo = None
+
+        if alvo is None:
+            log.warning("Opinião sobre membro sem alvo identificável; guild=%s autor_id=%s.", guild_id, autor_id)
+            return {"status": "alvo_nao_identificado", "nome": "essa pessoa"}
+
+        alvo_id = int(getattr(alvo, "id", 0) or 0)
+        nome_alvo = (getattr(alvo, "display_name", None)
+                     or getattr(alvo, "global_name", None)
+                     or getattr(alvo, "name", None) or str(alvo_id))
+
+        if not await self._relacionamento_ativo(guild_id, alvo_id):
             log.warning(
-                "Opinião sobre membro: não há alvo de relacionamento configurado para guild=%s.",
-                guild_id,
+                "Opinião sobre membro sem histórico relacional autorizado; guild=%s autor_id=%s alvo_id=%s.",
+                guild_id, autor_id, alvo_id,
             )
-            return ""
+            return {"status": "sem_historico", "alvo_id": alvo_id, "nome": str(nome_alvo)[:80]}
 
-        membro = guild.get_member(alvo_id) if guild else None
-        if membro is None:
-            try:
-                membro = await self.bot.fetch_user(alvo_id)
-            except Exception:
-                membro = None
-
-        nomes = []
-        if membro is not None:
-            for atributo in ("display_name", "name", "global_name"):
-                valor = getattr(membro, atributo, None)
-                if valor:
-                    nomes.append(str(valor))
-        mencionado = any(int(getattr(usuario, "id", 0) or 0) == alvo_id
-                         for usuario in (getattr(message, "mentions", None) or []))
-        consulta_detectada = nara_relacionamento.detectar_consulta_opiniao(
-            texto, nomes, mencionado=mencionado
+        perfil = await self.bot.db._one(
+            "SELECT afinidade, paciencia FROM nara_relacionamento_perfil WHERE guild_id=? AND user_id=?",
+            (guild_id, alvo_id),
         )
-        if not consulta_detectada:
-            return ""
-
-        memoria_ativa = await self._relacionamento_ativo(guild_id, alvo_id)
-        if not memoria_ativa:
-            log.warning(
-                "Opinião sobre membro detectada, mas memória/relacionamento desativado: "
-                "guild=%s alvo_id=%s menção_real=%s nomes_disponíveis=%s.",
-                guild_id, alvo_id, mencionado, len(nomes),
-            )
-            return ""
-
+        afinidade = float(perfil["afinidade"] or 5.0) if perfil else 5.0
+        paciencia = float(perfil["paciencia"] or 5.0) if perfil else 5.0
         contexto = await self._carregar_contexto_relacionamento(guild_id, alvo_id)
         if not contexto:
-            log.error(
-                "Opinião sobre membro detectada, mas contexto relacional vazio: "
-                "guild=%s alvo_id=%s.", guild_id, alvo_id,
-            )
-            return ""
-        nome_alvo = (getattr(membro, "display_name", None)
-                     or getattr(membro, "name", None) or str(alvo_id))
-        afinidade_match = re.search(r"Afinidade:\s*([0-9]+(?:\.[0-9]+)?)/10", contexto)
-        afinidade_log = afinidade_match.group(1) if afinidade_match else "não identificada"
+            log.error("Opinião sobre membro: perfil ativo sem contexto; guild=%s alvo_id=%s.", guild_id, alvo_id)
+            return {"status": "sem_historico", "alvo_id": alvo_id, "nome": str(nome_alvo)[:80]}
+
         log.info(
-            "Opinião sobre membro: contexto carregado; guild=%s autor_id=%s alvo_id=%s "
-            "nome=%r menção_real=%s afinidade=%s.",
-            guild_id,
-            int(getattr(getattr(message, "author", None), "id", 0) or 0),
-            alvo_id,
-            str(nome_alvo)[:80],
-            mencionado,
-            afinidade_log,
+            "Opinião sobre membro: contexto carregado; guild=%s autor_id=%s alvo_id=%s nome=%r afinidade=%.1f faixa=%s.",
+            guild_id, autor_id, alvo_id, str(nome_alvo)[:80], afinidade,
+            nara_relacionamento.faixa_afinidade(afinidade),
         )
-        return (
-            "[ALVO DA OPINIAO — pessoa sobre quem a pergunta foi feita: "
-            + str(nome_alvo)[:80] + "]\\n"
-            + contexto
-            + "\\nREGRA DE ESCOPO: esta avaliação pertence ao ALVO acima. "
-              "Não substitua pelas notas de quem perguntou. Não transfira sentimentos "
-              "ou histórico de outra pessoa para este alvo."
-        )
+        return {
+            "status": "ok", "alvo_id": alvo_id, "nome": str(nome_alvo)[:80],
+            "afinidade": afinidade, "paciencia": paciencia,
+            "contexto": (
+                f"[ALVO DA OPINIÃO: {str(nome_alvo)[:80]} | ID: {alvo_id}]\n"
+                + contexto
+                + "\nEste perfil pertence exclusivamente ao alvo acima. Não use o relacionamento do autor da pergunta."
+            ),
+        }
 
     async def _carregar_contexto_relacionamento(self, guild_id: int, user_id: int) -> str:
         """Fornece afinidade, paciência e eventos importantes ao prompt da NARA."""
@@ -1034,6 +1081,8 @@ class NaraIA(commands.Cog):
         nome = "Souls" if int(getattr(autor, "id", 0) or 0) == config.SOULS_USER_ID else autor.display_name
         guild_id = getattr(getattr(message, "guild", None), "id", 0) or 0
         anexos = getattr(message, "attachments", None) or []
+        pergunta_opiniao = nara_relacionamento.eh_consulta_opiniao(texto)
+        fallback_conversa = conv.resposta_sem_ia() if pergunta_opiniao else (contexto_local or conv.resposta_sem_ia())
         if not texto.strip() and not anexos:
             return contexto_local or nara_respostas.resposta_social("mensagem_vazia", nome=nome)
 
@@ -1043,40 +1092,50 @@ class NaraIA(commands.Cog):
         if nara_social.detectar_abordagem_sexual(texto):
             return nara_social.resposta_limite_sexual(texto)
         if self.ia is None:
-            return contexto_local or conv.resposta_sem_ia()
+            return fallback_conversa
 
-        memoria_ativada_agora = await self._ativar_memoria_no_primeiro_contato(guild_id, int(autor.id))
-        memoria_ativa = await self._memoria_ativa(guild_id, autor.id)
-        relacionamento_ativo = bool(guild_id and memoria_ativa)
+        memoria_ativada_agora = False
+        memoria_ativa = False
+        if not pergunta_opiniao:
+            memoria_ativada_agora = await self._ativar_memoria_no_primeiro_contato(guild_id, int(autor.id))
+            memoria_ativa = await self._memoria_ativa(guild_id, autor.id)
+        relacionamento_ativo = bool(guild_id and memoria_ativa and not pergunta_opiniao)
         chave = conv.chave_cache(texto)
-        if not contexto and not memoria_ativa and not anexos and not contexto_local:
+        if not pergunta_opiniao and not contexto and not memoria_ativa and not anexos and not contexto_local:
             em_cache = self.conv_cache.obter(chave)
             if em_cache:
                 return em_cache
 
         if not self.conv_cooldown.liberar(autor.id):
-            return contexto_local or conv.RESPOSTA_COOLDOWN.format(nome=nome)
+            return conv.RESPOSTA_COOLDOWN.format(nome=nome) if pergunta_opiniao else (contexto_local or conv.RESPOSTA_COOLDOWN.format(nome=nome))
         if conv.LIMITE_USUARIO_DIA and await self._gasto_conversa(autor.id) >= conv.LIMITE_USUARIO_DIA:
-            return contexto_local or conv.RESPOSTA_LIMITE_USUARIO.format(nome=nome)
+            return conv.RESPOSTA_LIMITE_USUARIO.format(nome=nome) if pergunta_opiniao else (contexto_local or conv.RESPOSTA_LIMITE_USUARIO.format(nome=nome))
         if conv.LIMITE_GLOBAL_DIA and await self._gasto_conversa(0) >= conv.LIMITE_GLOBAL_DIA:
             log.warning("Teto diário global da conversa da Nara atingido (%s).", conv.LIMITE_GLOBAL_DIA)
-            return contexto_local or conv.resposta_sem_ia()
+            return fallback_conversa
 
-        pedido = conv.montar_pedido(nome, texto or "Analise a imagem anexada e responda ao contexto.", contexto)
-        memoria = await self._carregar_memoria(guild_id, autor.id)
-        if memoria:
-            pedido += memoria
+        pedido = conv.montar_pedido(
+            nome, texto or "Analise a imagem anexada e responda ao contexto.",
+            "" if pergunta_opiniao else contexto,
+        )
+        if not pergunta_opiniao:
+            memoria = await self._carregar_memoria(guild_id, autor.id)
+            if memoria:
+                pedido += memoria
         imagens = await self._imagens_para_modelo(message) if anexos else []
         if anexos and not imagens and tem_anexo_visual(anexos):
             return "Não consegui ler esse formato ou arquivo. Envie PNG, JPG ou WEBP com até 5 MiB por imagem."
-        if relacionamento_ativo:
+        if relacionamento_ativo and not pergunta_opiniao:
             # A avaliação é local e acontece na mesma interação; não cria chamada adicional à IA.
             await self._atualizar_relacionamento(guild_id, autor.id, texto)
-        prompt = (self.prompt_conversa + nara_social.contexto_especialista(texto)
-                  + nara_social.instrucoes_tom(texto))
+        prompt = (
+            self.prompt_conversa if pergunta_opiniao else
+            self.prompt_conversa + nara_social.contexto_especialista(texto)
+            + nara_social.instrucoes_tom(texto)
+        )
         # Histórico efêmero das respostas da Nara neste canal: ajuda a variar sem persistir mensagens.
         canal_id = int(getattr(message.channel, "id", 0) or 0)
-        respostas_recentes = self._respostas_recentes_nara.get(canal_id, [])[-4:]
+        respostas_recentes = [] if pergunta_opiniao else self._respostas_recentes_nara.get(canal_id, [])[-4:]
         if respostas_recentes:
             bloco_recentes = "\n".join(
                 f"{i}. {resposta[:520]}" for i, resposta in enumerate(respostas_recentes, 1)
@@ -1090,38 +1149,50 @@ class NaraIA(commands.Cog):
                   "Alterne naturalmente entre resposta direta, pergunta, opinião, reconhecimento, "
                   "explicação curta e humor contextual. Não escolha um formato fixo."
             )
-        if contexto_local:
+        if contexto_local and not pergunta_opiniao:
             prompt += (
                 "\n\nCONTEXTO FACTUAL VERIFICADO PELO CÓDIGO — fonte de verdade para esta resposta:\n"
                 + contexto_local[:1800]
                 + "\nUse esses dados como referência obrigatória. Preserve valores, nomes, estados e limites exatamente. "
                   "Você pode adaptar a linguagem à sua personalidade, mas não invente, complete ou altere informações."
             )
-        if not relacionamento_ativo:
-            relacao = await self._carregar_relacao_social(guild_id, autor.id)
-            if relacao:
-                prompt += "\n\n" + relacao
-        else:
-            contexto_relacionamento = await self._carregar_contexto_relacionamento(guild_id, autor.id)
-            if contexto_relacionamento:
-                prompt += "\n\n" + contexto_relacionamento
-        # O alvo da pergunta pode ser diferente de quem escreveu a mensagem.
-        # Anexa o perfil do alvo DEPOIS do perfil do autor para governar a avaliação.
-        contexto_alvo_opiniao = await self._carregar_contexto_alvo_opiniao(message, texto)
-        if contexto_alvo_opiniao:
-            log.info(
-                "Opinião sobre membro: contexto do alvo anexado ao prompt; guild=%s autor_id=%s.",
-                guild_id,
-                int(getattr(autor, "id", 0) or 0),
-            )
+        if not pergunta_opiniao:
+            if not relacionamento_ativo:
+                relacao = await self._carregar_relacao_social(guild_id, autor.id)
+                if relacao:
+                    prompt += "\n\n" + relacao
+            else:
+                contexto_relacionamento = await self._carregar_contexto_relacionamento(guild_id, autor.id)
+                if contexto_relacionamento:
+                    prompt += "\n\n" + contexto_relacionamento
+
+        # Em perguntas de opinião, somente o perfil do alvo é relevante.
+        contexto_alvo_opiniao = None
+        if pergunta_opiniao:
+            contexto_alvo_opiniao = await self._carregar_contexto_alvo_opiniao(message, texto)
+            if not contexto_alvo_opiniao or contexto_alvo_opiniao.get("status") != "ok":
+                status = (contexto_alvo_opiniao or {}).get("status", "alvo_nao_identificado")
+                nome_alvo = (contexto_alvo_opiniao or {}).get("nome", "essa pessoa")
+                if status == "alvo_ambiguo":
+                    return "menciona uma pessoa por vez, pq vieram vários nomes e eu não vou misturar os históricos."
+                if status == "sem_historico":
+                    return f"não tenho histórico suficiente com {nome_alvo} pra formar uma opinião justa."
+                return "de quem vc quer saber? menciona a pessoa pra eu não confundir o alvo."
+
             prompt += (
-                "\\n\\n" + contexto_alvo_opiniao
-                + "\\nINSTRUÇÃO FINAL DE AVALIAÇÃO: a pergunta solicita sua opinião sobre o ALVO DA OPINIAO. "
-                  "Use o relacionamento do alvo acima como referência decisiva. Não transfira para ele "
-                  "a afinidade, paciência, memória ou sentimentos do autor da pergunta. "
-                  "Não compense uma avaliação reservada com elogio, saudade, apego ou frase positiva "
-                  "inventada no encerramento. Se os dados indicarem afinidade baixa, mantenha a avaliação "
-                  "reservada ou desfavorável, sem transformar deboche em elogio disfarçado."
+                "\n\n" + contexto_alvo_opiniao["contexto"]
+                + "\nPRIORIDADE DESTA RESPOSTA: você foi perguntada sobre a opinião a respeito de "
+                  + contexto_alvo_opiniao["nome"] + ". A faixa de afinidade acima determina a avaliação, não apenas o tom. "
+                  "Não use histórico, memória, afinidade ou sentimentos do autor da pergunta. "
+                  "Não acrescente elogios de cortesia, ressalvas positivas, saudade ou apego para suavizar uma avaliação baixa. "
+                  "Se a afinidade for baixa, diga com clareza que a relação é distante ou que há pouca simpatia. "
+                  "Não invente condutas negativas: sem eventos, descreva apenas a baixa afinidade. "
+                  "Não revele pontuação ou dados privados."
+            )
+            log.info(
+                "Opinião sobre membro: contexto do alvo anexado ao prompt; guild=%s autor_id=%s alvo_id=%s faixa=%s.",
+                guild_id, int(getattr(autor, "id", 0) or 0), contexto_alvo_opiniao["alvo_id"],
+                nara_relacionamento.faixa_afinidade(contexto_alvo_opiniao["afinidade"]),
             )
         norm = texto.casefold()
         termos_bot = (
@@ -1131,7 +1202,10 @@ class NaraIA(commands.Cog):
         )
         termos_duvida = ("como", "onde", "qual", "quais", "botao", "botão", "comando", "funciona",
                          "usar", "usa", "fazer", "faco", "faço", "registr", "enviar", "mandar", "ensina")
-        if any(termo in norm for termo in termos_bot) or any(t in norm for t in termos_duvida):
+        if not pergunta_opiniao and (
+            any(re.search(rf"(?<![a-z0-9]){re.escape(termo)}(?![a-z0-9])", norm) for termo in termos_bot)
+            or any(re.search(rf"(?<![a-z0-9]){re.escape(termo)}(?![a-z0-9])", norm) for termo in termos_duvida)
+        ):
             if self.prompt_manual:
                 prompt += "\n\n" + self.prompt_manual
             try:
@@ -1149,32 +1223,60 @@ class NaraIA(commands.Cog):
                      if imagens else await self.ia.conversar(prompt, pedido, conv.MAX_TOKENS))
         except GeminiUnavailableError as exc:
             log.warning("Conversa da Nara: provedor indisponível: %s", getattr(exc, "admin_message", str(exc)))
-            return contexto_local or conv.resposta_sem_ia()
+            return fallback_conversa
         except TodosProvedoresIndisponiveis as exc:
             log.error("Conversa da Nara: todos os provedores indisponíveis: %s", exc.admin_message)
-            return contexto_local or conv.resposta_sem_ia()
+            return fallback_conversa
         except Exception:
             log.exception("Falha na conversa da Nara")
-            return contexto_local or conv.resposta_sem_ia()
+            return fallback_conversa
 
         resposta = conv.limpar_resposta(bruto)
         if not resposta:
-            return contexto_local or conv.resposta_sem_ia()
-        if memoria_ativada_agora:
+            return fallback_conversa
+
+        if pergunta_opiniao and contexto_alvo_opiniao and contexto_alvo_opiniao.get("status") == "ok":
+            afinidade_alvo = float(contexto_alvo_opiniao["afinidade"])
+            chave_opiniao = (int(guild_id), int(contexto_alvo_opiniao["alvo_id"]))
+            anteriores = self._ultimas_opinioes_nara.get(chave_opiniao, [])
+            motivo = nara_relacionamento.motivo_resposta_incoerente(resposta, afinidade_alvo)
+            repetida = nara_relacionamento.resposta_repetida(resposta, anteriores)
+            if motivo or repetida:
+                log.warning(
+                    "Resposta de opinião corrigida pelo validador; alvo_id=%s afinidade=%.1f motivo=%s repetida=%s.",
+                    contexto_alvo_opiniao["alvo_id"], afinidade_alvo, motivo or "nenhum", repetida,
+                )
+                resposta = nara_relacionamento.resposta_padrao_opiniao(
+                    contexto_alvo_opiniao["nome"], afinidade_alvo, anteriores,
+                )
+            else:
+                log.info(
+                    "Opinião sobre membro: resposta compatível com a faixa; alvo_id=%s afinidade=%.1f faixa=%s.",
+                    contexto_alvo_opiniao["alvo_id"], afinidade_alvo,
+                    nara_relacionamento.faixa_afinidade(afinidade_alvo),
+                )
+            opinioes_salvas = self._ultimas_opinioes_nara.setdefault(chave_opiniao, [])
+            opinioes_salvas.append(resposta[:650])
+            del opinioes_salvas[:-3]
+            if len(self._ultimas_opinioes_nara) > 500:
+                primeira_chave = next(iter(self._ultimas_opinioes_nara))
+                self._ultimas_opinioes_nara.pop(primeira_chave, None)
+        if memoria_ativada_agora and not pergunta_opiniao:
             resposta = (
                 "*Aviso: a memória da NARA foi ativada no seu primeiro contato para manter continuidade "
                 "entre conversas. Você pode consultar, desativar ou apagar seus dados a qualquer momento "
                 "em `/nara_memoria`. São armazenadas até 12 mensagens recentes por até 30 dias, além de "
                 "eventos resumidos de relacionamento por até 90 dias.*\n\n" + resposta
             )
-        if contexto_local:
+        if contexto_local and not pergunta_opiniao:
             # A IA pode personalizar a explicação, mas os links factuais não podem sumir.
             resposta = preservar_links_contexto_local(resposta, contexto_local)
-        try:
-            await self._salvar_memoria(guild_id, autor.id, texto, resposta)
-        except Exception:
-            log.exception("Não foi possível persistir a memória automática da Nara.")
-        if not relacionamento_ativo:
+        if not pergunta_opiniao:
+            try:
+                await self._salvar_memoria(guild_id, autor.id, texto, resposta)
+            except Exception:
+                log.exception("Não foi possível persistir a memória automática da Nara.")
+        if not relacionamento_ativo and not pergunta_opiniao:
             try:
                 await self._atualizar_relacao_social(guild_id, autor.id, texto)
             except Exception:
@@ -1183,9 +1285,9 @@ class NaraIA(commands.Cog):
             await self._registrar_conversa(autor.id)
         except Exception:
             log.exception("Não foi possível registrar o uso da conversa da Nara.")
-        if not contexto and not memoria_ativa and not imagens and not contexto_local and nome.lower() not in resposta.lower():
+        if not pergunta_opiniao and not contexto and not memoria_ativa and not imagens and not contexto_local and nome.lower() not in resposta.lower():
             self.conv_cache.guardar(chave, resposta)
-        if resposta:
+        if resposta and not pergunta_opiniao:
             recentes = self._respostas_recentes_nara.setdefault(canal_id, [])
             recentes.append(resposta[:650])
             del recentes[:-4]
