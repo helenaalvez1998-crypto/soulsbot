@@ -378,8 +378,10 @@ class CogConversaTests(unittest.TestCase):
         resposta = run(self.cog._conversar(msg, "qual sua opnião sobre @davisg95?"))
 
         self.assertNotEqual(resposta, resposta_gemini)
-        self.assertIn("distante", resposta)
+        self.assertNotIn("distante", resposta)
+        self.assertNotIn("neutra", resposta)
         self.assertNotIn("movimenta", resposta)
+        self.assertTrue(resposta)
         system, pedido, _tokens = self.cog.ia.chamadas[0]
         self.assertIn("ALVO DA OPINIÃO", system)
         self.assertNotIn("HISTÓRICO DE RESPOSTAS RECENTES", system)

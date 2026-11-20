@@ -74,11 +74,12 @@ class AvaliacaoRelacionamentoTests(unittest.TestCase):
 
     def test_contexto_define_afinidade_como_opiniao_e_confianca(self):
         contexto = rel.formatar_contexto(3.1, 5.0, [])
-        self.assertIn("afinidade determina opinião", contexto)
-        self.assertIn("2,5–3,9 não é neutralidade", contexto)
-        self.assertIn("afinidade determina opinião", contexto)
+        self.assertIn("afinidade determina consideração", contexto)
+        self.assertIn("faixa 2,5–3,9 representa pouca simpatia, não neutralidade", contexto)
+        self.assertIn("aja conforme a faixa, não narre a faixa", contexto)
+        self.assertIn("Não diga repetidamente que a relação é distante", contexto)
         contexto_alto = rel.formatar_contexto(9.0, 5.0, [])
-        self.assertIn("confiança e consideração construídas", contexto_alto)
+        self.assertIn("carinho, confiança e consideração podem aparecer naturalmente", contexto_alto)
 
     def test_contexto_nao_autoriza_revelar_pontuacoes_ou_eventos(self):
         contexto = rel.formatar_contexto(2.5, 3.0, [{"summary": "Desrespeito explícito"}])
@@ -148,10 +149,12 @@ class AvaliacaoRelacionamentoTests(unittest.TestCase):
         resposta = "gosto dele e é bom ter por perto."
         self.assertIsNone(rel.motivo_resposta_incoerente(resposta, 9.0))
 
-    def test_resposta_deterministica_para_afinidade_3_1(self):
+    def test_resposta_de_contingencia_para_afinidade_3_1_nao_recita_categoria(self):
         resposta = rel.resposta_padrao_opiniao("davisg95", 3.1)
-        self.assertIn("relação", resposta)
-        self.assertIn("distante", resposta)
+        self.assertNotIn("relação", resposta)
+        self.assertNotIn("distante", resposta)
+        self.assertNotIn("neutra", resposta)
+        self.assertNotIn("afinidade", resposta)
         self.assertNotIn("movimenta", resposta)
 
     def test_resposta_quase_igual_a_anterior_e_detectada(self):
@@ -160,13 +163,25 @@ class AvaliacaoRelacionamentoTests(unittest.TestCase):
         self.assertTrue(rel.resposta_repetida(atual, [anterior]))
 
 
-    def test_resposta_sem_marcador_de_distancia_e_barrada(self):
-        self.assertEqual(
+    def test_resposta_sem_marcador_de_distancia_e_aceita(self):
+        # A nota orienta a atitude; a resposta não precisa declarar a categoria do vínculo.
+        self.assertIsNone(
             rel.motivo_resposta_incoerente(
-                "davis é aquela figura que testa a paciência da moderação.", 3.1
-            ),
-            "avaliacao_sem_distanciamento",
+                "davis? não é alguém que me ganhe facilmente. fico na cordialidade e pronto.", 3.1
+            )
         )
+
+    def test_opiniao_fria_sem_rotulo_relacional_e_aceita(self):
+        resposta = "davis? não vou fingir entusiasmo. trato normal e sigo o baile."
+        self.assertIsNone(rel.motivo_resposta_incoerente(resposta, 3.1))
+
+    def test_resposta_padrao_baixa_afinidade_varia_sem_anunciar_distancia(self):
+        primeira = rel.resposta_padrao_opiniao("davisg95", 3.1)
+        segunda = rel.resposta_padrao_opiniao("davisg95", 3.1, [primeira])
+        self.assertNotEqual(primeira, segunda)
+        for resposta in (primeira, segunda):
+            self.assertNotIn("relação distante", resposta)
+            self.assertNotIn("relação neutra", resposta)
 
     def test_resposta_padrao_varia_quando_a_anterior_ja_foi_usada(self):
         primeira = rel.resposta_padrao_opiniao("davisg95", 3.1)
