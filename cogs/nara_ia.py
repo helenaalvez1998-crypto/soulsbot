@@ -241,7 +241,8 @@ class NaraIA(commands.Cog):
         # A personalidade principal existente é carregada antes do escopo específico da rota.
         self.prompt_conversa = conv.carregar_prompt()
         self.prompt_identidade = ""
-        self.prompt_personalidade = conv.carregar_personalidade()
+        self.prompt_personalidade = conv.carregar_personalidade_base() or conv.PROMPT_MINIMO
+        self.prompt_filtro_runtime = conv.carregar_filtro_runtime()
         try:
             self.prompt_identidade = (Path(__file__).resolve().parent.parent / "prompts" / "nara.md").read_text(encoding="utf-8").strip()
         except (OSError, UnicodeError):
@@ -1220,6 +1221,9 @@ class NaraIA(commands.Cog):
                     f"- {resp[:900]}" for _i, resp, _s in relacionadas
                 )
             prompt += "\n\n" + nara_conhecimento.inventario_runtime(self.bot, autor, limite=35)
+        # O runtime é a última camada, depois da personalidade-base, dos dados do alvo,
+        # das regras da rota e de qualquer contexto factual/inventário anexado.
+        prompt = conv.aplicar_filtro_runtime(prompt, self.prompt_filtro_runtime)
         try:
             bruto = (await self.ia.conversar(prompt, pedido, conv.MAX_TOKENS, imagens=imagens)
                      if imagens else await self.ia.conversar(prompt, pedido, conv.MAX_TOKENS))
@@ -1510,6 +1514,7 @@ class NaraIA(commands.Cog):
             bloco for bloco in (self.prompt_personalidade, self.prompt_identidade, self.prompt_manual, inventario) if bloco
         )
         system += nara_social.instrucoes_tom(message.clean_content or "")
+        system = conv.aplicar_filtro_runtime(system, self.prompt_filtro_runtime)
         gerar = self.ia.criar_gerador(system, registro)
         texto = await rodar_agente(gerar, self.ia, pedido, registro, ctx)
         return (texto or "Não consegui concluir a ação com as ferramentas disponíveis." ).strip(), ctx
@@ -1532,6 +1537,7 @@ class NaraIA(commands.Cog):
         registro = Registro([f for f in registro.ferramentas.values() if f.risco is Risco.LEITURA])
 
         prompt = self.prompt_pesquisa + nara_social.instrucoes_tom(pergunta)
+        prompt = conv.aplicar_filtro_runtime(prompt, self.prompt_filtro_runtime)
         gerar = self.ia.criar_gerador(prompt, registro)
         texto = await rodar_agente(gerar, self.ia, conteudo, registro, ctx)
         return (texto or "Não consegui concluir a pesquisa.").strip(), ctx
