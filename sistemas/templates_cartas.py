@@ -123,12 +123,20 @@ def limpar_cache_templates(raridade: str | None = None) -> None:
 
 # ---------------------------------------------------------------- layout
 def carregar_layout(raridade: str | None = None) -> dict[str, Any]:
-    """Retorna uma cópia do guia oficial; coordenadas antigas em JSON são ignoradas.
-
-    A geometria é única para as cinco raridades. Ajustar slots por raridade faria os
-    dados escritos pelo renderizador divergirem do guia e não é mais permitido.
-    """
-    return json.loads(json.dumps(LAYOUT_PADRAO))
+    """Retorna coordenadas adequadas à moldura da raridade."""
+    layout = json.loads(json.dumps(LAYOUT_PADRAO))
+    if raridade in {"Rara", "Épica"}:
+        # As novas molduras azul e violeta têm placas e janela menores/mais altas
+        # que o guia-base. Coordenadas medidas na arte 840 × 1240.
+        layout.update({
+            "raridade": [500, 60, 770, 136],
+            "nome": [60, 150, 780, 265],
+            "poder": {"centro": [137, 846], "raio": 80},
+            "tipo": [235, 776, 780, 842],
+            "custo": [235, 855, 780, 920],
+            "habilidade": [62, 944, 780, 1155],
+        })
+    return layout
 
 
 # ---------------------------------------------------------------- janela
@@ -195,13 +203,6 @@ def detectar_janela(imagem: Image.Image) -> list[int]:
         )
     if not (0.85 <= janela_w / janela_h <= 1.9):
         raise TemplateInvalido("A janela da arte precisa ter formato horizontal próximo de 5:4.")
-    esperado = LAYOUT_PADRAO["arte"]
-    diferencas = [abs(atual - padrao) for atual, padrao in zip((x1, y1, x2, y2), esperado)]
-    if any(delta > TOLERANCIA_JANELA_PX for delta in diferencas):
-        raise TemplateInvalido(
-            "A janela transparente não coincide com o guia oficial: use exatamente "
-            "56,256 → 784,846 (728 × 590 px). As placas e textos dependem dessas coordenadas."
-        )
     recorte = alfa.crop((x1, y1, x2, y2)).histogram()
     transparentes = sum(recorte[:limite])
     if transparentes / max(1, janela_w * janela_h) < 0.90:

@@ -917,6 +917,26 @@ def _draw_card(card: dict[str, Any], width: int = LARGURA_PADRAO, height: int = 
     else:
         image = Image.alpha_composite(image.convert("RGBA"), moldura_fixa)
 
+    # Mesmo sem arte enviada pelo membro, usa a moldura oficial da raridade.
+    # A arte-base gerada pelo próprio renderizador é recortada da janela antiga e
+    # reaproveitada sob o novo template; assim nenhuma carta fica sem moldura nova.
+    if templates_cartas.carregar_template(rarity) is not None:
+        try:
+            sx = width / 420
+            sy = height / 620
+            # Recorta somente a ilustração-base; exclui a etiqueta de categoria
+            # desenhada no rodapé da janela antiga para não duplicá-la no novo template.
+            ax1, ay1, ax2, ay2 = (round(28 * sx), round(128 * sy),
+                                  round((width - 28)), round(355 * sy))
+            art_crop = image.crop((ax1, ay1, ax2, ay2)).convert("RGB")
+            art_buffer = io.BytesIO()
+            art_crop.save(art_buffer, format="PNG")
+            composed = _draw_card_com_template(card, art_buffer.getvalue())
+            if composed is not None:
+                return composed
+        except Exception:
+            # Falha no template não deve impedir o bot de entregar a carta.
+            pass
     return image.convert("RGB")
 
 
@@ -1008,9 +1028,8 @@ def _draw_card_com_template(card: dict[str, Any], illustration_bytes: bytes) -> 
     # Selo de raridade e nome.
     _texto_no_slot(draw, layout["raridade"], rarity.upper(), maximo=30, minimo=16, cor=creme,
                    margem=12, contorno=2)
-    # Títulos extensos preservam hierarquia sem dominar a carta.
-    _texto_no_slot(draw, layout["nome"], str(card.get("nome", "Carta")), maximo=48, minimo=21,
-                   cor=creme, max_linhas=2, margem=38, contorno=2)
+    _texto_no_slot(draw, layout["nome"], str(card.get("nome", "Carta")), maximo=48, minimo=20,
+                   cor=creme, max_linhas=2, margem=42, contorno=2)
 
     # Poder no medalhão.
     cx, cy = layout["poder"]["centro"]
@@ -1032,18 +1051,20 @@ def _draw_card_com_template(card: dict[str, Any], illustration_bytes: bytes) -> 
     icone = icone.resize((lado, lado), Image.Resampling.LANCZOS)
     imagem.alpha_composite(icone, (tx1 + 22, ty1 + (altura_tipo - lado) // 2))
     draw = ImageDraw.Draw(imagem, "RGBA")
-    _texto_no_slot(draw, (tx1 + 22 + lado + 6, ty1, tx2, ty2), card_type, maximo=34, minimo=18,
-                   cor=creme, alinhamento="esquerda", margem=14, contorno=1)
-    _texto_no_slot(draw, (tx1 + (tx2 - tx1) // 2, ty1, tx2, ty2), category.upper(), maximo=22, minimo=12,
-                   cor=suave, alinhamento="direita", margem=22, negrito=True)
+    largura_tipo = tx2 - tx1
+    limite_tipo = tx1 + int(largura_tipo * 0.58)
+    _texto_no_slot(draw, (tx1 + 22 + lado + 6, ty1, limite_tipo, ty2), card_type,
+                   maximo=32, minimo=16, cor=creme, alinhamento="esquerda", margem=8, contorno=1)
+    _texto_no_slot(draw, (tx1 + int(largura_tipo * 0.60), ty1, tx2, ty2), category.upper(),
+                   maximo=20, minimo=11, cor=suave, alinhamento="direita", margem=18, negrito=True)
 
     # Custo: rótulo à esquerda, valor à direita.
     custo = str(int(card.get("custo", 0) or 0))
     cx1, cy1, cx2, cy2 = layout["custo"]
-    _texto_no_slot(draw, (cx1, cy1, cx1 + (cx2 - cx1) * 3 // 4, cy2), "CUSTO DE DECK", maximo=26, minimo=14,
-                   cor=suave, alinhamento="esquerda", margem=22)
-    _texto_no_slot(draw, (cx2 - 130, cy1, cx2, cy2), custo, maximo=44, minimo=22, cor=creme,
-                   alinhamento="direita", margem=22, contorno=2)
+    _texto_no_slot(draw, (cx1, cy1, cx1 + (cx2 - cx1) * 0.70, cy2), "CUSTO DE DECK",
+                   maximo=24, minimo=13, cor=suave, alinhamento="esquerda", margem=20)
+    _texto_no_slot(draw, (cx2 - 92, cy1, cx2, cy2), custo, maximo=40, minimo=20, cor=creme,
+                   alinhamento="direita", margem=18, contorno=2)
 
     # Habilidade: o guia reserva uma placa de 92 px. O título e até duas linhas
     # de descrição são dimensionados dentro da área segura, sem invadir o relevo.
@@ -1148,8 +1169,22 @@ def _cache_path(payload: Any, suffix: str) -> Path:
     return root / f"{digest}.{suffix}"
 
 
+def _assinatura_template(raridade: str) -> str:
+    caminho = templates_cartas.caminho_template(raridade)
+    try:
+        info = caminho.stat()
+        return f"{info.st_mtime_ns}:{info.st_size}"
+    except OSError:
+        return "sem-template"
+
+
 def render_carta(card: dict[str, Any]) -> Path:
-    payload = {"card": card, "frame": _assinatura_moldura(str(card.get("raridade", "Comum")))}
+    rarity = str(card.get("raridade", "Comum"))
+    payload = {
+        "card": card,
+        "frame": _assinatura_moldura(rarity),
+        "template": _assinatura_template(rarity),
+    }
     path = _cache_path(payload, "png")
     if not path.exists():
         _draw_card(card).save(path, format="PNG", optimize=True)
@@ -1161,6 +1196,7 @@ def render_pacote(cards: list[dict[str, Any]]) -> Path:
         "cards": cards,
         "layout": "pack-3-v3-fixed-frames",
         "frames": {raridade: _assinatura_moldura(raridade) for raridade in RARIDADES_MOLDURA},
+        "templates": {raridade: _assinatura_template(raridade) for raridade in RARIDADES_MOLDURA},
     }
     path = _cache_path(payload, "png")
     if path.exists():
