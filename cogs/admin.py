@@ -1093,7 +1093,10 @@ ADMIN_CATEGORIAS = {
     "economia": {
         "titulo": "🪙 Economia e progressão",
         "descricao": "Consulte e ajuste XP, Denários, limites e recompensas. Os valores não personalizados continuam usando os padrões do bot.",
-        "acoes": [("economy", "Configurar economia", "🪙")],
+        "acoes": [
+            ("economy", "Configurar economia", "🪙"),
+            ("economy_adjust_member", "Ajustar XP / Denários de membro", "⚖️"),
+        ],
     },
     "publicacoes": {
         "titulo": "📌 Publicações e integrações",
@@ -1224,6 +1227,21 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
         return await _abrir_jogos(interaction, bot, callback_voltar=voltar)
     if action == "economy":
         return await _abrir_economia(interaction, bot, callback_voltar=voltar)
+    if action == "economy_adjust_member":
+        if not await _eh_admin_painel(bot, interaction.user):
+            return await interaction.response.send_message(MSG_SO_ADMIN, ephemeral=True)
+        view = AdminEconomiaAjusteView(bot, interaction.user.id, callback_voltar=voltar)
+        embed = discord.Embed(
+            title="⚖️ Ajustar XP e Denários",
+            description=(
+                "Escolha um membro, selecione se deseja adicionar ou remover e informe "
+                "as quantidades. A operação é registrada no histórico de auditoria.\n\n"
+                "**Proteções:** saldos não ficam negativos; se a remoção superar o saldo, "
+                "o recurso é reduzido somente até zero."
+            ),
+            color=COR_PAINEL,
+        )
+        return await interaction.response.edit_message(embed=embed, view=view)
     if action == "community_config":
         return await _abrir_secao(
             interaction, bot, "community", "📚 Configurações de contribuições e Arquivo de Mundos",
@@ -1921,6 +1939,222 @@ class RoleSelectView(discord.ui.View):
         else:
             view = VoltarInicioView(self.bot)
         await interaction.response.edit_message(embed=embed, view=view)
+
+
+# ────────────────────────────────────────────────────────────────
+# Ajuste administrativo individual de XP e Denários
+# ────────────────────────────────────────────────────────────────
+
+class AdminEconomiaMembroSelect(discord.ui.UserSelect):
+    def __init__(self, painel):
+        self.painel = painel
+        super().__init__(
+            placeholder="Selecione o membro que receberá o ajuste...",
+            min_values=1, max_values=1, row=0,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        usuario = self.values[0] if self.values else None
+        if usuario is None:
+            return await interaction.response.send_message("Selecione um membro válido.", ephemeral=True)
+        if getattr(usuario, "bot", False):
+            return await interaction.response.send_message("Não é permitido ajustar o saldo de bots.", ephemeral=True)
+        self.painel.membro_id = int(usuario.id)
+        self.painel.membro_nome = str(getattr(usuario, "display_name", usuario.name))
+        await self.painel.atualizar(interaction)
+
+
+class AdminEconomiaOperacaoSelect(discord.ui.Select):
+    def __init__(self, painel):
+        self.painel = painel
+        super().__init__(
+            placeholder="Escolha a operação...",
+            min_values=1, max_values=1, row=1,
+            options=[
+                discord.SelectOption(label="Adicionar", value="adicionar", emoji="➕", description="Creditar XP e/ou Denários"),
+                discord.SelectOption(label="Remover", value="remover", emoji="➖", description="Debitar XP e/ou Denários"),
+            ],
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        self.painel.operacao = self.values[0]
+        await self.painel.atualizar(interaction)
+
+
+class AdminEconomiaAjusteModal(discord.ui.Modal, title="Ajustar XP e Denários"):
+    xp = discord.ui.TextInput(
+        label="Quantidade de XP (opcional)", placeholder="Ex.: 500", required=False, max_length=10,
+    )
+    denarios = discord.ui.TextInput(
+        label="Quantidade de Denários (opcional)", placeholder="Ex.: 100", required=False, max_length=10,
+    )
+    motivo = discord.ui.TextInput(
+        label="Motivo obrigatório do ajuste", placeholder="Ex.: compensação de evento", max_length=200,
+    )
+
+    def __init__(self, bot, actor_id: int, target_id: int, operacao: str):
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.actor_id = int(actor_id)
+        self.target_id = int(target_id)
+        self.operacao = operacao
+
+    @staticmethod
+    def _quantidade(valor: str, rotulo: str) -> int:
+        texto = str(valor or "").strip()
+        if not texto:
+            return 0
+        if not texto.isdecimal():
+            raise ValueError(f"{rotulo}: informe somente um número inteiro positivo.")
+        quantidade = int(texto)
+        if not 1 <= quantidade <= 1_000_000_000:
+            raise ValueError(f"{rotulo}: o valor precisa estar entre 1 e 1.000.000.000.")
+        return quantidade
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        if int(interaction.user.id) != self.actor_id or not await _eh_admin_painel(self.bot, interaction.user):
+            return await interaction.followup.send(MSG_SO_ADMIN, ephemeral=True)
+        if interaction.guild is None:
+            return await interaction.followup.send("Esta ação só pode ser usada dentro de um servidor.", ephemeral=True)
+
+        try:
+            qtd_xp = self._quantidade(self.xp.value, "XP")
+            qtd_denarios = self._quantidade(self.denarios.value, "Denários")
+        except ValueError as exc:
+            return await interaction.followup.send(str(exc), ephemeral=True)
+        if qtd_xp == 0 and qtd_denarios == 0:
+            return await interaction.followup.send(
+                "Informe pelo menos uma quantidade: XP, Denários ou ambos.", ephemeral=True,
+            )
+        motivo = " ".join(str(self.motivo.value or "").split())
+        if not motivo:
+            return await interaction.followup.send("O motivo do ajuste é obrigatório.", ephemeral=True)
+
+        membro = interaction.guild.get_member(self.target_id)
+        if membro is None:
+            try:
+                membro = await interaction.guild.fetch_member(self.target_id)
+            except discord.NotFound:
+                return await interaction.followup.send(
+                    "Esse membro não está mais no servidor. Nenhum saldo foi alterado.", ephemeral=True,
+                )
+            except discord.HTTPException:
+                return await interaction.followup.send(
+                    "Não consegui confirmar o membro no servidor. Tente novamente.", ephemeral=True,
+                )
+        if membro.bot:
+            return await interaction.followup.send("Não é permitido ajustar o saldo de bots.", ephemeral=True)
+
+        sinal = 1 if self.operacao == "adicionar" else -1
+        try:
+            resultado = await self.bot.db.ajustar_economia_por_admin(
+                user_id=membro.id,
+                actor_id=interaction.user.id,
+                xp_delta=qtd_xp * sinal,
+                denarios_delta=qtd_denarios * sinal,
+                motivo=motivo,
+                guild_id=interaction.guild.id,
+            )
+        except Exception:
+            log.exception("Falha ao ajustar XP/Denários de user=%s por admin=%s", membro.id, interaction.user.id)
+            return await interaction.followup.send(
+                "Não consegui concluir o ajuste. Nenhum resultado foi confirmado; consulte os logs do bot.",
+                ephemeral=True,
+            )
+
+        if resultado["xp_antes"] != resultado["xp_depois"]:
+            try:
+                from cogs.platinas import sincronizar_patente
+                await sincronizar_patente(
+                    interaction.guild, membro, resultado["nivel_depois"],
+                )
+            except Exception:
+                log.exception("Saldo ajustado, mas falhou sincronização de patente para user=%s", membro.id)
+
+        def fmt(numero: int) -> str:
+            return f"{int(numero):,}".replace(",", ".")
+
+        def linha(nome: str, delta: int, antes: int, depois: int) -> str:
+            sinal_texto = "+" if delta > 0 else ""
+            solicitado = qtd_xp if nome == "XP" else qtd_denarios
+            aplicado = abs(int(delta))
+            complemento = (
+                f" _(solicitado: {fmt(solicitado)}; aplicado: {fmt(aplicado)} devido ao saldo disponível)_"
+                if self.operacao == "remover" and aplicado < solicitado else ""
+            )
+            return f"**{nome}:** `{fmt(antes)}` → `{fmt(depois)}` · `{sinal_texto}{fmt(delta)}`{complemento}"
+
+        embed = discord.Embed(
+            title="✅ Ajuste administrativo concluído",
+            description=(
+                f"**Membro:** {membro.mention}\n"
+                f"**Operação:** {'Adicionar' if self.operacao == 'adicionar' else 'Remover'}\n\n"
+                f"{linha('XP', resultado['xp_delta'], resultado['xp_antes'], resultado['xp_depois'])}\n"
+                f"{linha('Denários', resultado['denarios_delta'], resultado['denarios_antes'], resultado['denarios_depois'])}\n\n"
+                f"**Nível:** {resultado['nivel_antes']} → {resultado['nivel_depois']}\n"
+                f"**Motivo:** {discord.utils.escape_markdown(motivo)}"
+            ),
+            color=discord.Color.green(),
+        )
+        embed.set_footer(text=f"Responsável: {interaction.user} · Registro gravado na auditoria")
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+
+class AdminEconomiaAjusteContinuarButton(discord.ui.Button):
+    def __init__(self, painel):
+        super().__init__(
+            label="Informar quantidades", emoji="⚖️", style=discord.ButtonStyle.primary,
+            row=2, disabled=True,
+        )
+        self.painel = painel
+
+    async def callback(self, interaction: discord.Interaction):
+        if not self.painel.membro_id or self.painel.operacao not in {"adicionar", "remover"}:
+            return await interaction.response.send_message(
+                "Selecione um membro e uma operação antes de continuar.", ephemeral=True,
+            )
+        await interaction.response.send_modal(AdminEconomiaAjusteModal(
+            self.painel.bot, self.painel.user_id, self.painel.membro_id, self.painel.operacao,
+        ))
+
+
+class AdminEconomiaAjusteView(discord.ui.View):
+    """Fluxo privado do /adm para creditar/debitar XP e Denários de um membro."""
+
+    def __init__(self, bot, user_id: int, callback_voltar=None):
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.user_id = int(user_id)
+        self.membro_id: int | None = None
+        self.membro_nome: str | None = None
+        self.operacao: str | None = None
+        self.continuar_button = AdminEconomiaAjusteContinuarButton(self)
+        self.add_item(AdminEconomiaMembroSelect(self))
+        self.add_item(AdminEconomiaOperacaoSelect(self))
+        self.add_item(self.continuar_button)
+        if callback_voltar:
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar à Economia")
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if int(interaction.user.id) != self.user_id or not await _eh_admin_painel(self.bot, interaction.user):
+            await interaction.response.send_message(MSG_SO_ADMIN, ephemeral=True)
+            return False
+        return True
+
+    async def atualizar(self, interaction: discord.Interaction):
+        self.continuar_button.disabled = not (self.membro_id and self.operacao)
+        membro = f"<@{self.membro_id}>" if self.membro_id else "_Não selecionado_"
+        operacao = {"adicionar": "Adicionar", "remover": "Remover"}.get(self.operacao, "_Não selecionada_")
+        embed = discord.Embed(
+            title="⚖️ Ajustar XP e Denários",
+            description=(
+                f"**Membro:** {membro}\n**Operação:** {operacao}\n\n"
+                "Selecione um membro e uma operação. Depois, informe XP e/ou Denários e o motivo."
+            ),
+            color=COR_PAINEL,
+        )
+        await interaction.response.edit_message(embed=embed, view=self)
 
 
 # ────────────────────────────────────────────────────────────────

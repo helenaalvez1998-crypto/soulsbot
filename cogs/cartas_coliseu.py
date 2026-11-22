@@ -227,19 +227,35 @@ class PersonalizarCartaButton(discord.ui.Button):
         if interaction.user.id != self.user_id:
             return await interaction.response.send_message("Essa carta pertence à coleção de outro membro.", ephemeral=True)
         prompt = gerar_prompt_carta(self.carta)
+        nome_base = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(self.carta.get("nome") or "carta"))
+        nome_base = nome_base.strip("_-")[:48] or "carta"
+        arquivo_prompt = discord.File(
+            io.BytesIO(prompt.encode("utf-8")),
+            filename=f"prompt_atelie_{nome_base}.txt",
+        )
         embed = discord.Embed(
             title="🎨 Ateliê do Coliseu · Prompt pronto",
             description=(
-                "Copie o texto e cole no gerador de imagens de sua preferência. "
-                "O jogo, a categoria, a raridade e a habilidade definem a cena. A identidade visual combina dark fantasy monumental com anime épico; a moldura oficial é aplicada separadamente.\n\n"
-                f"```text\n{prompt}\n```"
+                "O prompt completo foi enviado em um arquivo `.txt` na sua mensagem privada.\n\n"
+                "Abra o arquivo, copie todo o conteúdo e cole no gerador de imagens de sua preferência. "
+                "A arte deve conter somente a ilustração; moldura, nome e atributos oficiais são aplicados pelo SoulsBot."
             ),
             color=config.COR_OURO,
         )
-        embed.set_footer(text="Arte híbrida dark fantasy + anime épico. A moldura, o nome e os atributos oficiais são aplicados pelo SoulsBot.")
+        embed.add_field(
+            name="Carta",
+            value=f"**{self.carta.get('nome', 'Carta')}** · {self.carta.get('raridade', 'Raridade')} · {self.carta.get('tipo', 'Tipo')}",
+            inline=False,
+        )
+        embed.set_footer(text="O prompt é anexado como TXT para evitar o limite de 4.096 caracteres dos embeds do Discord.")
         await interaction.response.edit_message(
             embed=embed, attachments=[],
             view=EnviarArteAtelieView(self.cog, self.user_id, self.carta, self.collection_view),
+        )
+        await interaction.followup.send(
+            content="📄 **Prompt completo da sua carta:**",
+            file=arquivo_prompt,
+            ephemeral=True,
         )
 
 
@@ -1286,10 +1302,10 @@ class TemplateRemoverSelect(discord.ui.Select):
     def __init__(self, view: "TemplatesCartasAdminView"):
         self.painel = view
         super().__init__(
-            placeholder="Remover um template (volta ao layout antigo)...",
+            placeholder="Restaurar o template padrão do projeto...",
             min_values=1, max_values=1, row=2,
             options=[
-                discord.SelectOption(label=raridade, value=raridade, description=f"Remover o template de {raridade}")
+                discord.SelectOption(label=raridade, value=raridade, description=f"Restaurar o template padrão de {raridade}")
                 for raridade in templates_cartas.RARIDADES_TEMPLATE
             ],
         )
@@ -1300,8 +1316,8 @@ class TemplateRemoverSelect(discord.ui.Select):
         embed = await self.painel.cog.embed_painel_templates()
         await interaction.response.edit_message(embed=embed, view=self.painel)
         mensagem = (
-            f"O template de **{raridade}** foi removido. Cartas dessa raridade com arte enviada voltam ao layout antigo."
-            if removido else f"**{raridade}** já estava sem template."
+            f"A substituição personalizada de **{raridade}** foi removida. O template padrão incluso no projeto voltou a ser usado."
+            if removido else f"**{raridade}** já está usando o template padrão do projeto."
         )
         await interaction.followup.send(mensagem, ephemeral=True)
 
@@ -1512,18 +1528,27 @@ class ColiseuCartas(commands.Cog):
         status = templates_cartas.listar_templates()
         linhas = []
         for raridade, configurado in status.items():
-            estado = "🟢 Template ativo" if configurado else "⚪ Sem template (layout antigo)"
+            origem = templates_cartas.origem_template(raridade)
+            if origem == "personalizado":
+                estado = "🟢 Template personalizado"
+            elif origem == "padrão":
+                estado = "🔷 Template padrão do projeto"
+            elif origem and origem.startswith("padrão ("):
+                estado = "🟡 Template padrão ativo (upload antigo inválido ignorado)"
+            elif origem == "inválido":
+                estado = "🔴 Template inválido e sem padrão disponível"
+            else:
+                estado = "⚪ Sem template (layout antigo)"
             linhas.append(f"**{raridade}:** {estado}")
         embed = discord.Embed(
             title="🃏 Templates completos das cartas",
             description=(
-                "Usados **somente nas cartas com arte enviada pelo membro**. A arte entra por trás do template, "
-                "pela janela da arte, e o bot escreve nome, poder, tipo, custo e habilidade nas placas.\n"
-                "Cartas sem arte enviada continuam sendo desenhadas pelo bot.\n\n"
+                "Os cinco templates oficiais já vêm incluídos no projeto e são usados **somente nas cartas com arte enviada pelo membro**. "
+                "A arte entra por trás do template, pela janela transparente, e o bot escreve os dados nos slots do guia.\n"
+                "Cartas sem arte enviada continuam sendo desenhadas pelo bot. Você pode enviar um PNG para substituir temporariamente o padrão.\n\n"
                 + "\n".join(linhas)
-                + "\n\n**Arquivo aceito:** carta completa e opaca, retrato ~420:620 (recomendado **840 × 1240 px**), "
-                "até 8 MB, **sem nenhum texto**. A janela da arte deve estar transparente ou preenchida com "
-                "magenta chapado `#FF00FF`."
+                + "\n\n**Arquivo aceito:** PNG RGBA de carta completa, 840 × 1240 px, sem textos. "
+                "A janela transparente deve coincidir com o guia oficial (56,256 → 784,846)."
             ),
             color=config.COR_OURO,
         )
@@ -1556,10 +1581,10 @@ class ColiseuCartas(commands.Cog):
             await dm.send(
                 f"🃏 **Upload do template completo — {raridade}**\n\n"
                 "Anexe **um único arquivo** (PNG recomendado; JPG/WEBP só com magenta chapado) nesta conversa.\n"
-                "• Tamanho recomendado: **840 × 1240 px**, retrato (proporção ~420:620).\n"
-                "• Carta **completa e opaca**: fundo, moldura e placas vazias, **sem nenhum texto**.\n"
-                "• A **janela da arte** (área grande no meio, ~5:4) deve estar **transparente** ou preenchida "
-                "com **magenta chapado #FF00FF**.\n"
+                "• Canvas: **840 × 1240 px**, retrato, PNG RGBA.\n"
+                "• Carta completa, com fundo e placas vazias, **sem nenhum texto**.\n"
+                "• A única janela transparente deve coincidir com `(56,256) → (784,846)` (**728 × 590 px**). "
+                "Fora dela, o template deve ser opaco. Se usar magenta, ele deve ocupar exatamente essa janela.\n"
                 "• Limite: **8 MB**. A sessão expira em 10 minutos.\n\n"
                 "Depois de validar, salvo o template e envio duas prévias: a carta de exemplo e outra com os "
                 "slots contornados, para conferir se os textos caíram nas placas."
