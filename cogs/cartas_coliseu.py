@@ -236,8 +236,8 @@ class PersonalizarCartaButton(discord.ui.Button):
         embed = discord.Embed(
             title="🎨 Ateliê do Coliseu · Prompt pronto",
             description=(
-                "O prompt completo foi enviado em um arquivo `.txt` na sua mensagem privada.\n\n"
-                "Abra o arquivo, copie todo o conteúdo e cole no gerador de imagens de sua preferência. "
+                "Use o botão **📋 Copiar prompt** abaixo para receber o texto em blocos com opção de cópia. "
+                "O arquivo `.txt` também foi enviado como alternativa para guardar o prompt completo.\n\n"
                 "A arte deve conter somente a ilustração; moldura, nome e atributos oficiais são aplicados pelo SoulsBot."
             ),
             color=config.COR_OURO,
@@ -250,7 +250,9 @@ class PersonalizarCartaButton(discord.ui.Button):
         embed.set_footer(text="O prompt é anexado como TXT para evitar o limite de 4.096 caracteres dos embeds do Discord.")
         await interaction.response.edit_message(
             embed=embed, attachments=[],
-            view=EnviarArteAtelieView(self.cog, self.user_id, self.carta, self.collection_view),
+            view=EnviarArteAtelieView(
+                self.cog, self.user_id, self.carta, self.collection_view, prompt=prompt,
+            ),
         )
         await interaction.followup.send(
             content="📄 **Prompt completo da sua carta:**",
@@ -323,10 +325,60 @@ class EnviarArteAtelieButton(discord.ui.Button):
         await self.cog.iniciar_upload_atelie(interaction, self.carta)
 
 
+def _dividir_prompt_para_discord(prompt: str, limite: int = 1750) -> list[str]:
+    """Divide o prompt em blocos copiáveis, preservando exatamente o texto original."""
+    texto = str(prompt or "")
+    if not texto:
+        return []
+
+    partes: list[str] = []
+    inicio = 0
+    while inicio < len(texto):
+        fim = min(inicio + limite, len(texto))
+        if fim < len(texto):
+            # Prefere quebrar em parágrafo ou espaço, mantendo o separador na parte anterior.
+            quebra = texto.rfind("\n\n", inicio, fim)
+            if quebra <= inicio:
+                quebra = texto.rfind("\n", inicio, fim)
+            if quebra <= inicio:
+                quebra = texto.rfind(" ", inicio, fim)
+            if quebra > inicio:
+                fim = quebra + (2 if texto.startswith("\n\n", quebra) else 1)
+        partes.append(texto[inicio:fim])
+        inicio = fim
+    return partes
+
+class CopiarPromptAtelieButton(discord.ui.Button):
+    def __init__(self, user_id: int, prompt: str):
+        super().__init__(label="Copiar prompt", emoji="📋", style=discord.ButtonStyle.primary, row=0)
+        self.user_id = int(user_id)
+        self.prompt = str(prompt or "")
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("Este prompt pertence a outro membro.", ephemeral=True)
+        partes = _dividir_prompt_para_discord(self.prompt)
+        if not partes:
+            return await interaction.response.send_message("Não encontrei o conteúdo do prompt. Gere-o novamente.", ephemeral=True)
+
+        await interaction.response.send_message(
+            "📋 **Prompt pronto para copiar.** Use o botão de copiar exibido no bloco de código de cada parte. "
+            "Se o prompt tiver várias partes, copie-as na ordem indicada.",
+            ephemeral=True,
+        )
+        total = len(partes)
+        for indice, parte in enumerate(partes, start=1):
+            # 1.750 caracteres + rótulo e cercas Markdown permanecem abaixo dos 2.000.
+            conteudo = f"**Parte {indice}/{total}**\n```text\n{parte}\n```"
+            await interaction.followup.send(conteudo, ephemeral=True)
+
+
 class EnviarArteAtelieView(discord.ui.View):
-    def __init__(self, cog: "ColiseuCartas", user_id: int, carta: dict, collection_view: "CollectionView"):
+    def __init__(self, cog: "ColiseuCartas", user_id: int, carta: dict,
+                 collection_view: "CollectionView", *, prompt: str = ""):
         super().__init__(timeout=600)
         self.add_item(EnviarArteAtelieButton(cog, user_id, carta))
+        self.add_item(CopiarPromptAtelieButton(user_id, prompt))
         self.add_item(VoltarCartaAtelieButton(cog, user_id, carta, collection_view))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
