@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS sl_runs (
     created_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_sl_cat ON sl_runs(game_id, challenge_id, status);
+CREATE INDEX IF NOT EXISTS idx_sl_user_status ON sl_runs(user_id, status);
 CREATE TABLE IF NOT EXISTS platina_proofs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     platina_id INTEGER NOT NULL,
@@ -730,6 +731,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_catalog_jobs_dedupe_ativo
 CREATE INDEX IF NOT EXISTS idx_catalog_jobs_status ON catalog_import_jobs(status, updated_at);
 CREATE INDEX IF NOT EXISTS idx_catalog_search_kind_time ON catalog_search_requests(kind, created_at);
 CREATE INDEX IF NOT EXISTS idx_sl_challenges_game ON sl_challenges(game_id, name);
+CREATE INDEX IF NOT EXISTS idx_zer_user_status ON zerados(user_id, status);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_zerados_source_platina_unique
     ON zerados(source_platina_id) WHERE source_platina_id IS NOT NULL;
 """
@@ -873,6 +875,65 @@ class Database:
         await self.conn.execute("INSERT OR IGNORE INTO users(user_id) VALUES (?)", (user_id,))
         await self.conn.commit()
         return await self._one("SELECT * FROM users WHERE user_id=?", (user_id,))
+
+    async def resumo_painel_nara(self, user_id: int) -> dict:
+        """Carrega em uma consulta os indicadores usados pela central /nara.
+
+        Evita executar estatísticas completas de runs e avaliações quando a central
+        só precisa de contagens e da média geral do membro.
+        """
+        user_id = int(user_id)
+        await self.conn.execute(
+            "INSERT OR IGNORE INTO users(user_id) VALUES (?)", (user_id,)
+        )
+        await self.conn.commit()
+        row = await self._one(
+            """WITH avaliacoes AS (
+                   SELECT rating FROM platinas
+                    WHERE user_id=? AND status='approved'
+                   UNION ALL
+                   SELECT rating FROM zerados
+                    WHERE user_id=? AND status='approved' AND source_platina_id IS NULL
+                   UNION ALL
+                   SELECT rating FROM sl_runs
+                    WHERE user_id=? AND status='approved'
+               ), media AS (
+                   SELECT AVG(rating) AS media_nota, COUNT(rating) AS qtd_notas
+                     FROM avaliacoes
+               )
+               SELECT u.xp, u.denarios,
+                      (SELECT COUNT(*) FROM platinas
+                        WHERE user_id=u.user_id AND status='approved') AS platinas,
+                      (SELECT COUNT(*) FROM zerados
+                        WHERE user_id=u.user_id AND status='approved') AS zerados,
+                      (SELECT COUNT(*) FROM sl_runs
+                        WHERE user_id=u.user_id AND status='approved') AS runs,
+                      ((SELECT COUNT(*) FROM platinas
+                          WHERE user_id=u.user_id AND status='pending') +
+                       (SELECT COUNT(*) FROM zerados
+                          WHERE user_id=u.user_id AND status='pending') +
+                       (SELECT COUNT(*) FROM sl_runs
+                          WHERE user_id=u.user_id AND status='pending')) AS pendentes,
+                      media.media_nota, media.qtd_notas
+                 FROM users AS u CROSS JOIN media
+                WHERE u.user_id=?""",
+            (user_id, user_id, user_id, user_id),
+        )
+        if row is None:
+            return {
+                "xp": 0, "denarios": 0, "platinas": 0, "zerados": 0,
+                "runs": 0, "pendentes": 0, "media_nota": None, "qtd_notas": 0,
+            }
+        return {
+            "xp": int(row["xp"] or 0),
+            "denarios": int(row["denarios"] or 0),
+            "platinas": int(row["platinas"] or 0),
+            "zerados": int(row["zerados"] or 0),
+            "runs": int(row["runs"] or 0),
+            "pendentes": int(row["pendentes"] or 0),
+            "media_nota": float(row["media_nota"]) if row["media_nota"] is not None else None,
+            "qtd_notas": int(row["qtd_notas"] or 0),
+        }
 
     async def add_reward(self, user_id: int, xp: int, denarios: int):
         """Aplica XP/Denários atomicamente; devolve nível antigo, novo e XP total."""
@@ -2652,20 +2713,24 @@ class Database:
             return novas
 
     async def coliseu_estado_usuario(self, user_id: int):
-        await self.conn.execute("INSERT OR IGNORE INTO users(user_id) VALUES (?)", (int(user_id),))
-        await self.conn.execute("INSERT OR IGNORE INTO cartas_almas(user_id) VALUES (?)", (int(user_id),))
-        await self.conn.execute("INSERT OR IGNORE INTO cartas_pity(user_id) VALUES (?)", (int(user_id),))
+        user_id = int(user_id)
+        await self.conn.execute("INSERT OR IGNORE INTO users(user_id) VALUES (?)", (user_id,))
+        await self.conn.execute("INSERT OR IGNORE INTO cartas_almas(user_id) VALUES (?)", (user_id,))
+        await self.conn.execute("INSERT OR IGNORE INTO cartas_pity(user_id) VALUES (?)", (user_id,))
         await self.conn.commit()
-        row = await self._one("SELECT xp FROM users WHERE user_id=?", (int(user_id),))
-        user = await self.get_user(int(user_id))
-        almas = await self._one("SELECT quantidade FROM cartas_almas WHERE user_id=?", (int(user_id),))
-        pity = await self._one("SELECT comuns_seguidas FROM cartas_pity WHERE user_id=?", (int(user_id),))
-        total = await self._one("SELECT COUNT(*) AS n FROM cartas_colecao WHERE user_id=?", (int(user_id),))
-        deck = await self._one("SELECT COUNT(*) AS n FROM cartas_deck_itens WHERE user_id=?", (int(user_id),))
+        row = await self._one(
+            """SELECT u.xp, u.denarios,
+                      COALESCE((SELECT quantidade FROM cartas_almas WHERE user_id=u.user_id), 0) AS almas,
+                      COALESCE((SELECT comuns_seguidas FROM cartas_pity WHERE user_id=u.user_id), 0) AS pity,
+                      (SELECT COUNT(*) FROM cartas_colecao WHERE user_id=u.user_id) AS cartas,
+                      (SELECT COUNT(*) FROM cartas_deck_itens WHERE user_id=u.user_id) AS deck
+                 FROM users AS u WHERE u.user_id=?""",
+            (user_id,),
+        )
         return {
-            "xp": int(row["xp"] or 0), "denarios": int(user["denarios"] or 0),
-            "almas": int(almas["quantidade"] or 0), "pity": int(pity["comuns_seguidas"] or 0),
-            "cartas": int(total["n"] or 0), "deck": int(deck["n"] or 0),
+            "xp": int(row["xp"] or 0), "denarios": int(row["denarios"] or 0),
+            "almas": int(row["almas"] or 0), "pity": int(row["pity"] or 0),
+            "cartas": int(row["cartas"] or 0), "deck": int(row["deck"] or 0),
         }
 
     async def coliseu_listar_colecao(self, user_id: int):
