@@ -1,6 +1,7 @@
 """Testes de regressão para o núcleo de contribuições e interações comunitárias."""
 
 import asyncio
+import sqlite3
 
 import pytest
 
@@ -73,6 +74,126 @@ def test_community_reactions_bookmarks_follows_and_honors_are_unique_and_togglea
 
     run(scenario())
 
+
+def test_game_ratings_and_comments_are_saved_and_platina_syncs_to_zeroed():
+    async def scenario():
+        db = Database(":memory:")
+        await db.connect()
+        try:
+            platina_id = await db.criar_platina_unica(
+                101, "Sekiro", "PS5", "2026-11-20", "https://example.com/prova.png",
+                9001, 9, "Combate excelente e chefes muito bem construídos.", 4,
+            )
+            assert platina_id is not None
+            platina = await db.get_platina(platina_id)
+            assert int(platina["rating"]) == 9
+            assert int(platina["difficulty"]) == 4
+            assert platina["comment"] == "Combate excelente e chefes muito bem construídos."
+
+            result = await db.aprovar_platina_com_recompensa(
+                platina_id, reviewer_id=999, xp=50, denarios=20,
+                xp_zerado=10, denarios_zerado=5, limite_zerados=5,
+            )
+            assert result["platina_rating"] == 9
+            assert result["platina_difficulty"] == 4
+            assert result["platina_comment"] == "Combate excelente e chefes muito bem construídos."
+
+            zerados = await db.zerados_do_usuario(101)
+            assert len(zerados) == 1
+            assert int(zerados[0]["rating"]) == 9
+            assert int(zerados[0]["difficulty"]) == 4
+            assert zerados[0]["comment"] == "Combate excelente e chefes muito bem construídos."
+
+            manual_id = await db.criar_zerado_pendente(
+                202, "Hades", "PC", "2026-11-21", "Loop viciante e ótima trilha.", 8, 2,
+            )
+            manual = await db.get_zerado(manual_id)
+            assert int(manual["rating"]) == 8
+            assert int(manual["difficulty"]) == 2
+            assert manual["comment"] == "Loop viciante e ótima trilha."
+
+            game = await db._one("SELECT id FROM sl_games LIMIT 1")
+            if game is None:
+                cur_game = await db.conn.execute("INSERT INTO sl_games(name) VALUES (?)", ("Dark Souls III",))
+                game_id = cur_game.lastrowid
+            else:
+                game_id = int(game["id"])
+            cur_challenge = await db.conn.execute(
+                "INSERT INTO sl_challenges(name, game_id) VALUES (?,?)", ("Sem invocações", game_id)
+            )
+            cur_run = await db.conn.execute(
+                "INSERT INTO sl_runs(user_id, game_id, challenge_id, build, seconds, rating, difficulty, comment) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                (303, game_id, cur_challenge.lastrowid, "Força", 3600, 10, 5, "Desafio intenso."),
+            )
+            await db.conn.commit()
+            run = await db._one("SELECT * FROM sl_runs WHERE id=?", (cur_run.lastrowid,))
+            assert int(run["difficulty"]) == 5
+            assert int(run["rating"]) == 10
+
+            pending_zerado_id = await db.criar_zerado_pendente(
+                404, "Hollow Knight", "Switch", "2026-11-20", "Registro inicial.", 6, 2,
+            )
+            pending_platina_id = await db.criar_platina_unica(
+                404, "Hollow Knight", "Switch", "2026-11-21", "https://example.com/hk.png",
+                9002, 9, "A platina exigiu bastante exploração.", 4,
+            )
+            await db.aprovar_platina_com_recompensa(
+                pending_platina_id, reviewer_id=999, xp=10, denarios=5,
+                xp_zerado=0, denarios_zerado=0, limite_zerados=5,
+            )
+            converted = await db.get_zerado(pending_zerado_id)
+            assert converted["status"] == "approved"
+            assert int(converted["rating"]) == 9
+            assert int(converted["difficulty"]) == 4
+            assert converted["comment"] == "A platina exigiu bastante exploração."
+        finally:
+            await db.close()
+
+    run(scenario())
+
+
+
+def test_existing_database_gets_nullable_difficulty_columns_without_losing_records(tmp_path):
+    async def scenario():
+        path = tmp_path / "soulsbot-migration.db"
+        db = Database(str(path))
+        await db.connect()
+        try:
+            platina_id = await db.criar_platina_unica(
+                501, "Bloodborne", "PS4", "2026-11-21", "https://example.com/bb.png",
+                None, 8, "Combate preciso e atmosfera excelente.", 4,
+            )
+            zerado_id = await db.criar_zerado_pendente(
+                502, "Celeste", "PC", "2026-11-21", "Controles excelentes.", 9, 3,
+            )
+            assert platina_id is not None and zerado_id is not None
+        finally:
+            await db.close()
+
+        # Simula um banco criado pela versão anterior, que ainda não tinha essas colunas.
+        with sqlite3.connect(path) as conn:
+            for table in ("platinas", "zerados", "sl_runs"):
+                conn.execute(f"ALTER TABLE {table} DROP COLUMN difficulty")
+
+        migrated = Database(str(path))
+        await migrated.connect()
+        try:
+            platina = await migrated.get_platina(platina_id)
+            zerado = await migrated.get_zerado(zerado_id)
+            assert platina["comment"] == "Combate preciso e atmosfera excelente."
+            assert int(platina["rating"]) == 8
+            assert platina["difficulty"] is None
+            assert zerado["comment"] == "Controles excelentes."
+            assert int(zerado["rating"]) == 9
+            assert zerado["difficulty"] is None
+            for table in ("platinas", "zerados", "sl_runs"):
+                columns = {row["name"] for row in await migrated._all(f"PRAGMA table_info({table})")}
+                assert "difficulty" in columns
+        finally:
+            await migrated.close()
+
+    run(scenario())
 
 def test_approved_game_and_game_specific_challenge_are_materialized_idempotently():
     async def scenario():
