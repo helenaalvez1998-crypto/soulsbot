@@ -1984,6 +1984,8 @@ class ColiseuCartas(commands.Cog):
                 previous_a, previous_b = "venceu", "perdeu"
             elif winner == "b":
                 previous_a, previous_b = "perdeu", "venceu"
+            elif winner == "empate":
+                previous_a = previous_b = "empatou"
         tipo_anterior_a = tipo_anterior_b = None
         if historico:
             deck_a = await self.bot.db.coliseu_deck_da_partida(int(duel["id"]), a)
