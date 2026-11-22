@@ -11,6 +11,7 @@ from discord.ext import commands
 import config
 from admin_config import GuildConfig
 from utils import get_text_channel, upsert_panel
+from cogs.avaliacao_jogo import NotaJogoView, formatar_dificuldade
 
 log = logging.getLogger("soulslike")
 
@@ -207,15 +208,21 @@ class Soulslike(commands.Cog):
         return e
 
     # -------------------------------------------------------- submissão de runs (usada pela Central)
-    async def enviar_para_moderacao(self, user, g, c, seg, build, dados, filename):
+    async def enviar_para_moderacao(self, user, g, c, seg, build, dados, filename,
+                                    nota: int | None = None, comentario: str = "",
+                                    dificuldade: int | None = None):
         db = self.bot.db
         mod_ch_id = await GuildConfig.get(db, user.guild.id if hasattr(user, 'guild') and user.guild else 0, "mod_channel")
         canal = await get_text_channel(self.bot, mod_ch_id)
         if canal is None:
             return None
+        if nota is not None and (type(nota) is not int or not 1 <= nota <= 10):
+            return None
+        if dificuldade is not None and (type(dificuldade) is not int or not 1 <= dificuldade <= 5):
+            return None
         cur = await db.conn.execute(
-            "INSERT INTO sl_runs(user_id, game_id, challenge_id, build, seconds) VALUES (?,?,?,?,?)",
-            (user.id, g["id"], c["id"], build, seg),
+            "INSERT INTO sl_runs(user_id, game_id, challenge_id, build, seconds, rating, difficulty, comment) VALUES (?,?,?,?,?,?,?,?)",
+            (user.id, g["id"], c["id"], build, seg, nota, dificuldade, str(comentario or "")[:500]),
         )
         await db.conn.commit()
         run_id = cur.lastrowid
@@ -244,6 +251,12 @@ class Soulslike(commands.Cog):
             embed.add_field(name="Desafio", value=c["name"])
             embed.add_field(name="Tempo", value=fmt_tempo(seg))
             embed.add_field(name="Build", value=build or "Não informada")
+            if nota is not None:
+                embed.add_field(name="Nota do jogo", value=f"⭐ {int(nota)}/10")
+            if dificuldade is not None:
+                embed.add_field(name="Dificuldade percebida", value=formatar_dificuldade(dificuldade))
+            if str(comentario or "").strip():
+                embed.add_field(name="Comentário", value=str(comentario).strip()[:500], inline=False)
             embed.add_field(name="Posição", value=ref)
             if filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")):
                 embed.set_image(url=f"attachment://{filename}")
@@ -296,6 +309,55 @@ class Soulslike(commands.Cog):
         except Exception:
             log.exception("Run #%s registrada, mas falhou o log de auditoria", run_id)
         return run_id
+
+    async def iniciar_upload_run(self, interaction: discord.Interaction, game_id: int,
+                                 challenge_id: int, segundos: int, build: str,
+                                 nota: int, comentario: str, dificuldade: int):
+        """Salva a avaliação temporária e solicita o comprovante por DM."""
+        if type(nota) is not int or not 1 <= nota <= 10:
+            return await interaction.response.send_message("Escolha uma nota entre 1 e 10.", ephemeral=True)
+        if type(dificuldade) is not int or not 1 <= dificuldade <= 5:
+            return await interaction.response.send_message("Escolha uma dificuldade entre 1 e 5.", ephemeral=True)
+        state = self.pending_uploads.get(interaction.user.id)
+        if state and time.monotonic() - float(state.get("created_at", 0)) <= PENDING_UPLOAD_TTL:
+            return await interaction.response.send_message(
+                "Você já tem um registro aguardando comprovante. Conclua esse envio ou aguarde o prazo de 10 minutos antes de iniciar outro.",
+                ephemeral=True,
+            )
+        g = await self.bot.db._one("SELECT * FROM sl_games WHERE id=?", (int(game_id),))
+        c = await self.bot.db._one("SELECT * FROM sl_challenges WHERE id=?", (int(challenge_id),))
+        if not g or not c:
+            return await interaction.response.send_message(
+                "O jogo ou desafio não está mais disponível. Reabra a Central Soulslike.", ephemeral=True
+            )
+        self.pending_uploads[interaction.user.id] = {
+            'game_id': int(game_id), 'challenge_id': int(challenge_id), 'seconds': int(segundos),
+            'build': str(build or 'Não informada')[:100], 'rating': int(nota),
+            'difficulty': int(dificuldade), 'comment': str(comentario or '').strip()[:500],
+            'created_at': time.monotonic(),
+        }
+        try:
+            dm = await interaction.user.create_dm()
+            await dm.send(
+                f"**Ritual de entrada — etapa final**\nJogo: **{g['name']}**\nDesafio: **{c['name']}**\n"
+                f"Tempo: **{fmt_tempo(segundos)}**\nNota do jogo: **{int(nota)}/10**\n"
+                f"Dificuldade percebida: **{formatar_dificuldade(dificuldade)}**\n\n"
+                f"Envie nesta conversa uma imagem ou vídeo como comprovante. "
+                "O bot apresentará uma prévia para você confirmar antes de enviar à moderação. Limite: 20 MB."
+            )
+        except discord.Forbidden:
+            self.pending_uploads.pop(interaction.user.id, None)
+            return await interaction.response.send_message(
+                "Não consigo enviar DM para você. Ative mensagens diretas deste servidor e tente novamente.",
+                ephemeral=True,
+            )
+        await interaction.response.send_message(
+            "## ✅ Etapa final do registro\n\n"
+            "Enviei uma mensagem direta para você. Anexe nela a imagem ou o vídeo de comprovante da run.\n\n"
+            "_Esta tela foi atualizada; você não precisa abrir outro painel._",
+            ephemeral=True,
+            view=VoltarCentralView(self),
+        )
 
     # -------------------------------------------------------- central Soulslike
     def texto_central(self) -> str:
@@ -416,10 +478,20 @@ class Soulslike(commands.Cog):
                 f"**Tempo:** `{fmt_tempo(seg)}`",
                 f"**Build:** {state['build'] or 'Não informada'}",
             ]
+            if state.get("rating") is not None:
+                prev.append(f"**Nota do jogo:** ⭐ {int(state['rating'])}/10")
+            if state.get("difficulty") is not None:
+                prev.append(f"**Dificuldade percebida:** {formatar_dificuldade(state['difficulty'])}")
+            if str(state.get("comment") or "").strip():
+                prev.append(f"**Comentário:** {str(state['comment']).strip()[:500]}")
             if c['rules']:
                 prev.extend(["", f"**Regras do desafio:** {c['rules'][:700]}"])
             prev.extend(["", "_Confirme para enviar o comprovante à moderação._"])
-            view = ConfirmarView(self, message.author, g, c, seg, state['build'], data, attachment.filename[:100])
+            view = ConfirmarView(
+                self, message.author, g, c, seg, state['build'], data,
+                attachment.filename[:100], state.get("rating"), state.get("comment", ""),
+                state.get("difficulty"),
+            )
             await message.channel.send(content="\n".join(prev), view=view)
             self.pending_uploads.pop(message.author.id, None)
         except (discord.HTTPException, OSError) as exc:
@@ -585,6 +657,15 @@ class Soulslike(commands.Cog):
                     f"**Posição no ranking:** {pos}º" + ("" if melhorou else " _(melhor tempo pessoal)_"),
                     f"**Recompensa:** +{resultado['xp_awarded']} XP",
                 ]
+                if run["rating"] is not None:
+                    linhas.insert(4, f"**Nota do jogo:** ⭐ {int(run['rating'])}/10")
+                if run["difficulty"] is not None:
+                    pos_dificuldade = 5 if run["rating"] is not None else 4
+                    linhas.insert(pos_dificuldade, f"**Dificuldade percebida:** {formatar_dificuldade(run['difficulty'])}")
+                if str(run["comment"] or "").strip():
+                    pos_comentario = 4 + int(run["rating"] is not None) + int(run["difficulty"] is not None)
+                    linhas.insert(pos_comentario,
+                                  f"**Comentário:** {str(run['comment']).strip()[:500]}")
                 if run["proof_url"]:
                     linhas.append(f"[📸 Ver comprovante]({run['proof_url']})")
                 if vezes > 1:
@@ -855,44 +936,27 @@ class RunDadosModal(discord.ui.Modal, title="Registrar run Soulslike"):
             )
         if state:
             self.cog.pending_uploads.pop(interaction.user.id, None)
-        self.cog.pending_uploads[interaction.user.id] = {
-            'game_id': self.game_id, 'challenge_id': self.challenge_id, 'seconds': seg,
-            'build': (str(self.build).strip() or 'Não informada')[:100],
-            'created_at': time.monotonic(),
-        }
-        try:
-            dm = await interaction.user.create_dm()
-            await dm.send(
-                f"**Ritual de entrada — etapa final**\nJogo: **{g['name']}**\nDesafio: **{c['name']}**\n"
-                f"Tempo: **{fmt_tempo(seg)}**\n\nEnvie nesta conversa uma imagem ou vídeo como comprovante. "
-                "O bot apresentará uma prévia para você confirmar antes de enviar à moderação. Limite: 20 MB."
+        build = (str(self.build).strip() or 'Não informada')[:100]
+
+        async def concluir(avaliacao_interaction, nota, dificuldade, comentario):
+            await self.cog.iniciar_upload_run(
+                avaliacao_interaction, self.game_id, self.challenge_id, seg, build, nota, comentario, dificuldade
             )
-        except discord.Forbidden:
-            self.cog.pending_uploads.pop(interaction.user.id, None)
-            return await interaction.response.send_message(
-                "Não consigo enviar DM para você. Ative mensagens diretas deste servidor e tente novamente.", ephemeral=True
-            )
-        aviso = (
-            "## ✅ Etapa final do registro\n\n"
-            "Enviei uma mensagem direta para você. Anexe nela a imagem ou o vídeo de comprovante da run.\n\n"
-            "_Esta tela foi atualizada; você não precisa abrir outro painel._"
+
+        await interaction.response.send_message(
+            "**Avaliação — 1/3: Nota da experiência**\nQuanto você gostou desta run? Escolha uma nota de 1 a 10.",
+            view=NotaJogoView(
+                concluir, "Na sua experiência, qual foi a dificuldade para concluir esta run/desafio?"
+            ), ephemeral=True,
         )
         if self.parent_interaction is not None:
-            await interaction.response.defer(ephemeral=True, thinking=True)
             try:
                 await self.parent_interaction.edit_original_response(
-                    content=aviso, embeds=[], view=VoltarCentralView(self.cog),
+                    content="Conclua a avaliação na tela privada aberta. Depois, enviarei as instruções do comprovante.",
+                    embeds=[], view=VoltarCentralView(self.cog),
                 )
             except discord.HTTPException:
-                # Se o token anterior expirou, preserva a confirmação no fluxo atual.
-                await interaction.edit_original_response(content=aviso, embeds=[], view=VoltarCentralView(self.cog))
-            else:
-                try:
-                    await interaction.delete_original_response()
-                except discord.HTTPException:
-                    pass  # A tela principal já foi atualizada; não duplica a confirmação.
-        else:
-            await interaction.response.send_message(aviso, ephemeral=True)
+                log.debug("Não foi possível atualizar a tela anterior ao iniciar avaliação da run")
 
 
 class PerfilView(discord.ui.View):
@@ -953,10 +1017,12 @@ class CancelarRunButton(discord.ui.Button):
 
 
 class ConfirmarView(discord.ui.View):
-    def __init__(self, cog, user, g, c, seg, build, dados, filename):
+    def __init__(self, cog, user, g, c, seg, build, dados, filename, nota=None, comentario="", dificuldade=None):
         super().__init__(timeout=180)
         self.cog, self.user, self.g, self.c = cog, user, g, c
         self.seg, self.build, self.dados, self.filename = seg, build, dados, filename
+        self.nota, self.comentario = nota, str(comentario or "")[:500]
+        self.dificuldade = dificuldade
         self._claimed = False
         self._claim_lock = asyncio.Lock()
 
@@ -971,7 +1037,8 @@ class ConfirmarView(discord.ui.View):
         await interaction.response.edit_message(content="⏳ Enviando para a moderação...", embed=None, view=None)
         try:
             run_id = await self.cog.enviar_para_moderacao(
-                self.user, self.g, self.c, self.seg, self.build, self.dados, self.filename
+                self.user, self.g, self.c, self.seg, self.build, self.dados, self.filename,
+                self.nota, self.comentario, self.dificuldade,
             )
         except Exception:
             log.exception("Falha inesperada ao enviar run para user=%s", self.user.id)

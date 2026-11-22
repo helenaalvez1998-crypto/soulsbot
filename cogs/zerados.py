@@ -8,6 +8,7 @@ from discord.ext import commands
 import config
 from admin_config import GuildConfig
 from cogs.platinas import eh_moderador, sincronizar_patente, hoje
+from cogs.avaliacao_jogo import NotaJogoView, formatar_dificuldade
 from levels import nivel_por_xp, patente_por_nivel
 from utils import get_text_channel, upsert_panel, erro_comando
 
@@ -127,7 +128,8 @@ class Zerados(commands.Cog):
 
     # ------------------------------------------------------------ registro
     async def registrar_zerado(self, interaction: discord.Interaction, jogo: str, plataforma: str,
-                               data: str, comentario: str, capturas):
+                               data: str, comentario: str, capturas, nota: int | None = None,
+                               dificuldade: int | None = None):
         try:
             d = dt.datetime.strptime(data.strip(), "%d/%m/%Y").date()
         except ValueError:
@@ -136,7 +138,11 @@ class Zerados(commands.Cog):
             return await interaction.response.send_message("A data não pode estar no futuro.", ephemeral=True)
 
         jogo, plataforma = jogo.strip()[:100], plataforma.strip()[:30]
-        comentario = (comentario or "").strip()[:300]
+        comentario = (comentario or "").strip()[:500]
+        if nota is not None and (type(nota) is not int or not 1 <= nota <= 10):
+            return await interaction.response.send_message("Escolha uma nota entre 1 e 10.", ephemeral=True)
+        if dificuldade is not None and (type(dificuldade) is not int or not 1 <= dificuldade <= 5):
+            return await interaction.response.send_message("Escolha uma dificuldade entre 1 e 5.", ephemeral=True)
         if not jogo:
             return await interaction.response.send_message("Informe o nome do jogo.", ephemeral=True)
 
@@ -169,12 +175,15 @@ class Zerados(commands.Cog):
 
         await interaction.response.defer(ephemeral=True, thinking=True)
         try:
-            linhas = await self.gravar_zerado(interaction.guild, interaction.user, d, jogo, plataforma, comentario, capturas)
+            linhas = await self.gravar_zerado(
+                interaction.guild, interaction.user, d, jogo, plataforma, comentario, capturas, nota, dificuldade
+            )
         except ValueError as exc:
             return await interaction.edit_original_response(content=str(exc))
         await interaction.edit_original_response(content="\n".join(linhas))
 
-    async def gravar_zerado(self, guild, user, d, jogo, plataforma, comentario, capturas) -> list[str]:
+    async def gravar_zerado(self, guild, user, d, jogo, plataforma, comentario, capturas,
+                            nota: int | None = None, dificuldade: int | None = None) -> list[str]:
         """Cria uma solicitação pendente e envia o cartão com comprovantes ao canal central."""
         db = self.bot.db
         mod_ch_id = await GuildConfig.get(db, guild.id, "mod_channel")
@@ -191,7 +200,7 @@ class Zerados(commands.Cog):
             )
 
         zerado_id = await db.criar_zerado_pendente(
-            user.id, jogo, plataforma, d.isoformat(), comentario
+            user.id, jogo, plataforma, d.isoformat(), comentario, nota, dificuldade
         )
         if zerado_id is None:
             raise ValueError(
@@ -211,6 +220,10 @@ class Zerados(commands.Cog):
             embed.set_thumbnail(url=user.display_avatar.url)
             embed.add_field(name="Plataforma", value=plataforma, inline=True)
             embed.add_field(name="Data em que zerou", value=d.strftime("%d/%m/%Y"), inline=True)
+            if nota is not None:
+                embed.add_field(name="Nota do jogo", value=f"⭐ {nota}/10", inline=True)
+            if dificuldade is not None:
+                embed.add_field(name="Dificuldade percebida", value=formatar_dificuldade(dificuldade), inline=True)
             if comentario:
                 embed.add_field(name="Comentário", value=comentario, inline=False)
             if capturas:
@@ -276,6 +289,10 @@ class Zerados(commands.Cog):
                 embed.set_thumbnail(url=membro.display_avatar.url)
             embed.add_field(name="Plataforma", value=registro["platform"], inline=True)
             embed.add_field(name="Data", value=data_legivel(registro["finished_at"]), inline=True)
+            if registro.get("rating") is not None:
+                embed.add_field(name="Nota do jogo", value=f"⭐ {int(registro['rating'])}/10", inline=True)
+            if registro.get("difficulty") is not None:
+                embed.add_field(name="Dificuldade percebida", value=formatar_dificuldade(registro["difficulty"]), inline=True)
             if registro.get("comment"):
                 embed.add_field(name="Comentário", value=registro["comment"], inline=False)
             anexos = list(getattr(interaction.message, "attachments", []) or [])
@@ -589,6 +606,10 @@ class GaleriaZeradosView(discord.ui.View):
                 color=discord.Color.green(),
             )
             comentario = str(row["comment"] or "").strip()
+            if row["rating"] is not None:
+                e.add_field(name="Nota do jogo", value=f"⭐ {int(row['rating'])}/10", inline=True)
+            if row["difficulty"] is not None:
+                e.add_field(name="Dificuldade percebida", value=formatar_dificuldade(row["difficulty"]), inline=True)
             if comentario:
                 e.add_field(name="Comentário", value=comentario[:900], inline=False)
             # O cartão original da moderação pode conter um comprovante anexado.
@@ -698,7 +719,7 @@ class RankingZeradosView(VoltarZeradosView):
 
 
 class ZeradoModal(discord.ui.Modal):
-    """Formulário de registro (anexo é opcional). Precisa de discord.py >= 2.6."""
+    """Dados do registro; a nota e o comentário são solicitados em duas etapas seguintes."""
 
     def __init__(self, cog: Zerados):
         super().__init__(title="Registrar jogo zerado")
@@ -709,23 +730,30 @@ class ZeradoModal(discord.ui.Modal):
             options=[discord.SelectOption(label=p, value=p) for p in PLATAFORMAS],
         )
         self.data = discord.ui.TextInput(default=hoje().strftime("%d/%m/%Y"), placeholder="DD/MM/AAAA", max_length=10)
-        self.comentario = discord.ui.TextInput(
-            style=discord.TextStyle.paragraph, required=False, max_length=300,
-            placeholder="O que achou? Nota, final, dificuldade... (opcional)",
-        )
         self.prova = discord.ui.FileUpload(required=False, min_values=0, max_values=5)
         self.add_item(discord.ui.Label(text="Jogo", component=self.jogo))
         self.add_item(discord.ui.Label(text="Plataforma", component=self.plataforma))
         self.add_item(discord.ui.Label(text="Data em que zerou", component=self.data))
-        self.add_item(discord.ui.Label(text="Comentário (opcional)", component=self.comentario))
         self.add_item(discord.ui.Label(text="Print dos créditos (opcional)", component=self.prova))
 
     async def on_submit(self, interaction: discord.Interaction):
         if not self.plataforma.values:
             return await interaction.response.send_message("Escolha a plataforma.", ephemeral=True)
-        await self.cog.registrar_zerado(
-            interaction, self.jogo.value, self.plataforma.values[0], self.data.value,
-            self.comentario.value, list(self.prova.values),
+        jogo = str(self.jogo.value).strip()
+        plataforma = self.plataforma.values[0]
+        data = str(self.data.value).strip()
+        capturas = list(self.prova.values)
+
+        async def concluir(avaliacao_interaction, nota, dificuldade, comentario):
+            await self.cog.registrar_zerado(
+                avaliacao_interaction, jogo, plataforma, data, comentario, capturas, nota, dificuldade,
+            )
+
+        await interaction.response.send_message(
+            "**Avaliação — 1/3: Nota do jogo**\nQuanto você gostou deste jogo? Escolha uma nota de 1 a 10.",
+            view=NotaJogoView(
+                concluir, "Na sua experiência, qual foi a dificuldade para zerar este jogo?"
+            ), ephemeral=True,
         )
 
     async def on_error(self, interaction: discord.Interaction, error: Exception):

@@ -8,6 +8,7 @@ import config
 from admin_config import GuildConfig
 from levels import patente_por_nivel, nivel_por_xp, barra_progresso
 from utils import get_text_channel, upsert_panel  # noqa: F401
+from cogs.avaliacao_jogo import NotaJogoView, formatar_dificuldade
 
 log = logging.getLogger("cogs.platinas")
 
@@ -149,6 +150,15 @@ class RevisaoView(discord.ui.View):
                         f"[📸 Ver comprovante]({p['proof_url']})",
                         f"**Recompensa:** +{int(xp_plat)} XP · +{int(den_plat)} Denários",
                     ]
+                    if p["rating"] is not None:
+                        linhas.insert(3, f"**Nota do jogo:** ⭐ {int(p['rating'])}/10")
+                    if p["difficulty"] is not None:
+                        pos_dificuldade = 4 if p["rating"] is not None else 3
+                        linhas.insert(pos_dificuldade, f"**Dificuldade percebida:** {formatar_dificuldade(p['difficulty'])}")
+                    if str(p["comment"] or "").strip():
+                        pos_comentario = 3 + int(p["rating"] is not None) + int(p["difficulty"] is not None)
+                        linhas.insert(pos_comentario,
+                                      f"**Comentário:** {str(p['comment']).strip()}")
                     if novo > antigo:
                         linhas.extend(["", f"⬆️ **Novo nível:** {novo} — {patente_por_nivel(novo)}"])
                     mensagem_publica = await canal.send("\n".join(linhas), allowed_mentions=discord.AllowedMentions.none())
@@ -182,7 +192,9 @@ class RevisaoView(discord.ui.View):
                         "id": decision["zerado_id"], "user_id": user_id,
                         "game": p["game"], "platform": p["platform"],
                         "finished_at": p["earned_at"],
-                        "comment": "Registrado automaticamente pela platina aprovada.",
+                        "comment": str(p["comment"] or "Registrado automaticamente pela platina aprovada."),
+                        "rating": p["rating"],
+                        "difficulty": p["difficulty"],
                         "xp": decision["zerado_xp"],
                         "denarios": decision["zerado_denarios"],
                         "daily_limit_reached": decision["zerado_daily_limit_reached"],
@@ -423,7 +435,8 @@ class Platinas(commands.Cog):
 
     # -------------------------------------------------------- registro
     async def registrar_platina(self, interaction: discord.Interaction, jogo: str, plataforma: str,
-                                data: str, capturas):
+                                data: str, capturas, nota: int | None = None, comentario: str = "",
+                                dificuldade: int | None = None):
         try:
             d = dt.datetime.strptime(data.strip(), "%d/%m/%Y").date()
         except ValueError:
@@ -458,6 +471,11 @@ class Platinas(commands.Cog):
             )
 
         jogo, plataforma = jogo.strip()[:100], plataforma.strip()[:30]
+        comentario = str(comentario or "").strip()[:500]
+        if nota is not None and (type(nota) is not int or not 1 <= nota <= 10):
+            return await interaction.response.send_message("Escolha uma nota entre 1 e 10.", ephemeral=True)
+        if dificuldade is not None and (type(dificuldade) is not int or not 1 <= dificuldade <= 5):
+            return await interaction.response.send_message("Escolha uma dificuldade entre 1 e 5.", ephemeral=True)
         if not jogo:
             return await interaction.response.send_message("Informe o nome do jogo.", ephemeral=True)
         db = self.bot.db
@@ -484,6 +502,12 @@ class Platinas(commands.Cog):
             embed.add_field(name="Jogo", value=jogo)
             embed.add_field(name="Plataforma", value=plataforma)
             embed.add_field(name="Data", value=d.strftime("%d/%m/%Y"))
+            if nota is not None:
+                embed.add_field(name="Nota do jogo", value=f"⭐ {nota}/10")
+            if dificuldade is not None:
+                embed.add_field(name="Dificuldade percebida", value=formatar_dificuldade(dificuldade))
+            if comentario:
+                embed.add_field(name="Comentário", value=comentario, inline=False)
             embed.add_field(name="Comprovantes", value=f"{len(capturas)} arquivo(s) anexado(s)", inline=False)
             primeiro_tipo = (capturas[0].content_type or "").lower()
             if primeiro_tipo.startswith("image/") or capturas[0].filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")):
@@ -496,7 +520,7 @@ class Platinas(commands.Cog):
             urls = [(att.url, att.content_type) for att in msg.attachments]
             url = urls[0][0] if urls else capturas[0].url
             platina_id = await db.criar_platina_unica(
-                interaction.user.id, jogo, plataforma, d.isoformat(), url, msg.id
+                interaction.user.id, jogo, plataforma, d.isoformat(), url, msg.id, nota, comentario, dificuldade
             )
             if platina_id is None:
                 try:
@@ -761,7 +785,7 @@ class RankingView(discord.ui.View):
 
 
 class PlatinaModal(discord.ui.Modal):
-    """Formulário com o campo para anexar o print (precisa de discord.py >= 2.6)."""
+    """Dados da platina; nota e comentário são solicitados em seguida."""
 
     def __init__(self, cog):
         super().__init__(title="Registrar platina")
@@ -781,8 +805,21 @@ class PlatinaModal(discord.ui.Modal):
     async def on_submit(self, interaction: discord.Interaction):
         if not self.prova.values or not self.plataforma.values:
             return await interaction.response.send_message("Preencha a plataforma e anexe pelo menos um comprovante.", ephemeral=True)
-        await self.cog.registrar_platina(
-            interaction, self.jogo.value, self.plataforma.values[0], self.data.value, list(self.prova.values)
+        jogo = str(self.jogo.value).strip()
+        plataforma = self.plataforma.values[0]
+        data = str(self.data.value).strip()
+        capturas = list(self.prova.values)
+
+        async def concluir(avaliacao_interaction, nota, dificuldade, comentario):
+            await self.cog.registrar_platina(
+                avaliacao_interaction, jogo, plataforma, data, capturas, nota, comentario, dificuldade
+            )
+
+        await interaction.response.send_message(
+            "**Avaliação — 1/3: Nota do jogo**\nQuanto você gostou deste jogo? Escolha uma nota de 1 a 10.",
+            view=NotaJogoView(
+                concluir, "Na sua experiência, qual foi a dificuldade para conquistar esta platina?"
+            ), ephemeral=True,
         )
 
     async def on_error(self, interaction: discord.Interaction, error: Exception):
