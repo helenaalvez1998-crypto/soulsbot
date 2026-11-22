@@ -2,12 +2,84 @@
 from __future__ import annotations
 
 import discord
+import logging
 from discord import app_commands
 from discord.ext import commands
 
 import config
 from levels import nivel_por_xp, patente_por_nivel, barra_progresso
 from painel_navegacao import adicionar_botao_voltar, view_so_com_voltar
+
+log = logging.getLogger("cogs.painel_membros")
+
+
+class FecharPainelNaraButton(discord.ui.Button):
+    """Fecha apenas a interface efêmera atual, sem apagar dados ou cancelar registros."""
+
+    def __init__(self, user_id: int, row: int = 4):
+        super().__init__(label="Fechar painel", emoji="✖️", style=discord.ButtonStyle.secondary, row=row)
+        self.user_id = int(user_id)
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message(
+                "Este painel pertence a outro membro. Abra `/nara` para acessar o seu.", ephemeral=True
+            )
+        await interaction.response.edit_message(
+            content="Central fechada. Quando quiser voltar, use `/nara`.",
+            embed=None,
+            attachments=[],
+            view=None,
+        )
+
+
+def adicionar_fechar_nara(view: discord.ui.View | None, user_id: int) -> discord.ui.View | None:
+    """Adiciona um fechamento seguro sem remover controles funcionais existentes."""
+    if view is None or any(isinstance(item, FecharPainelNaraButton) for item in view.children):
+        return view
+    if len(view.children) >= 25:
+        return view
+    try:
+        view.add_item(FecharPainelNaraButton(user_id))
+    except ValueError:
+        # Uma linha pode estar cheia mesmo quando ainda há espaço global na View.
+        try:
+            view.add_item(FecharPainelNaraButton(user_id, row=3))
+        except ValueError:
+            log.debug("Não foi possível encaixar o botão Fechar sem deslocar controles existentes.")
+    return view
+
+
+async def _marcar_painel_nara_expirado(view: discord.ui.View) -> None:
+    """Mantém a mensagem visível, desativa controles e informa como reabrir a central."""
+    for item in view.children:
+        if hasattr(item, "disabled"):
+            item.disabled = True
+    mensagem = getattr(view, "_nara_message", None)
+    if mensagem is None:
+        return
+    try:
+        embeds = getattr(mensagem, "embeds", []) or []
+        if embeds:
+            embed = embeds[0].copy()
+            footer = embed.footer.text or "NARA"
+            embed.set_footer(text=f"{footer} · Sessão encerrada; use /nara para reabrir"[:2048])
+            await mensagem.edit(embed=embed, view=view)
+        else:
+            await mensagem.edit(content="Esta sessão terminou. Use `/nara` para abrir uma nova.", view=view)
+    except (discord.HTTPException, AttributeError):
+        log.debug("Não foi possível atualizar a mensagem expirada da Nara.", exc_info=True)
+
+
+def _view_com_navegacao_nara(view: discord.ui.View, callback_voltar, user_id: int, mensagem=None):
+    # Alguns painéis já possuem um botão de retorno próprio e contextual.
+    # Evita duplicar a navegação e apresentar dois botões que parecem iguais.
+    if callback_voltar is not None and not getattr(view, "_nara_has_return", False):
+        adicionar_botao_voltar(view, callback_voltar)
+    adicionar_fechar_nara(view, user_id)
+    if mensagem is not None:
+        view._nara_message = mensagem
+    return view
 
 
 class RemoverZeradoModal(discord.ui.Modal, title="Remover registro de jogo zerado"):
@@ -34,26 +106,26 @@ class RemoverZeradoModal(discord.ui.Modal, title="Remover registro de jogo zerad
 
 
 GUIA_MEMBROS = {
-    "jogos": ("🎮 Minha biblioteca", "**Platinas:** consulte suas conquistas e registros aprovados.\n**Zerados:** registre e consulte seus jogos concluídos.\n**Runs e desafios:** acesse seus registros, tempos e recordes."),
-    "progresso": ("🛡️ Nível e recompensas", "**Meu nível e XP:** consulte sua patente, experiência acumulada e progresso.\n**Ranking de XP:** compare a experiência dos membros.\n**Loja de recompensas:** consulte itens disponíveis e use seus Denários nas opções oferecidas."),
-    "ajuda": ("🧠 Preferências e suporte", "**Minha memória na Nara:** acesse as opções de memória pessoal da assistente.\n**Ajuda e tutoriais:** encontre instruções para os recursos da comunidade.\n**Dica:** os botões abrem respostas privadas; você pode voltar ao painel para escolher outra função."),
-    "perfil": ("👤 Meu perfil", "**Meu perfil:** consulte sua patente, nível, XP, Denários, quantidade de platinas e jogos zerados, além das posições nos rankings."),
-    "santuario": ("🏛️ Meu Santuário", "**Meu Santuário:** crie ou abra seu espaço pessoal, personalize sua apresentação, configure redes e consulte sua galeria de platinas."),
+    "jogos": ("🎮 Começar pelos jogos", "**Minha biblioteca:** registre e consulte platinas, zerados e runs.\n**Meus registros:** acompanhe aprovações e corrija envios rejeitados.\n**Ports & Mods:** explore o catálogo da comunidade."),
+    "coliseu": ("⚔️ Como funciona o Coliseu", "Seu deck inicial aparece na própria central. Abra **Meu deck** para ver cartas, editar sua formação, personalizar artes e desafiar um membro online."),
+    "progresso": ("🏆 Progresso e recompensas", "Consulte nível, patente, XP e ranking. Os Denários ficam na carteira e podem ser usados na loja e nos pacotes do Coliseu."),
+    "comunidade": ("📡 Participar da comunidade", "Envie lore, teorias, descobertas, guias e propostas. Acompanhe o estado de cada contribuição e responda a pedidos de ajuste."),
 }
 
 
 class GuiaMembrosSelect(discord.ui.Select):
-    def __init__(self):
+    def __init__(self, bot, user_id: int):
+        self.bot = bot
+        self.user_id = int(user_id)
         super().__init__(
             placeholder="Não sabe por onde começar? Escolha um guia...",
             min_values=1,
             max_values=1,
             options=[
-                discord.SelectOption(label="Jogos zerados", value="jogos", description="Registrar, consultar e excluir registros", emoji="🎮"),
-                discord.SelectOption(label="Nível, XP e loja", value="progresso", description="Progresso, ranking e recompensas", emoji="🛡️"),
-                discord.SelectOption(label="Memória e ajuda", value="ajuda", description="Preferências pessoais e tutoriais", emoji="🧠"),
-                discord.SelectOption(label="Meu perfil", value="perfil", description="Nível, Denários, platinas e rankings", emoji="👤"),
-                discord.SelectOption(label="Meu Santuário", value="santuario", description="Seu espaço pessoal e galeria", emoji="🏛️"),
+                discord.SelectOption(label="Começar pelos jogos", value="jogos", description="Biblioteca, conquistas e registros", emoji="🎮"),
+                discord.SelectOption(label="Entender o Coliseu", value="coliseu", description="Deck, cartas e desafios", emoji="⚔️"),
+                discord.SelectOption(label="Progresso e recompensas", value="progresso", description="Nível, XP, Denários e loja", emoji="🏆"),
+                discord.SelectOption(label="Participar da comunidade", value="comunidade", description="Contribuições e arquivo", emoji="📡"),
             ],
             row=3,
         )
@@ -61,45 +133,38 @@ class GuiaMembrosSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         titulo, descricao = GUIA_MEMBROS[self.values[0]]
         embed = discord.Embed(title=titulo, description=descricao, color=config.COR_OURO)
-        embed.set_footer(text="Volte ao painel anterior para executar a função desejada.")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        embed.set_footer(text="NARA • Orientação rápida · Voltar à central")
+        callback = _retorno_categoria_membro(self.bot, self.user_id, "__inicio__")
+        view = _view_com_navegacao_nara(view_so_com_voltar(callback), callback, self.user_id, interaction.message)
+        await interaction.response.edit_message(embed=embed, view=view)
 
 
 
 MEMBROS_CATEGORIAS = {
     "jogos": {
-        "titulo": "🎮 Ports & Mods",
-        "descricao": "Explore ports de jogos organizados por plataforma e mods relacionados. Pesquise títulos ou envie sugestões para análise da equipe.",
+        "titulo": "🎮 Jogos e biblioteca",
+        "descricao": "Acesse seus registros de platinas, jogos zerados, Runs e desafios. Consulte o que já foi aprovado, acompanhe pendências e explore os catálogos.",
         "acoes": [
-            ("catalogos", "Abrir Ports & Mods", "🎮", discord.ButtonStyle.primary),
+            ("coliseu", "Central de conquistas", "🏛️", discord.ButtonStyle.primary),
+            ("zerados", "Jogos zerados", "✅", discord.ButtonStyle.success),
+            ("meus_registros", "Meus registros", "📬", discord.ButtonStyle.secondary),
+            ("catalogos", "Ports & Mods", "🎮", discord.ButtonStyle.primary),
             ("luatools", "LuaTools — Steam", "🕹️", discord.ButtonStyle.success),
-        ],
-    },
-    "biblioteca": {
-        "titulo": "📚 Minha biblioteca",
-        "descricao": "Acesse suas platinas, jogos zerados e runs. Acompanhe os registros enviados e o resultado da moderação.",
-        "acoes": [
-            ("biblioteca_platinas", "Platinas", "🏆", discord.ButtonStyle.primary),
-            ("coliseu", "Painel de platinas", "⚔️", discord.ButtonStyle.secondary),
-            ("zerados", "Zerados", "✅", discord.ButtonStyle.success),
-            ("biblioteca_runs", "Runs e desafios", "⚔️", discord.ButtonStyle.danger),
-            ("meus_registros", "Meus registros e aprovações", "📬", discord.ButtonStyle.secondary),
-            ("remover_zerado", "Remover zerado", "🗑️", discord.ButtonStyle.secondary),
+            ("remover_zerado", "Remover jogo zerado", "🗑️", discord.ButtonStyle.secondary),
         ],
     },
     "progresso": {
         "titulo": "🏆 Meu progresso e recompensas",
-        "descricao": "Consulte seu nível, compare seu XP, utilize seus Denários e entre no Coliseu de Cartas.",
+        "descricao": "Veja sua patente, nível, XP e ranking. Use Denários na loja e nos recursos do Coliseu.",
         "acoes": [
             ("nivel", "Meu nível e XP", "🛡️", discord.ButtonStyle.primary),
             ("ranking_xp", "Ranking de XP", "🏆", discord.ButtonStyle.secondary),
             ("loja", "Loja de recompensas", "🪙", discord.ButtonStyle.success),
-            ("cartas_coliseu", "Coliseu de cartas", "⚔️", discord.ButtonStyle.danger),
         ],
     },
     "preferencias": {
         "titulo": "🧠 Minhas preferências",
-        "descricao": "Configure suas notificações e opções pessoais da Nara.",
+        "descricao": "Ajuste como a Nara conversa com você e escolha quais avisos deseja receber.",
         "acoes": [
             ("memoria", "Memória da Nara", "🧠", discord.ButtonStyle.secondary),
             ("notificacoes", "Notificações", "🔔", discord.ButtonStyle.primary),
@@ -107,22 +172,19 @@ MEMBROS_CATEGORIAS = {
     },
     "ajuda": {
         "titulo": "❔ Ajuda e suporte",
-        "descricao": "Encontre orientações para usar os recursos da comunidade.",
+        "descricao": "Encontre orientações rápidas e suporte para usar os recursos do SoulsBot.",
         "acoes": [
-            ("ajuda", "Abrir central de ajuda", "📖", discord.ButtonStyle.primary),
+            ("ajuda", "Central de ajuda", "📖", discord.ButtonStyle.primary),
             ("tutorial_transmissao", "Como transmitir a tela", "📺", discord.ButtonStyle.success),
         ],
     },
     "comunidade": {
         "titulo": "📡 Comunidade e contribuições",
-        "descricao": "Participe da comunidade, publique Lore e Teorias, envie guias e acompanhe suas contribuições. Tudo passa por revisão humana antes da publicação.",
+        "descricao": "Envie ideias, acompanhe suas propostas, explore o Arquivo de Mundos e gerencie favoritos.",
         "acoes": [
-            ("community_home", "Central de Contribuições", "💡", discord.ButtonStyle.primary),
+            ("community_home", "Central de contribuições", "💡", discord.ButtonStyle.primary),
             ("community_archive", "Arquivo de Mundos", "📚", discord.ButtonStyle.secondary),
             ("community_mine", "Minhas contribuições", "🗂️", discord.ButtonStyle.secondary),
-            ("ajuda", "Central de ajuda", "📖", discord.ButtonStyle.secondary),
-            ("perfil", "Meu perfil e atividade", "👤", discord.ButtonStyle.secondary),
-            ("santuario", "Meu Santuário", "🏛️", discord.ButtonStyle.success),
         ],
     },
 }
@@ -132,34 +194,101 @@ def _embed_categoria_membro(categoria: str) -> discord.Embed:
     dados = MEMBROS_CATEGORIAS[categoria]
     embed = discord.Embed(
         title=dados["titulo"],
-        description=dados["descricao"] + "\n\nEscolha uma ação. O resultado será privado; eu cuido da navegação para você não precisar caçar botão.",
+        description=dados["descricao"] + "\n\nEscolha uma opção. Você pode voltar à central a qualquer momento.",
         color=config.COR_OURO,
     )
-    embed.set_footer(text="NARA • Use 'Voltar à central' para escolher outra categoria")
+    embed.set_footer(text="NARA • Painel privado · Voltar à central a qualquer momento")
     return embed
+
+
+async def _montar_embed_central_nara(bot: commands.Bot, user_id: int):
+    """Monta a central inicial de forma concisa e com a prévia do deck do membro."""
+    db = bot.db
+    user = await db.get_user(int(user_id))
+    xp = int(user["xp"] or 0)
+    nivel_atual = nivel_por_xp(xp)
+    platinas = await db.contar_platinas(int(user_id))
+    zerados = await db.contar_zerados(int(user_id))
+    stats_runs = await db.stats_runs(int(user_id))
+    analytics = await db.estatisticas_gamer(int(user_id))
+    pendentes = await db.registros_pendentes_usuario(int(user_id))
+
+    embed = discord.Embed(
+        title="🌙 NARA — SUA CENTRAL",
+        description=(
+            "Sua jornada em um só lugar. Consulte seu progresso, veja seu deck e acesse as atividades sem precisar memorizar comandos. Os painéis são privados e você pode voltar ou fechar quando quiser."
+        ),
+        color=config.COR_OURO,
+    )
+    embed.add_field(
+        name="🛡️ Seu progresso",
+        value=(
+            f"**Nível {nivel_atual} · {patente_por_nivel(nivel_atual)}**\n"
+            f"{barra_progresso(xp)}\n"
+            f"🏆 {platinas} platinas · ✅ {zerados} zerados · ⚔️ {stats_runs['runs']} runs"
+        ),
+        inline=False,
+    )
+    economia = f"🪙 **{int(user['denarios'] or 0)} Denários**"
+    if analytics.get("media_nota") is not None:
+        economia += f" · ⭐ **{analytics['media_nota']:.1f}/10** em {analytics['qtd_notas']} avaliações"
+    embed.add_field(name="Sua conta", value=economia, inline=True)
+    if pendentes:
+        embed.add_field(
+            name="📬 Há atualizações nos seus registros",
+            value=f"Você tem **{pendentes}** registro(s) aguardando moderação. Consulte **Minha biblioteca → Meus registros**.",
+            inline=True,
+        )
+
+    deck_file = None
+    coliseu = bot.get_cog("ColiseuCartas") if hasattr(bot, "get_cog") else None
+    if coliseu is not None:
+        try:
+            deck = await coliseu.preparar_deck_inicial(int(user_id))
+            if deck:
+                from sistemas.arte_cartas import render_deck_preview_bytes
+                deck_file = discord.File(render_deck_preview_bytes(deck), filename="meu_deck.png")
+                custo_deck = sum(int(c.get("custo", 0) or 0) for c in deck)
+                poder_deck = sum(int(c.get("poder", 0) or 0) for c in deck)
+                raridades = {str(c.get("raridade", "Comum")) for c in deck}
+                embed.add_field(
+                    name="🃏 Seu deck está pronto",
+                    value=(
+                        f"**{len(deck)}/5 cartas** · custo **{custo_deck}/12** · poder-base **{poder_deck}**\n"
+                        f"Raridades no deck: {', '.join(sorted(raridades)) or '—'}\n"
+                        "Sua formação aparece abaixo. Em **Meu deck**, você pode editar, abrir pacotes, personalizar artes ou desafiar alguém online."
+                    ),
+                    inline=False,
+                )
+                embed.set_image(url="attachment://meu_deck.png")
+            else:
+                embed.add_field(
+                    name="🃏 Prepare seu primeiro deck",
+                    value="Abra **Meu deck** para receber sua formação inicial e conhecer a coleção.",
+                    inline=False,
+                )
+        except Exception:
+            log.exception("Não foi possível montar a prévia do deck na central /nara para user=%s", user_id)
+            embed.add_field(name="🃏 Seu deck", value="Sua coleção está disponível no botão **Meu deck** abaixo.", inline=False)
+
+    embed.set_footer(text="NARA • Painel privado · Voltar retorna uma etapa; Fechar encerra esta sessão")
+    return embed, deck_file
 
 
 def _retorno_categoria_membro(bot: commands.Bot, user_id: int, categoria: str):
     async def voltar(interaction: discord.Interaction):
         if categoria == "__inicio__":
-            embed = discord.Embed(
-                title="🌙 NARA — CENTRAL DO MEMBRO",
-                description=(
-                    "**Bem-vindo à sua central NARA.**\n\n"
-                    "Escolha uma categoria. Eu organizo os caminhos; você fica com a parte interessante.\n"
-                    "🎮 **Ports & Mods** · 📚 **Minha biblioteca** · 🏆 **Meu progresso**\n"
-                    "🧠 **Preferências** · 📡 **Comunidade** · ❔ **Ajuda e suporte**\n\n"
-                    "🔒 Esta central é privada e só pode ser utilizada por você."
-                ),
-                color=config.COR_OURO,
-            )
-            embed.set_footer(text="NARA • Central de acesso dos membros")
-            await interaction.response.edit_message(embed=embed, view=PainelMembrosView(bot, user_id))
+            embed, deck_file = await _montar_embed_central_nara(bot, user_id)
+            view = PainelMembrosView(bot, user_id)
+            view._nara_message = interaction.message
+            if deck_file:
+                await interaction.response.edit_message(embed=embed, attachments=[deck_file], view=view)
+            else:
+                await interaction.response.edit_message(embed=embed, attachments=[], view=view)
             return
-        await interaction.response.edit_message(
-            embed=_embed_categoria_membro(categoria),
-            view=MembrosCategoriaView(bot, user_id, categoria),
-        )
+        view = MembrosCategoriaView(bot, user_id, categoria)
+        view._nara_message = interaction.message
+        await interaction.response.edit_message(embed=_embed_categoria_membro(categoria), view=view)
     return voltar
 
 
@@ -183,8 +312,8 @@ def luatools_embed() -> discord.Embed:
 
 
 class LuaToolsLinksView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
+    def __init__(self, callback_voltar=None):
+        super().__init__(timeout=600 if callback_voltar else None)
         self.add_item(discord.ui.Button(
             label="Baixar LuaTools v1.3.2", emoji="⬇️",
             style=discord.ButtonStyle.link, url=LUATOOLS_DOWNLOAD_URL,
@@ -193,6 +322,8 @@ class LuaToolsLinksView(discord.ui.View):
             label="Assistir ao tutorial", emoji="📹",
             style=discord.ButtonStyle.link, url=LUATOOLS_TUTORIAL_URL,
         ))
+        if callback_voltar:
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar à categoria", emoji="↩️")
 
 
 def tutorial_transmissao_embed() -> discord.Embed:
@@ -246,7 +377,10 @@ class MeusRegistrosSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         nova_view = MeusRegistrosView(
-            self.parent_view.bot, self.parent_view.user_id, self.values[0]
+            self.parent_view.bot,
+            self.parent_view.user_id,
+            self.values[0],
+            callback_voltar=self.parent_view.callback_voltar,
         )
         embed = await nova_view.criar_embed()
         await interaction.response.edit_message(embed=embed, view=nova_view)
@@ -321,6 +455,7 @@ class CorrigirRegistroSelect(discord.ui.Select):
                 cog, row["game_id"], row["challenge_id"],
                 tempo_padrao=row["seconds"], build_padrao=row["build"],
                 motivo_rejeicao=row["reject_reason"],
+                callback_voltar=self.parent_view.callback_voltar,
             ))
             return
 
@@ -348,9 +483,10 @@ class MeusRegistrosView(discord.ui.View):
         "invalidated": "⚠️ Invalidado",
     }
 
-    def __init__(self, bot: commands.Bot, user_id: int, filtro: str = "all"):
+    def __init__(self, bot: commands.Bot, user_id: int, filtro: str = "all", callback_voltar=None):
         super().__init__(timeout=600)
         self.bot, self.user_id, self.filtro = bot, int(user_id), filtro
+        self.callback_voltar = callback_voltar
         self.registros_rejeitados = []
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -367,7 +503,11 @@ class MeusRegistrosView(discord.ui.View):
         self.add_item(MeusRegistrosSelect(self))
         if self.registros_rejeitados:
             self.add_item(CorrigirRegistroSelect(self, self.registros_rejeitados))
-        self.add_item(MembrosVoltarButton(self.bot, self.user_id))
+        if self.callback_voltar:
+            adicionar_botao_voltar(self, self.callback_voltar, label="Voltar à biblioteca", emoji="↩️")
+        else:
+            self.add_item(MembrosVoltarButton(self.bot, self.user_id))
+        adicionar_fechar_nara(self, self.user_id)
         visiveis = [r for r in rows if self.filtro == "all" or str(r["status"]) == self.filtro]
         counts = {key: int(resumo.get(key, 0)) for key in ("pending", "approved", "rejected", "invalidated")}
         embed = discord.Embed(
@@ -410,7 +550,7 @@ class NotificacaoToggleButton(discord.ui.Button):
         "challenges": ("Desafios e participantes", "⚔️"),
     }
 
-    def __init__(self, bot, guild_id: int, user_id: int, key: str, enabled: bool, row: int):
+    def __init__(self, bot, guild_id: int, user_id: int, key: str, enabled: bool, row: int, callback_voltar=None):
         label, emoji = self.LABELS[key]
         super().__init__(
             label=f"{label}: {'ON' if enabled else 'OFF'}",
@@ -419,28 +559,35 @@ class NotificacaoToggleButton(discord.ui.Button):
             row=row,
         )
         self.bot, self.guild_id, self.user_id, self.key = bot, int(guild_id), int(user_id), key
+        self.callback_voltar = callback_voltar
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
             return await interaction.response.send_message("Estas preferências pertencem a outro membro.", ephemeral=True)
         prefs = await self.bot.db.get_preferencias_notificacao(self.guild_id, self.user_id)
         await self.bot.db.definir_preferencia_notificacao(self.guild_id, self.user_id, self.key, not prefs[self.key])
-        view = await NotificacoesView.criar(self.bot, self.guild_id, self.user_id)
+        view = await NotificacoesView.criar(self.bot, self.guild_id, self.user_id, callback_voltar=self.callback_voltar)
+        view._nara_message = interaction.message
         await interaction.response.edit_message(view=view)
 
 
 class NotificacoesView(discord.ui.View):
-    def __init__(self, bot, guild_id: int, user_id: int, prefs: dict):
+    def __init__(self, bot, guild_id: int, user_id: int, prefs: dict, callback_voltar=None):
         super().__init__(timeout=600)
         self.bot, self.guild_id, self.user_id = bot, int(guild_id), int(user_id)
+        self.callback_voltar = callback_voltar
         for i, key in enumerate(NotificacaoToggleButton.LABELS):
-            self.add_item(NotificacaoToggleButton(bot, guild_id, user_id, key, bool(prefs.get(key, True)), row=i // 3))
-        self.add_item(MembrosVoltarButton(bot, user_id))
+            self.add_item(NotificacaoToggleButton(bot, guild_id, user_id, key, bool(prefs.get(key, True)), row=i // 3, callback_voltar=callback_voltar))
+        if callback_voltar:
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar às preferências", emoji="↩️")
+        else:
+            self.add_item(MembrosVoltarButton(bot, user_id))
+        adicionar_fechar_nara(self, user_id)
 
     @classmethod
-    async def criar(cls, bot, guild_id: int, user_id: int):
+    async def criar(cls, bot, guild_id: int, user_id: int, callback_voltar=None):
         prefs = await bot.db.get_preferencias_notificacao(guild_id, user_id)
-        return cls(bot, guild_id, user_id, prefs)
+        return cls(bot, guild_id, user_id, prefs, callback_voltar=callback_voltar)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user_id:
@@ -460,11 +607,11 @@ async def _executar_acao_membro(
     """Encaminha a ação do painel para o módulo original, sem duplicar regras de negócio."""
     voltar = (
         _retorno_categoria_membro(bot, user_id or interaction.user.id, categoria)
-        if categoria in MEMBROS_CATEGORIAS else None
+        if categoria in MEMBROS_CATEGORIAS or categoria == "__inicio__" else None
     )
 
     def com_voltar(view):
-        return adicionar_botao_voltar(view, voltar)
+        return _view_com_navegacao_nara(view, voltar, user_id or interaction.user.id, interaction.message)
 
     if action == "coliseu":
         cog = bot.get_cog("Platinas")
@@ -472,6 +619,7 @@ async def _executar_acao_membro(
             return await interaction.response.send_message("O Coliseu está indisponível no momento. Tente novamente mais tarde.", ephemeral=True)
         from cogs.platinas import ColiseuView
         view = ColiseuView(cog, interaction.user, back_callback=voltar)
+        _view_com_navegacao_nara(view, voltar, interaction.user.id, interaction.message)
         return await interaction.response.edit_message(content=view.texto(), embed=None, view=view)
 
     if action == "biblioteca_platinas":
@@ -479,7 +627,7 @@ async def _executar_acao_membro(
         if cog is None:
             return await interaction.response.send_message("O painel de platinas está indisponível no momento.", ephemeral=True)
         from cogs.platinas import PainelView
-        view = PainelView(cog, interaction.user)
+        view = PainelView(cog, interaction.user, callback_voltar=voltar)
         return await interaction.response.edit_message(content=None, embed=await view.embed(), view=com_voltar(view))
 
     if action == "biblioteca_runs":
@@ -487,14 +635,14 @@ async def _executar_acao_membro(
         if cog is None:
             return await interaction.response.send_message("O painel de runs e desafios está indisponível no momento.", ephemeral=True)
         from cogs.soulslike import CentralView
-        view = CentralView(cog)
+        view = CentralView(cog, callback_voltar=voltar, user_id=interaction.user.id)
         return await interaction.response.edit_message(content=cog.texto_central(), embeds=[], view=com_voltar(view))
 
     if action == "zerados":
         cog = bot.get_cog("Zerados")
         if cog is None:
             return await interaction.response.send_message("O painel de jogos zerados está indisponível no momento.", ephemeral=True)
-        view = cog.painel_view(interaction.user)
+        view = cog.painel_view(interaction.user, callback_voltar=voltar)
         return await interaction.response.edit_message(content=None, embed=await view.embed(), view=com_voltar(view))
 
     if action == "remover_zerado":
@@ -504,7 +652,8 @@ async def _executar_acao_membro(
         return await interaction.response.send_modal(RemoverZeradoModal(cog, callback_voltar=voltar))
 
     if action == "meus_registros":
-        view = MeusRegistrosView(bot, interaction.user.id)
+        view = MeusRegistrosView(bot, interaction.user.id, callback_voltar=voltar)
+        view._nara_message = interaction.message
         return await interaction.response.edit_message(
             content=None, embed=await view.criar_embed(), view=view,
         )
@@ -512,7 +661,8 @@ async def _executar_acao_membro(
     if action == "notificacoes":
         if interaction.guild_id is None:
             return await interaction.response.send_message("Abra as preferências dentro do servidor.", ephemeral=True)
-        view = await NotificacoesView.criar(bot, interaction.guild_id, interaction.user.id)
+        view = await NotificacoesView.criar(bot, interaction.guild_id, interaction.user.id, callback_voltar=voltar)
+        view._nara_message = interaction.message
         return await interaction.response.edit_message(
             content=(
                 "🔔 **Notificações pessoais**\n"
@@ -528,6 +678,7 @@ async def _executar_acao_membro(
         from cogs.loja import LojaView
         view = LojaView(cog, interaction.user)
         await view.carregar()
+        com_voltar(view)
         return await interaction.response.edit_message(content=None, embed=view.embed(), view=view)
 
     if action == "nivel":
@@ -543,7 +694,7 @@ async def _executar_acao_membro(
         embed.add_field(name="Nível", value=str(nivel_atual), inline=True)
         embed.add_field(name="XP total", value=f"{xp:,}", inline=True)
         embed.add_field(name="Progresso", value=barra_progresso(xp), inline=False)
-        return await interaction.response.edit_message(embed=embed, content=None, view=view_so_com_voltar(voltar))
+        return await interaction.response.edit_message(embed=embed, content=None, view=_view_com_navegacao_nara(view_so_com_voltar(voltar), voltar, interaction.user.id, interaction.message))
 
     if action == "ranking_xp":
         cog = bot.get_cog("ProgressaoXP")
@@ -551,7 +702,7 @@ async def _executar_acao_membro(
             return await interaction.response.send_message("O ranking de XP está indisponível no momento.", ephemeral=True)
         rows = await bot.db.ranking_xp(10)
         if not rows:
-            return await interaction.response.edit_message(content="Ainda não há XP registrado para montar o ranking.", embed=None, view=view_so_com_voltar(voltar))
+            return await interaction.response.edit_message(content="Ainda não há XP registrado para montar o ranking.", embed=None, view=_view_com_navegacao_nara(view_so_com_voltar(voltar), voltar, interaction.user.id, interaction.message))
         linhas = []
         for i, row in enumerate(rows, 1):
             nivel_atual = nivel_por_xp(int(row["valor"]))
@@ -562,26 +713,26 @@ async def _executar_acao_membro(
         return await interaction.response.edit_message(
             content="## 🏆 Ranking de XP da NARA\n\n" + "\n".join(linhas),
             embed=None,
-            view=view_so_com_voltar(voltar),
+            view=_view_com_navegacao_nara(view_so_com_voltar(voltar), voltar, interaction.user.id, interaction.message),
         )
 
     if action == "cartas_coliseu":
         cog = bot.get_cog("ColiseuCartas")
         if cog is None:
             return await interaction.response.send_message("O Coliseu de cartas está indisponível no momento.", ephemeral=True)
-        return await cog.abrir_painel(interaction, editar=True)
+        return await cog.abrir_painel(interaction, editar=True, callback_voltar=voltar)
 
     if action == "memoria":
         cog = bot.get_cog("NaraIA")
         if cog is None:
             return await interaction.response.send_message("As preferências de memória estão indisponíveis no momento.", ephemeral=True)
-        return await type(cog).nara_memoria.callback(cog, interaction)
+        return await cog.abrir_painel_memoria(interaction, callback_voltar=voltar)
 
     if action == "ajuda":
         cog = bot.get_cog("NaraIA")
         if cog is None:
             return await interaction.response.send_message("A Central de Ajuda está indisponível no momento.", ephemeral=True)
-        return await type(cog).central_ajuda_command.callback(cog, interaction)
+        return await cog.abrir_central_ajuda(interaction, callback_voltar=voltar)
 
     if action == "perfil":
         cog = bot.get_cog("Perfil")
@@ -591,30 +742,30 @@ async def _executar_acao_membro(
             return await interaction.response.send_message("Não consegui identificar seu perfil neste servidor.", ephemeral=True)
         embed = await cog.embed_perfil(interaction.user)
         embed.set_footer(text="NARA • Seu perfil pessoal")
-        return await interaction.response.edit_message(embed=embed, content=None, view=view_so_com_voltar(voltar))
+        return await interaction.response.edit_message(embed=embed, content=None, view=_view_com_navegacao_nara(view_so_com_voltar(voltar), voltar, interaction.user.id, interaction.message))
 
     if action == "santuario":
         cog = bot.get_cog("Santuario")
         if cog is None:
             return await interaction.response.send_message("Seu Santuário está indisponível no momento.", ephemeral=True)
-        return await cog.abrir_meu(interaction)
+        return await cog.abrir_meu(interaction, callback_voltar=voltar)
 
     if action == "catalogos":
         cog = bot.get_cog("CatalogoIntegrado")
         if cog is None:
             return await interaction.response.send_message("O catálogo Ports & Mods ainda não está disponível.", ephemeral=True)
-        return await cog.abrir_membros(interaction)
+        return await cog.abrir_membros(interaction, callback_voltar=voltar)
 
     if action == "luatools":
         return await interaction.response.edit_message(
-            content=None, embed=luatools_embed(), view=LuaToolsLinksView()
+            content=None, embed=luatools_embed(), view=LuaToolsLinksView(callback_voltar=voltar)
         )
 
     if action == "tutorial_transmissao":
         return await interaction.response.edit_message(
             content=None,
             embed=tutorial_transmissao_embed(),
-            view=view_so_com_voltar(voltar),
+            view=_view_com_navegacao_nara(view_so_com_voltar(voltar), voltar, interaction.user.id, interaction.message),
         )
 
     if action in ("community_home", "community_archive", "community_mine"):
@@ -622,16 +773,18 @@ async def _executar_acao_membro(
         if cog is None:
             return await interaction.response.send_message("O sistema de contribuições está indisponível no momento.", ephemeral=True)
         if action == "community_archive":
-            return await cog.mostrar_arquivo(interaction)
+            return await cog.mostrar_arquivo(interaction, callback_voltar=voltar)
         if action == "community_mine":
-            return await cog.mostrar_minhas(interaction)
+            return await cog.mostrar_minhas(interaction, callback_voltar=voltar)
         from cogs.comunidade import CommunityHomeView
         embed = discord.Embed(
             title="💡 Contribuições da Comunidade",
             description="Publique lore, teorias, descobertas, guias, tutoriais e propostas para o NARA. Todos os envios passam por aprovação humana antes de aparecerem nos canais oficiais.",
             color=config.COR_OURO,
         )
-        return await interaction.response.edit_message(content=None, embed=embed, view=CommunityHomeView(cog))
+        view = CommunityHomeView(cog, callback_voltar=voltar)
+        _view_com_navegacao_nara(view, voltar, interaction.user.id, interaction.message)
+        return await interaction.response.edit_message(content=None, embed=embed, view=view)
 
     return await interaction.response.send_message("Esta opção ainda não está disponível. Volte à central e escolha outra categoria.", ephemeral=True)
 
@@ -653,24 +806,15 @@ class MembrosVoltarButton(discord.ui.Button):
         self.user_id = user_id
 
     async def callback(self, interaction: discord.Interaction):
-        embed = discord.Embed(
-            title="🌙 NARA — CENTRAL DO MEMBRO",
-            description=(
-                "**Bem-vindo à sua central de recursos.**\n\n"
-                "Escolha uma categoria para encontrar a função desejada:\n"
-                "🎮 **Ports & Mods:** explore ports de jogos e mods da comunidade.\n"
-                "📚 **Minha biblioteca:** Platinas, Zerados e Runs e desafios.\n"
-                "🏆 **Meu progresso:** nível, XP, ranking e Loja.\n"
-                "👤 **Meu perfil:** estatísticas, patente e rankings pessoais.\n"
-                "🏛️ **Meu Santuário:** espaço pessoal e galeria de platinas.\n"
-                "🧠 **Preferências:** opções pessoais da Nara.\n"
-                "❔ **Ajuda e suporte:** tutoriais e orientações.\n\n"
-                "🔒 Esta central é privada e só pode ser utilizada por você."
-            ),
-            color=config.COR_OURO,
-        )
-        embed.set_footer(text="NARA • Central de acesso dos membros")
-        await interaction.response.edit_message(embed=embed, view=PainelMembrosView(self.bot, self.user_id))
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("Este painel pertence a outro membro.", ephemeral=True)
+        embed, deck_file = await _montar_embed_central_nara(self.bot, self.user_id)
+        view = PainelMembrosView(self.bot, self.user_id)
+        view._nara_message = interaction.message
+        if deck_file:
+            await interaction.response.edit_message(embed=embed, attachments=[deck_file], view=view)
+        else:
+            await interaction.response.edit_message(embed=embed, attachments=[], view=view)
 
 
 class MembrosCategoriaView(discord.ui.View):
@@ -683,6 +827,7 @@ class MembrosCategoriaView(discord.ui.View):
         for index, (action, label, emoji, style) in enumerate(dados["acoes"]):
             self.add_item(MembrosAcaoButton(self, action, label, emoji, style, row=index // 2))
         self.add_item(MembrosVoltarButton(bot, user_id))
+        adicionar_fechar_nara(self, user_id)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user_id:
@@ -691,12 +836,7 @@ class MembrosCategoriaView(discord.ui.View):
         return True
 
     async def on_timeout(self) -> None:
-        mensagem = getattr(self, "message", None)
-        if mensagem is not None:
-            try:
-                await mensagem.delete()
-            except discord.HTTPException:
-                pass
+        await _marcar_painel_nara_expirado(self)
 
 
 class MembrosAcessoDiretoButton(discord.ui.Button):
@@ -719,14 +859,13 @@ class MembrosCategoriaButton(discord.ui.Button):
         dados = MEMBROS_CATEGORIAS[self.categoria]
         embed = discord.Embed(
             title=dados["titulo"],
-            description=dados["descricao"] + "\n\nEscolha uma ação. O resultado será privado; eu cuido da navegação para você não precisar caçar botão.",
+            description=dados["descricao"] + "\n\nEscolha uma opção. Você pode voltar à central a qualquer momento.",
             color=config.COR_OURO,
         )
-        embed.set_footer(text="NARA • Use 'Voltar à central' para escolher outra categoria")
-        await interaction.response.edit_message(
-            embed=embed,
-            view=MembrosCategoriaView(self.painel.bot, self.painel.user_id, self.categoria),
-        )
+        embed.set_footer(text="NARA • Painel privado · Voltar à central a qualquer momento")
+        view = MembrosCategoriaView(self.painel.bot, self.painel.user_id, self.categoria)
+        view._nara_message = interaction.message
+        await interaction.response.edit_message(embed=embed, view=view)
 
 
 class PainelMembrosView(discord.ui.View):
@@ -737,18 +876,19 @@ class PainelMembrosView(discord.ui.View):
         self.bot = bot
         self.user_id = user_id
         categorias = [
-            ("jogos", "Ports & Mods", "🎮"),
-            ("biblioteca", "Minha biblioteca", "📚"),
+            ("jogos", "Jogos e biblioteca", "🎮"),
             ("progresso", "Meu progresso", "🏆"),
+            ("comunidade", "Comunidade", "📡"),
             ("preferencias", "Preferências", "🧠"),
             ("ajuda", "Ajuda e suporte", "❔"),
-            ("comunidade", "Comunidade", "📡"),
         ]
         for index, (key, label, emoji) in enumerate(categorias):
             self.add_item(MembrosCategoriaButton(self, key, label, emoji, row=index // 3))
+        self.add_item(MembrosAcessoDiretoButton(self, "cartas_coliseu", "Meu deck", "🃏", discord.ButtonStyle.success))
         self.add_item(MembrosAcessoDiretoButton(self, "perfil", "Meu perfil", "👤", discord.ButtonStyle.secondary))
-        self.add_item(MembrosAcessoDiretoButton(self, "santuario", "Meu Santuário", "🏛️", discord.ButtonStyle.success))
-        self.add_item(GuiaMembrosSelect())
+        self.add_item(MembrosAcessoDiretoButton(self, "santuario", "Meu Santuário", "🏛️", discord.ButtonStyle.secondary))
+        self.add_item(GuiaMembrosSelect(bot, user_id))
+        adicionar_fechar_nara(self, user_id)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user_id:
@@ -760,12 +900,7 @@ class PainelMembrosView(discord.ui.View):
         return True
 
     async def on_timeout(self) -> None:
-        mensagem = getattr(self, "message", None)
-        if mensagem is not None:
-            try:
-                await mensagem.delete()
-            except discord.HTTPException:
-                pass
+        await _marcar_painel_nara_expirado(self)
 
 
 class PainelMembros(commands.Cog):
@@ -775,49 +910,16 @@ class PainelMembros(commands.Cog):
     @app_commands.command(name="nara", description="Abra sua central de Ports & Mods, biblioteca, progresso, recompensas e suporte.")
     @app_commands.guild_only()
     async def nara(self, interaction: discord.Interaction):
-        db = self.bot.db
-        user = await db.get_user(interaction.user.id)
-        xp = int(user["xp"] or 0)
-        nivel_atual = nivel_por_xp(xp)
-        platinas = await db.contar_platinas(interaction.user.id)
-        zerados = await db.contar_zerados(interaction.user.id)
-        stats = await db.stats_runs(interaction.user.id)
-        analytics = await db.estatisticas_gamer(interaction.user.id)
-        pendentes = await db.registros_pendentes_usuario(interaction.user.id)
-        resumo = (
-            f"**Nível {nivel_atual} · {patente_por_nivel(nivel_atual)}**\n"
-            f"{barra_progresso(xp)}\n"
-            f"🏆 {platinas} platinas · ✅ {zerados} zerados · ⚔️ {stats['runs']} runs aprovadas\n"
-            f"🪙 {int(user['denarios'] or 0)} Denários"
-        )
-        if analytics["media_nota"] is not None:
-            resumo += f" · ⭐ {analytics['media_nota']:.1f}/10 em {analytics['qtd_notas']} avaliações"
-        if pendentes:
-            resumo += f"\n📬 **{pendentes} registro(s) aguardando moderação.**"
-        embed = discord.Embed(
-            title="🌙 NARA — SUA CENTRAL",
-            description=(
-                "**Seu progresso agora**\n" + resumo + "\n\n"
-                "🎮 **Ports & Mods:** explore ports de jogos e mods da comunidade, pesquise e envie sugestões.\n"
-                "📚 **Minha biblioteca:** acesse Platinas, Zerados e Runs e desafios.\n"
-                "🏆 **Meu progresso:** acompanhe nível, XP, ranking, Loja e Coliseu de Cartas.\n"
-                "👤 **Meu perfil:** veja suas estatísticas e posições nos rankings.\n"
-                "🏛️ **Meu Santuário:** personalize seu espaço e galeria de platinas.\n"
-                "🧠 **Preferências:** acesse suas opções pessoais da Nara.\n"
-                "📡 **Comunidade:** acompanhe novidades, contribua com Lore, Teorias e Guias no Arquivo de Mundos.\n"
-                "❔ **Ajuda e suporte:** encontre tutoriais e orientações.\n\n"
-                "**Como usar:** escolha uma categoria para abrir as ações relacionadas. "
-                "Cada submenu explica o que você pode fazer. Não precisa decorar tudo de uma vez.\n\n"
-                "🔒 Este painel é privado: somente você pode utilizá-lo."
-            ),
-            color=config.COR_OURO,
-        )
-        embed.set_footer(text="NARA • Central de acesso dos membros")
-        await interaction.response.send_message(
-            embed=embed,
-            view=PainelMembrosView(self.bot, interaction.user.id),
-            ephemeral=True,
-        )
+        embed, deck_file = await _montar_embed_central_nara(self.bot, interaction.user.id)
+        view = PainelMembrosView(self.bot, interaction.user.id)
+        if deck_file:
+            await interaction.response.send_message(embed=embed, file=deck_file, view=view, ephemeral=True)
+        else:
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        try:
+            view._nara_message = await interaction.original_response()
+        except discord.HTTPException:
+            log.debug("Não consegui anexar a mensagem à View inicial da Nara.", exc_info=True)
 
     @app_commands.command(name="publicar_luatools", description="Publica e fixa o painel do LuaTools em um canal.")
     @app_commands.guild_only()

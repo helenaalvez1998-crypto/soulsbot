@@ -113,8 +113,8 @@ class ModeracaoPainelView(discord.ui.View):
         if interaction.user.id != self.user_id and not await eh_moderador(interaction.user, self.bot.db):
             await interaction.response.send_message("Este painel foi aberto por outro moderador.", ephemeral=True)
             return False
-        if not await eh_moderador(interaction.user, self.bot.db):
-            await interaction.response.send_message("Apenas moderadores podem acessar a Central de Moderação.", ephemeral=True)
+        if not await eh_moderador(interaction.user, self.bot.db) and not await _eh_admin_painel(self.bot, interaction.user):
+            await interaction.response.send_message("Apenas a equipe autorizada pode acessar a Central de Moderação.", ephemeral=True)
             return False
         return True
 
@@ -476,8 +476,9 @@ class DashboardAtualizarButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         from cogs.platinas import eh_moderador
-        if not await eh_moderador(interaction.user, self.bot.db):
-            return await interaction.response.send_message("Acesso restrito à moderação.", ephemeral=True)
+        autorizado = await eh_moderador(interaction.user, self.bot.db) or await _eh_admin_painel(self.bot, interaction.user)
+        if not autorizado:
+            return await interaction.response.send_message("Acesso restrito à equipe autorizada.", ephemeral=True)
         await interaction.response.edit_message(embed=await _embed_dashboard(self.bot, interaction.guild_id), view=self.view)
 
 
@@ -488,9 +489,11 @@ class DashboardHistoricoButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         from cogs.platinas import eh_moderador
-        if not await eh_moderador(interaction.user, self.bot.db):
-            return await interaction.response.send_message("Acesso restrito à moderação.", ephemeral=True)
-        view = HistoricoAuditoriaView(self.bot, interaction.user.id)
+        autorizado = await eh_moderador(interaction.user, self.bot.db) or await _eh_admin_painel(self.bot, interaction.user)
+        if not autorizado:
+            return await interaction.response.send_message("Acesso restrito à equipe autorizada.", ephemeral=True)
+        callback_voltar = getattr(self.view, "callback_voltar", None)
+        view = HistoricoAuditoriaView(self.bot, interaction.user.id, callback_voltar=callback_voltar)
         await interaction.response.edit_message(embed=await view.embed(), view=view)
 
 
@@ -526,17 +529,21 @@ async def _embed_dashboard(bot, guild_id: int):
 
 
 class DashboardOperacionalView(discord.ui.View):
-    def __init__(self, bot, user_id: int):
+    def __init__(self, bot, user_id: int, callback_voltar=None):
         super().__init__(timeout=600)
         self.bot = bot
         self.user_id = user_id
+        self.callback_voltar = callback_voltar
         self.add_item(DashboardAtualizarButton(bot))
         self.add_item(DashboardHistoricoButton(bot))
+        if callback_voltar:
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar à categoria")
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         from cogs.platinas import eh_moderador
-        if interaction.user.id != self.user_id or not await eh_moderador(interaction.user, self.bot.db):
-            await interaction.response.send_message("Este painel é restrito ao moderador que o abriu.", ephemeral=True)
+        autorizado = await eh_moderador(interaction.user, self.bot.db) or await _eh_admin_painel(self.bot, interaction.user)
+        if interaction.user.id != self.user_id or not autorizado:
+            await interaction.response.send_message("Este painel é restrito à pessoa que o abriu e à equipe autorizada.", ephemeral=True)
             return False
         return True
 
@@ -582,6 +589,16 @@ class HistoricoBuscaButton(discord.ui.Button):
         await interaction.response.send_modal(HistoricoBuscaModal(self.view))
 
 
+class HistoricoAtualizarButton(discord.ui.Button):
+    """Atualiza a auditoria sem perder filtro, pesquisa ou página atual."""
+    def __init__(self, view):
+        super().__init__(label="Atualizar", emoji="🔄", style=discord.ButtonStyle.secondary, row=2)
+        self.painel = view
+
+    async def callback(self, interaction: discord.Interaction):
+        await self.painel.atualizar(interaction)
+
+
 class HistoricoPaginaButton(discord.ui.Button):
     def __init__(self, view, delta):
         super().__init__(label="Anterior" if delta < 0 else "Próxima",
@@ -594,12 +611,16 @@ class HistoricoPaginaButton(discord.ui.Button):
 
 
 class HistoricoAuditoriaView(discord.ui.View):
-    def __init__(self, bot, user_id: int):
+    def __init__(self, bot, user_id: int, callback_voltar=None):
         super().__init__(timeout=600)
         self.bot, self.user_id = bot, user_id
+        self.callback_voltar = callback_voltar
         self.filtro, self.termo, self.pagina = "all", "", 0
         self.add_item(HistoricoFiltroSelect(self))
         self.add_item(HistoricoBuscaButton())
+        self.add_item(HistoricoAtualizarButton(self))
+        if callback_voltar:
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar à categoria")
 
     async def _buscar(self):
         where, args = [], []
@@ -647,6 +668,7 @@ class HistoricoAuditoriaView(discord.ui.View):
         self.clear_items()
         self.add_item(HistoricoFiltroSelect(self))
         self.add_item(HistoricoBuscaButton())
+        self.add_item(HistoricoAtualizarButton(self))
         if self.pagina > 0:
             self.add_item(HistoricoPaginaButton(self, -1))
         if (self.pagina + 1) * 10 < len(self.registros):
@@ -659,8 +681,9 @@ class HistoricoAuditoriaView(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         from cogs.platinas import eh_moderador
-        if interaction.user.id != self.user_id or not await eh_moderador(interaction.user, self.bot.db):
-            await interaction.response.send_message("Este histórico é restrito ao moderador que o abriu.", ephemeral=True)
+        autorizado = await eh_moderador(interaction.user, self.bot.db) or await _eh_admin_painel(self.bot, interaction.user)
+        if interaction.user.id != self.user_id or not autorizado:
+            await interaction.response.send_message("Este histórico é restrito à pessoa que o abriu e à equipe autorizada.", ephemeral=True)
             return False
         return True
 
@@ -694,7 +717,8 @@ class PublicarPaineisView(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         from cogs.platinas import eh_moderador
-        if interaction.user.id != self.user_id or not await eh_moderador(interaction.user, self.bot.db):
+        autorizado = await eh_moderador(interaction.user, self.bot.db) or await _eh_admin_painel(self.bot, interaction.user)
+        if interaction.user.id != self.user_id or not autorizado:
             await interaction.response.send_message("Acesso restrito à equipe autorizada.", ephemeral=True)
             return False
         return True
@@ -812,9 +836,10 @@ class PublicarPaineisView(discord.ui.View):
 class AcaoModalSimples(discord.ui.Modal):
     """Formulário genérico: coleta campos de texto e entrega os valores ao callback."""
 
-    def __init__(self, titulo: str, campos: list, executar):
+    def __init__(self, titulo: str, campos: list, executar, callback_voltar=None):
         super().__init__(title=titulo[:45], timeout=300)
         self._executar = executar
+        self.callback_voltar = callback_voltar
         self._campos = []
         for chave, rotulo, obrigatorio, longo, limite, padrao in campos:
             campo = discord.ui.TextInput(
@@ -828,6 +853,12 @@ class AcaoModalSimples(discord.ui.Modal):
         valores = {chave: (campo.value or "").strip() for chave, campo in self._campos}
         try:
             await self._executar(interaction, valores)
+            if self.callback_voltar and interaction.response.is_done():
+                from painel_navegacao import view_so_com_voltar
+                await interaction.followup.send(
+                    "Ação processada. Você pode voltar à categoria administrativa.",
+                    view=view_so_com_voltar(self.callback_voltar), ephemeral=True,
+                )
         except Exception:
             log.exception("Falha ao executar ação administrativa via formulário")
             if not interaction.response.is_done():
@@ -862,7 +893,8 @@ class _ViewDeModerador(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         from cogs.platinas import eh_moderador
-        if interaction.user.id != self.user_id or not await eh_moderador(interaction.user, self.bot.db):
+        autorizado = await eh_moderador(interaction.user, self.bot.db) or await _eh_admin_painel(self.bot, interaction.user)
+        if interaction.user.id != self.user_id or not autorizado:
             await interaction.response.send_message("Acesso restrito à equipe autorizada.", ephemeral=True)
             return False
         return True
@@ -907,8 +939,9 @@ class CargoOpcoesView(_ViewDeModerador):
 
     ROTULOS = {"adicionar": "Adicionar", "editar": "Editar", "remover": "Remover"}
 
-    def __init__(self, bot, user_id: int):
+    def __init__(self, bot, user_id: int, callback_voltar=None):
         super().__init__(bot, user_id)
+        self.callback_voltar = callback_voltar
         self.acao = "adicionar"
         seletor = discord.ui.Select(
             placeholder="1. O que deseja fazer?",
@@ -923,7 +956,11 @@ class CargoOpcoesView(_ViewDeModerador):
         self.cargo_select = discord.ui.RoleSelect(placeholder="2. Escolha o cargo", min_values=1, max_values=1)
         self.cargo_select.callback = self._selecionar_cargo
         self.add_item(self.cargo_select)
-        self.add_item(AdminVoltarButton(bot))
+        if callback_voltar:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar à categoria")
+        else:
+            self.add_item(AdminVoltarButton(bot))
 
     async def _selecionar_acao(self, interaction: discord.Interaction):
         self.acao = interaction.data["values"][0]
@@ -954,94 +991,73 @@ class CargoOpcoesView(_ViewDeModerador):
                 ("emoji", "Emoji do botão", False, False, 40, None),
             ],
             executar,
+            callback_voltar=self.callback_voltar,
         ))
 
 
 ADMIN_CATEGORIAS = {
     "servidor": {
-        "titulo": "⚙️ Servidor e configurações",
-        "descricao": "Configure canais, cargos e preferências gerais. Alterações críticas exigem confirmação.",
+        "titulo": "⚙️ Servidor e acesso",
+        "descricao": "Configure os canais e cargos do servidor, use o assistente inicial e gerencie os painéis de acesso.",
         "acoes": [
-            ("channels", "Configurar canais", "📺"),
-            ("roles", "Configurar cargos", "🎭"),
-            ("personalizacao", "Personalização", "🎨"),
-            ("auto_setup", "Configuração guiada", "✨"),
+            ("channels", "Canais do servidor", "📺"),
+            ("roles", "Cargos e permissões", "🎭"),
+            ("auto_setup", "Assistente de configuração", "✨"),
+            ("personalizacao", "Identidade visual", "🎨"),
+            ("post_verificacao", "Publicar verificação", "🛡️"),
+            ("post_cargos", "Publicar painel de cargos", "🎭"),
+            ("cargos_texto", "Editar texto dos cargos", "✏️"),
+            ("cargos_opcoes", "Opções dos cargos", "⚙️"),
             ("reset", "Restaurar padrões", "⚠️"),
         ],
     },
     "moderacao": {
-        "titulo": "🛡️ Central de moderação",
-        "descricao": "Consulte solicitações que aguardam análise e acesse as categorias de moderação.",
-        "acoes": [("moderacao", "Abrir fila de moderação", "📥")],
-    },
-    "sistemas": {
-        "titulo": "🎮 Sistemas e comunidade",
-        "descricao": "Acesse as configurações dos sistemas de jogo, galeria, perfis e jogos.",
+        "titulo": "🛡️ Moderação e auditoria",
+        "descricao": "Acompanhe solicitações, atualizações operacionais e o histórico de decisões. As ferramentas respeitam o nível de acesso da equipe.",
         "acoes": [
-            ("coliseu", "Coliseu", "⚔️"),
-            ("galeria", "Galeria", "🏆"),
-            ("perfis", "Perfis", "👤"),
-            ("jogos", "Jogos", "🎮"),
-            ("colizeu_atualizar", "Atualizar rankings do Coliseu", "🔄"),
+            ("moderacao", "Fila de aprovação", "📥"),
+            ("dashboard", "Resumo operacional", "📈"),
+            ("history", "Histórico de auditoria", "📜"),
         ],
     },
-    "runs": {
-        "titulo": "⚔️ Runs e desafios (Soulslike)",
-        "descricao": "Publique a central de runs, cadastre jogos e desafios e invalide runs já aprovadas.",
+    "jogos": {
+        "titulo": "🎮 Jogos, Coliseu e runs",
+        "descricao": "Configure canais e recompensas de conquistas, santuários, catálogos de jogos e desafios Soulslike.",
         "acoes": [
+            ("coliseu", "Configurações de conquistas", "⚔️"),
+            ("galeria", "Canal de Santuários", "🏛️"),
+            ("perfis", "Patentes e níveis de XP", "👤"),
+            ("jogos", "Canais de jogos e promoções", "🎮"),
+            ("colizeu_atualizar", "Atualizar rankings", "🔄"),
             ("sl_central", "Publicar central de runs", "📌"),
-            ("sl_jogo", "Adicionar jogo", "🎮"),
-            ("sl_desafio", "Criar desafio", "🏅"),
+            ("sl_jogo", "Adicionar jogo Soulslike", "🎮"),
+            ("sl_desafio", "Criar desafio Soulslike", "🏅"),
             ("sl_invalidar", "Invalidar run", "🚫"),
         ],
     },
     "comunidade": {
-        "titulo": "📚 Contribuições e Arquivo de Mundos",
-        "descricao": "Controle os canais de Lore, Guias e publicações comunitárias, ajuste recompensas e publique/atualize o painel do Arquivo de Mundos.",
+        "titulo": "📚 Comunidade e contribuições",
+        "descricao": "Configure os espaços de Lore, Guias e Arquivo de Mundos e publique os painéis comunitários.",
         "acoes": [
-            ("community_config", "Configurar canais e XP", "⚙️"),
-            ("community_publish", "Publicar painel do Arquivo de Mundos", "📚"),
-            ("community_guides_publish", "Publicar painel de Guias e Tutoriais", "📘"),
-            ("moderacao", "Revisar contribuições pendentes", "🛡️"),
+            ("community_config", "Canais e recompensas de contribuições", "⚙️"),
+            ("community_publish", "Publicar Arquivo de Mundos", "📚"),
+            ("community_guides_publish", "Publicar Guias e Tutoriais", "📘"),
         ],
     },
     "economia": {
         "titulo": "🪙 Economia e progressão",
-        "descricao": "Consulte e configure os parâmetros de XP, Denários e recompensas.",
+        "descricao": "Consulte e ajuste XP, Denários, limites e recompensas. Os valores não personalizados continuam usando os padrões do bot.",
         "acoes": [("economy", "Configurar economia", "🪙")],
     },
-    "diagnostico": {
-        "titulo": "📊 Status e diagnóstico",
-        "descricao": "Consulte o status e as configurações atualmente reconhecidas pela NARA.",
+    "publicacoes": {
+        "titulo": "📌 Publicações e integrações",
+        "descricao": "Publique painéis no canal atual ou use o gerenciador para escolher outro canal. Configure também Radar, YouTube e ofertas.",
         "acoes": [
-            ("dashboard", "Dashboard operacional", "📈"),
-            ("history", "Histórico de auditoria", "📜"),
-            ("status", "Ver status e configurações", "📊"),
-        ],
-    },
-    "paineis": {
-        "titulo": "📌 Painéis e publicações",
-        "descricao": "Publique, atualize e fixe os painéis persistentes da NARA: Coliseu, platinas, zerados, loja, santuários e central de ajuda.",
-        "acoes": [
-            ("publicar_paineis", "Gerenciador de painéis", "📌"),
-            ("post_coliseu", "Publicar painel do Coliseu", "⚔️"),
-            ("post_loja", "Publicar painel da loja", "🪙"),
-            ("post_santuario", "Publicar painel de santuários", "🏛️"),
-            ("post_ajuda", "Publicar central de ajuda", "📖"),
-        ],
-    },
-    "catalogos": {
-        "titulo": "🎮 Ports & Mods",
-        "descricao": "Administre o catálogo de ports, os envios da comunidade e o catálogo de mods.",
-        "acoes": [
-            ("catalogo_jogos", "Gerenciar ports e envios", "🎮"),
-            ("catalogo_mods", "Gerenciar mods", "🧩"),
-        ],
-    },
-    "radar": {
-        "titulo": "📡 Radar e conteúdo",
-        "descricao": "Configure o Radar de Games, os avisos do YouTube, as ofertas e o vídeo tutorial de transmissões.",
-        "acoes": [
+            ("publicar_paineis", "Gerenciador de painéis (escolher canal)", "📌"),
+            ("post_coliseu", "Publicar painel principal neste canal", "⚔️"),
+            ("post_ajuda", "Publicar Central de Ajuda neste canal", "📖"),
+            ("post_loja", "Publicar painel da loja neste canal", "🪙"),
+            ("post_santuario", "Publicar painel de Santuários neste canal", "🏛️"),
             ("radar_games", "Configurar Radar de Games", "📡"),
             ("youtube_status", "Status do YouTube", "📺"),
             ("youtube_test_video", "Testar aviso de vídeo", "🎬"),
@@ -1051,22 +1067,21 @@ ADMIN_CATEGORIAS = {
             ("transmissao_video", "Vídeo tutorial de transmissões", "🎥"),
         ],
     },
-    "cargos": {
-        "titulo": "🎭 Cargos e acesso",
-        "descricao": "Publique os painéis de verificação e de cargos, edite o texto do painel e gerencie suas opções. Exige a permissão Gerenciar Servidor.",
+    "catalogos": {
+        "titulo": "🧩 Catálogos de Ports & Mods",
+        "descricao": "Gerencie os ports, mods e envios da comunidade em seus catálogos próprios.",
         "acoes": [
-            ("post_verificacao", "Publicar painel de verificação", "🛡️"),
-            ("post_cargos", "Publicar painel de cargos", "🎭"),
-            ("cargos_texto", "Editar texto do painel de cargos", "✏️"),
-            ("cargos_opcoes", "Opções do painel de cargos", "⚙️"),
+            ("catalogo_jogos", "Gerenciar Ports", "🎮"),
+            ("catalogo_mods", "Gerenciar Mods", "🧩"),
         ],
     },
-    "inteligencia": {
-        "titulo": "🤖 NARA IA e inteligência",
-        "descricao": "Consulte indicadores de uso da assistente, estado dos provedores e recursos de IA.",
+    "diagnostico": {
+        "titulo": "🤖 Diagnóstico e NARA IA",
+        "descricao": "Verifique as configurações do servidor e o estado dos provedores e recursos de IA.",
         "acoes": [
-            ("ia_relatorio", "Relatório de uso da NARA IA", "📊"),
-            ("ia_provedores", "Status dos provedores IA", "🧠"),
+            ("status", "Ver configuração completa", "📊"),
+            ("ia_relatorio", "Relatório de uso da NARA", "📈"),
+            ("ia_provedores", "Status dos provedores de IA", "🧠"),
         ],
     },
 }
@@ -1076,8 +1091,7 @@ ADMIN_CATEGORIAS = {
 # Moderadores (cargo de equipe) só enxergam/usam o que estiver fora destes conjuntos.
 # Para liberar algo ao moderador, remova a categoria/ação daqui; para restringir, adicione.
 CATEGORIAS_SO_ADMIN = {
-    "servidor", "sistemas", "runs", "economia", "diagnostico",
-    "paineis", "radar", "cargos", "inteligencia",
+    "servidor", "jogos", "comunidade", "economia", "publicacoes", "catalogos", "diagnostico",
 }
 ACOES_SO_ADMIN = {
     acao
@@ -1099,36 +1113,41 @@ def eh_administrador(user) -> bool:
 
 def _retorno_categoria_admin(bot, categoria: str, user_id: int):
     async def voltar(interaction: discord.Interaction):
-        if categoria in CATEGORIAS_SO_ADMIN and not eh_administrador(interaction.user):
+        if int(interaction.user.id) != int(user_id):
+            return await interaction.response.send_message("Este painel pertence a outra sessão administrativa.", ephemeral=True)
+        is_admin = await _eh_admin_painel(bot, interaction.user)
+        if categoria in CATEGORIAS_SO_ADMIN and not is_admin:
             return await interaction.response.send_message(MSG_SO_ADMIN, ephemeral=True)
         dados = ADMIN_CATEGORIAS[categoria]
         embed = discord.Embed(
             title=dados["titulo"],
-            description=dados["descricao"] + "\n\nEscolha uma das opções abaixo para continuar.",
+            description=dados["descricao"] + "\n\nEscolha uma ferramenta. A navegação de retorno preserva esta categoria.",
             color=COR_PAINEL,
         )
-        embed.set_footer(text="NARA • Painel administrativo • Volte ao início para trocar de categoria")
+        acoes_visiveis = [a for a in dados["acoes"] if is_admin or a[0] not in ACOES_SO_ADMIN]
+        embed.add_field(name="Ferramentas disponíveis", value=f"{len(acoes_visiveis)} opção(ões) nesta área", inline=True)
+        embed.set_footer(text="NARA • Use ‘Voltar ao início’ para trocar de categoria")
         await interaction.response.edit_message(
-            embed=embed, view=AdminCategoriaView(bot, categoria, user_id, eh_administrador(interaction.user)))
+            embed=embed, view=AdminCategoriaView(bot, categoria, user_id, is_admin))
     return voltar
 
 
 async def _executar_acao_admin(interaction: discord.Interaction, bot, action: str, *, categoria: str | None = None, user_id: int | None = None):
     """Encaminha ações da navegação administrativa aos handlers já existentes."""
-    if action in ACOES_SO_ADMIN and not eh_administrador(interaction.user):
+    if action in ACOES_SO_ADMIN and not await _eh_admin_painel(bot, interaction.user):
         return await interaction.response.send_message(MSG_SO_ADMIN, ephemeral=True)
     voltar = _retorno_categoria_admin(bot, categoria, user_id or interaction.user.id) if categoria in ADMIN_CATEGORIAS else None
     def com_voltar(view):
         return adicionar_botao_voltar(view, voltar)
     if action == "channels":
-        return await _abrir_secao(interaction, bot, "channels", "📺 Canais configurados")
+        return await _abrir_secao(interaction, bot, "channels", "📺 Canais configurados", callback_voltar=voltar)
     if action == "roles":
-        return await _abrir_secao(interaction, bot, "roles", "🎭 Cargos configurados")
+        return await _abrir_secao(interaction, bot, "roles", "🎭 Cargos configurados", callback_voltar=voltar)
     if action == "coliseu":
-        return await _abrir_coliseu(interaction, bot)
+        return await _abrir_coliseu(interaction, bot, callback_voltar=voltar)
     if action == "moderacao":
         from cogs.platinas import eh_moderador
-        if not await eh_moderador(interaction.user, bot.db):
+        if not await eh_moderador(interaction.user, bot.db) and not await _eh_admin_painel(bot, interaction.user):
             return await interaction.response.send_message("Seu cargo não tem permissão para moderar solicitações.", ephemeral=True)
         view = ModeracaoPainelView(bot, interaction.user.id)
         view.guild_id = int(interaction.guild_id) if interaction.guild_id else None
@@ -1142,16 +1161,17 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
         com_voltar(view)
         return await interaction.response.edit_message(embed=embed, view=view)
     if action == "galeria":
-        return await _abrir_galeria(interaction, bot)
+        return await _abrir_galeria(interaction, bot, callback_voltar=voltar)
     if action == "perfis":
-        return await _abrir_perfis(interaction, bot)
+        return await _abrir_perfis(interaction, bot, callback_voltar=voltar)
     if action == "jogos":
-        return await _abrir_jogos(interaction, bot)
+        return await _abrir_jogos(interaction, bot, callback_voltar=voltar)
     if action == "economy":
-        return await _abrir_economia(interaction, bot)
+        return await _abrir_economia(interaction, bot, callback_voltar=voltar)
     if action == "community_config":
         return await _abrir_secao(
-            interaction, bot, "community", "📚 Configurações de contribuições e Arquivo de Mundos"
+            interaction, bot, "community", "📚 Configurações de contribuições e Arquivo de Mundos",
+            callback_voltar=voltar,
         )
     if action == "community_publish":
         cog = bot.get_cog("Comunidade")
@@ -1164,27 +1184,26 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
             return await interaction.response.send_message("O módulo de contribuições não está carregado.", ephemeral=True)
         return await cog.publicar_painel_guias(interaction)
     if action == "personalizacao":
-        return await _abrir_personalizacao(interaction, bot)
+        return await _abrir_personalizacao(interaction, bot, callback_voltar=voltar)
     if action == "dashboard":
         from cogs.platinas import eh_moderador
-        if not await eh_moderador(interaction.user, bot.db):
+        if not await eh_moderador(interaction.user, bot.db) and not await _eh_admin_painel(bot, interaction.user):
             return await interaction.response.send_message("Acesso restrito à moderação.", ephemeral=True)
-        view = DashboardOperacionalView(bot, interaction.user.id)
-        com_voltar(view)
+        view = DashboardOperacionalView(bot, interaction.user.id, callback_voltar=voltar)
         return await interaction.response.edit_message(embed=await _embed_dashboard(bot, interaction.guild_id), view=view)
     if action == "history":
         from cogs.platinas import eh_moderador
-        if not await eh_moderador(interaction.user, bot.db):
+        if not await eh_moderador(interaction.user, bot.db) and not await _eh_admin_painel(bot, interaction.user):
             return await interaction.response.send_message("Acesso restrito à moderação.", ephemeral=True)
-        view = HistoricoAuditoriaView(bot, interaction.user.id)
-        com_voltar(view)
+        view = HistoricoAuditoriaView(bot, interaction.user.id, callback_voltar=voltar)
         return await interaction.response.edit_message(embed=await view.embed(), view=view)
     if action == "status":
-        return await _abrir_status(interaction, bot)
+        return await _abrir_status(interaction, bot, callback_voltar=voltar)
     if action == "publicar_paineis":
         from cogs.platinas import eh_moderador
-        if not await eh_moderador(interaction.user, bot.db):
-            return await interaction.response.send_message("Acesso restrito à moderação.", ephemeral=True)
+        autorizado = await eh_moderador(interaction.user, bot.db) or await _eh_admin_painel(bot, interaction.user)
+        if not autorizado:
+            return await interaction.response.send_message("Acesso restrito à equipe autorizada.", ephemeral=True)
         view = PublicarPaineisView(bot, interaction.user.id)
         com_voltar(view)
         return await interaction.response.edit_message(
@@ -1234,10 +1253,7 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
         "sl_central", "sl_jogo", "sl_desafio", "sl_invalidar",
         "cargos_texto", "cargos_opcoes", "transmissao_video", "colizeu_atualizar",
     }
-    if action in acoes_restritas and not (
-        interaction.user.guild_permissions.manage_guild
-        or interaction.user.guild_permissions.administrator
-    ):
+    if action in acoes_restritas and not await _eh_admin_painel(bot, interaction.user):
         return await interaction.response.send_message(
             "Esta ação exige a permissão **Gerenciar Servidor** (ou Administrador).",
             ephemeral=True,
@@ -1288,7 +1304,7 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
         if action == "sl_central":
             return await interaction.response.edit_message(
                 content="## ⚔️ Central de runs Soulslike\nEscolha o canal e clique em **Publicar central**. Se já existir, a mensagem será atualizada.",
-                embed=None, attachments=[], view=CentralRunsView(bot, interaction.user.id),
+                embed=None, attachments=[], view=com_voltar(CentralRunsView(bot, interaction.user.id)),
             )
         if action == "sl_jogo":
             async def executar(inter, v):
@@ -1317,7 +1333,7 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
                 ("motivo", "Motivo (fica no log)", False, True, 300, None),
             ]
             titulo = "Invalidar run aprovada"
-        return await interaction.response.send_modal(AcaoModalSimples(titulo, campos, executar))
+        return await interaction.response.send_modal(AcaoModalSimples(titulo, campos, executar, callback_voltar=voltar))
     if action in ("cargos_texto", "cargos_opcoes"):
         cog = bot.get_cog("Cargos")
         if cog is None:
@@ -1325,7 +1341,7 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
         if action == "cargos_opcoes":
             return await interaction.response.edit_message(
                 content="## 🎭 Opções do painel de cargos\nEscolha a ação e o cargo e clique em **Continuar**. Depois, publique ou atualize o painel pelo botão **Publicar painel de cargos**.",
-                embed=None, attachments=[], view=com_voltar(CargoOpcoesView(bot, interaction.user.id)),
+                embed=None, attachments=[], view=com_voltar(CargoOpcoesView(bot, interaction.user.id, callback_voltar=voltar)),
             )
         atual = await cog._get_config(interaction.guild)
 
@@ -1341,6 +1357,7 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
                 ("mensagem", "Mensagem abaixo do título", True, True, 3500, str(atual.get("description", ""))[:3500]),
             ],
             executar,
+            callback_voltar=voltar,
         ))
     if action == "transmissao_video":
         cog = bot.get_cog("Transmissoes")
@@ -1356,6 +1373,7 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
             "Vídeo tutorial de transmissões",
             [("link", "Link do vídeo no YouTube", True, False, 300, await cog.obter_video(interaction.guild_id))],
             executar,
+            callback_voltar=voltar,
         ))
     if action == "colizeu_atualizar":
         cog = bot.get_cog("Colizeu")
@@ -1365,13 +1383,19 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
     if action == "auto_setup":
         return await _executar_configuracao_automatica(interaction, bot)
     if action == "reset":
-        return await _confirmar_reset(interaction, bot)
+        return await _confirmar_reset(interaction, bot, callback_voltar=voltar)
     return await interaction.response.send_message("Esta função ainda não está disponível no painel.", ephemeral=True)
 
 
 class AdminAcaoButton(discord.ui.Button):
     def __init__(self, action: str, label: str, emoji: str, row: int, categoria: str, user_id: int):
-        super().__init__(label=label, emoji=emoji, style=discord.ButtonStyle.secondary, row=row)
+        if action in {"reset", "sl_invalidar"}:
+            estilo = discord.ButtonStyle.danger
+        elif action in {"moderacao", "publicar_paineis", "community_publish", "community_guides_publish", "sl_central"}:
+            estilo = discord.ButtonStyle.success
+        else:
+            estilo = discord.ButtonStyle.secondary
+        super().__init__(label=label, emoji=emoji, style=estilo, row=row)
         self.action = action
         self.categoria = categoria
         self.user_id = user_id
@@ -1398,13 +1422,22 @@ class AdminCategoriaView(discord.ui.View):
         dados = ADMIN_CATEGORIAS[categoria]
         acoes = [a for a in dados["acoes"] if is_admin or a[0] not in ACOES_SO_ADMIN]
         for index, (action, label, emoji) in enumerate(acoes):
-            self.add_item(AdminAcaoButton(action, label, emoji, row=index // 2, categoria=categoria, user_id=user_id))
+            # Até 12 ações cabem em quatro linhas de três; a quinta linha fica
+            # reservada ao retorno. Evita row=5, que o Discord rejeita.
+            self.add_item(AdminAcaoButton(action, label, emoji, row=index // 3, categoria=categoria, user_id=user_id))
         self.add_item(AdminVoltarButton(bot))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         from cogs.platinas import eh_moderador
-        if interaction.user.id != self.user_id or not await eh_moderador(interaction.user, self.bot.db):
-            await interaction.response.send_message("Este painel é restrito ao moderador que o abriu e à equipe autorizada. Use `/adm` para abrir sua própria central.", ephemeral=True)
+        mesma_pessoa = interaction.user.id == self.user_id
+        autorizado_admin = await _eh_admin_painel(self.bot, interaction.user)
+        autorizado_moderacao = await eh_moderador(interaction.user, self.bot.db)
+        acesso_categoria = autorizado_admin if self.categoria in CATEGORIAS_SO_ADMIN else (autorizado_admin or autorizado_moderacao)
+        if not mesma_pessoa or not acesso_categoria:
+            await interaction.response.send_message(
+                "Este painel é restrito à pessoa que o abriu e à equipe autorizada. Use `/adm` para abrir sua própria central.",
+                ephemeral=True,
+            )
             return False
         return True
 
@@ -1420,16 +1453,18 @@ class AdminCategoriaButton(discord.ui.Button):
         self.user_id = user_id
 
     async def callback(self, interaction: discord.Interaction):
-        admin = eh_administrador(interaction.user)
+        admin = await _eh_admin_painel(self.bot, interaction.user)
         if self.categoria in CATEGORIAS_SO_ADMIN and not admin:
             return await interaction.response.send_message(MSG_SO_ADMIN, ephemeral=True)
         dados = ADMIN_CATEGORIAS[self.categoria]
         embed = discord.Embed(
             title=dados["titulo"],
-            description=dados["descricao"] + "\n\nEscolha uma das opções abaixo para continuar.",
+            description=dados["descricao"] + "\n\nEscolha uma ferramenta. A navegação de retorno preserva esta categoria.",
             color=COR_PAINEL,
         )
-        embed.set_footer(text="NARA • Painel administrativo • Volte ao início para trocar de categoria")
+        acoes_visiveis = [a for a in dados["acoes"] if admin or a[0] not in ACOES_SO_ADMIN]
+        embed.add_field(name="Ferramentas disponíveis", value=f"{len(acoes_visiveis)} opção(ões) nesta área", inline=True)
+        embed.set_footer(text="NARA • Use ‘Voltar ao início’ para trocar de categoria")
         await interaction.response.edit_message(embed=embed, view=AdminCategoriaView(self.bot, self.categoria, self.user_id or interaction.user.id, admin))
 
 
@@ -1443,6 +1478,21 @@ async def _eh_dono_global_bot(bot, user) -> bool:
     except Exception:
         log.exception("Não foi possível validar o proprietário global do bot no painel ADM.")
         return False
+
+
+async def _eh_admin_painel(bot, user) -> bool:
+    """Permissão administrativa coerente com a entrada do /adm.
+
+    Administrador do servidor, dono do servidor, quem possui Gerenciar Servidor
+    ou proprietário global do bot pode usar as categorias administrativas.
+    Cargos de moderador sem essa permissão continuam limitados à moderação.
+    """
+    if eh_administrador(user):
+        return True
+    perms = getattr(user, "guild_permissions", None)
+    if perms and getattr(perms, "manage_guild", False):
+        return True
+    return await _eh_dono_global_bot(bot, user)
 
 
 class RelacionamentoAdminUserSelectView(discord.ui.View):
@@ -1514,38 +1564,102 @@ class RelacionamentoAdminButton(discord.ui.Button):
         await interaction.response.edit_message(embed=embed, view=view)
 
 
+class AdminAtalhosSelect(discord.ui.Select):
+    """Acesso rápido às tarefas administrativas mais frequentes."""
+
+    def __init__(self, bot, user_id: int | None, is_admin: bool):
+        self.bot = bot
+        self.user_id = int(user_id) if user_id is not None else None
+        self.rotas = {
+            "moderacao": ("moderacao", "moderacao"),
+            "dashboard": ("dashboard", "moderacao"),
+            "history": ("history", "moderacao"),
+        }
+        opcoes = [
+            discord.SelectOption(
+                label="Abrir fila de aprovação", value="moderacao",
+                description="Platinas, zerados, runs e contribuições", emoji="📥",
+            ),
+            discord.SelectOption(
+                label="Resumo operacional", value="dashboard",
+                description="Pendências, decisões recentes e alertas", emoji="📈",
+            ),
+            discord.SelectOption(
+                label="Histórico de auditoria", value="history",
+                description="Pesquisar ações e decisões registradas", emoji="📜",
+            ),
+        ]
+        if is_admin:
+            self.rotas.update({
+                "channels": ("channels", "servidor"),
+                "publish": ("publicar_paineis", "publicacoes"),
+                "status": ("status", "diagnostico"),
+            })
+            opcoes.extend([
+                discord.SelectOption(
+                    label="Configurar canais", value="channels",
+                    description="Ajustar destinos e canais do servidor", emoji="📺",
+                ),
+                discord.SelectOption(
+                    label="Publicar ou atualizar painéis", value="publish",
+                    description="Gerenciar painéis públicos do SoulsBot", emoji="📌",
+                ),
+                discord.SelectOption(
+                    label="Ver diagnóstico", value="status",
+                    description="Identificar configurações ausentes ou padrão", emoji="🩺",
+                ),
+            ])
+        super().__init__(
+            placeholder="Acesso rápido — escolha uma tarefa frequente...",
+            min_values=1, max_values=1, options=opcoes,
+            custom_id="adm:atalhos", row=2,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        rota = self.rotas.get(self.values[0])
+        if not rota:
+            return await interaction.response.send_message(
+                "Essa ação rápida não está disponível. Abra uma categoria do painel.", ephemeral=True
+            )
+        action, categoria = rota
+        await _executar_acao_admin(
+            interaction, self.bot, action,
+            categoria=categoria, user_id=self.user_id or interaction.user.id,
+        )
+
+
 class AdminMainView(discord.ui.View):
-    """Painel administrativo organizado por categorias de trabalho."""
+    """Painel administrativo organizado por categorias e atalhos frequentes."""
 
     def __init__(self, bot, user_id: int | None = None, is_admin: bool = True, is_bot_owner: bool = False):
         super().__init__(timeout=None)
         self.bot = bot
         self.user_id = user_id
         categorias = [
-            ("servidor", "Servidor", "⚙️"),
+            ("servidor", "Servidor e acesso", "⚙️"),
             ("moderacao", "Moderação", "🛡️"),
-            ("sistemas", "Sistemas", "🎮"),
-            ("runs", "Runs e desafios", "⚔️"),
+            ("jogos", "Jogos e Coliseu", "🎮"),
+            ("comunidade", "Comunidade", "📚"),
             ("economia", "Economia", "🪙"),
-            ("diagnostico", "Diagnóstico", "📊"),
-            ("paineis", "Painéis", "📌"),
-            ("catalogos", "Ports & Mods", "🎮"),
-            ("comunidade", "Comunidade", "🌑"),
-            ("radar", "Radar e conteúdo", "📡"),
-            ("cargos", "Cargos e acesso", "🎭"),
-            ("inteligencia", "NARA IA", "🤖"),
+            ("publicacoes", "Publicações", "📌"),
+            ("catalogos", "Ports & Mods", "🧩"),
+            ("diagnostico", "Diagnóstico e IA", "🤖"),
         ]
         if not is_admin:  # moderador: esconde as categorias exclusivas do administrador
             categorias = [c for c in categorias if c[0] not in CATEGORIAS_SO_ADMIN]
         for index, (key, label, emoji) in enumerate(categorias):
-            self.add_item(AdminCategoriaButton(bot, key, label, emoji, row=index // 3, user_id=user_id))
+            self.add_item(AdminCategoriaButton(bot, key, label, emoji, row=index // 4, user_id=user_id))
+        # Sempre presente para que o custom_id também seja registrado na view
+        # persistente criada durante cog_load(). As opções da sessão continuam
+        # filtradas conforme o nível de acesso do usuário.
+        self.add_item(AdminAtalhosSelect(bot, user_id, is_admin=is_admin))
         if is_bot_owner:
             self.add_item(RelacionamentoAdminButton(bot, int(user_id or 0)))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         from cogs.platinas import eh_moderador
         mesma_pessoa = self.user_id is None or interaction.user.id == self.user_id
-        autorizado = await eh_moderador(interaction.user, self.bot.db) or await _eh_dono_global_bot(self.bot, interaction.user)
+        autorizado = await eh_moderador(interaction.user, self.bot.db) or await _eh_admin_painel(self.bot, interaction.user)
         if not mesma_pessoa or not autorizado:
             await interaction.response.send_message("Você não tem autorização para utilizar este painel. Use `/adm` com uma conta autorizada.", ephemeral=True)
             return False
@@ -1567,9 +1681,10 @@ class VoltarInicioView(discord.ui.View):
 class ResetConfirmView(discord.ui.View):
     """Confirmação dupla antes de resetar todas as configurações."""
 
-    def __init__(self, bot):
+    def __init__(self, bot, callback_voltar=None):
         super().__init__(timeout=60)
         self.bot = bot
+        self.callback_voltar = callback_voltar
 
     @discord.ui.button(label="Sim, restaurar tudo", emoji="⚠️", style=discord.ButtonStyle.danger, custom_id="adm:reset_yes")
     async def confirmar(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1579,11 +1694,17 @@ class ResetConfirmView(discord.ui.View):
             description=f"**{count}** configuração(ões) foram restauradas aos valores padrão de `config.py`.\n\nO bot continuará funcionando normalmente usando os valores globais.",
             color=discord.Color.green(),
         )
-        view = VoltarInicioView(self.bot)
+        if self.callback_voltar:
+            from painel_navegacao import view_so_com_voltar
+            view = view_so_com_voltar(self.callback_voltar)
+        else:
+            view = VoltarInicioView(self.bot)
         await interaction.response.edit_message(embed=embed, view=view)
 
     @discord.ui.button(label="Cancelar", emoji="↩️", style=discord.ButtonStyle.secondary, custom_id="adm:reset_no")
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.callback_voltar:
+            return await self.callback_voltar(interaction)
         await _mostrar_painel_principal(interaction, self.bot)
 
 
@@ -1594,11 +1715,15 @@ class ResetConfirmView(discord.ui.View):
 class ChannelSelectView(discord.ui.View):
     """Seletor nativo de canal que salva automaticamente."""
 
-    def __init__(self, bot, key: str, label: str):
-        super().__init__(timeout=120)
+    def __init__(self, bot, key: str, label: str, callback_voltar=None):
+        super().__init__(timeout=180)
         self.bot = bot
         self.key = key
         self.label = label
+        self.callback_voltar = callback_voltar
+        if callback_voltar:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar à categoria")
         self.select = discord.ui.ChannelSelect(
             placeholder=f"Selecione o {label.lower()}",
             channel_types=[discord.ChannelType.text],
@@ -1639,18 +1764,26 @@ class ChannelSelectView(discord.ui.View):
             description=f"**{LABELS.get(self.key, self.key)}** definido como {escolhido.mention}.",
             color=discord.Color.green(),
         )
-        view = VoltarInicioView(self.bot)
+        if self.callback_voltar:
+            from painel_navegacao import view_so_com_voltar
+            view = view_so_com_voltar(self.callback_voltar)
+        else:
+            view = VoltarInicioView(self.bot)
         await interaction.response.edit_message(embed=embed, view=view)
 
 
 class RoleSelectView(discord.ui.View):
     """Seletor nativo de cargo que salva automaticamente."""
 
-    def __init__(self, bot, key: str, label: str):
-        super().__init__(timeout=120)
+    def __init__(self, bot, key: str, label: str, callback_voltar=None):
+        super().__init__(timeout=180)
         self.bot = bot
         self.key = key
         self.label = label
+        self.callback_voltar = callback_voltar
+        if callback_voltar:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar à categoria")
         self.select = discord.ui.RoleSelect(
             placeholder=f"Selecione o {label.lower()}",
             min_values=1,
@@ -1695,7 +1828,11 @@ class RoleSelectView(discord.ui.View):
             ),
             color=discord.Color.orange() if aviso_permissao else discord.Color.green(),
         )
-        view = VoltarInicioView(self.bot)
+        if self.callback_voltar:
+            from painel_navegacao import view_so_com_voltar
+            view = view_so_com_voltar(self.callback_voltar)
+        else:
+            view = VoltarInicioView(self.bot)
         await interaction.response.edit_message(embed=embed, view=view)
 
 
@@ -1706,10 +1843,11 @@ class RoleSelectView(discord.ui.View):
 class NumberModal(discord.ui.Modal):
     """Modal genérico para configurar valores numéricos."""
 
-    def __init__(self, bot, key: str, label: str, current_value: int | None):
+    def __init__(self, bot, key: str, label: str, current_value: int | None, callback_voltar=None):
         super().__init__(title=f"Configurar: {label}")
         self.bot = bot
         self.key = key
+        self.callback_voltar = callback_voltar
         self.valor_input = discord.ui.TextInput(
             label=label,
             placeholder=str(current_value) if current_value else "Ex.: 100",
@@ -1734,8 +1872,12 @@ class NumberModal(discord.ui.Modal):
             description=f"**{LABELS.get(self.key, self.key)}** definido como **{valor}**.",
             color=discord.Color.green(),
         )
-        view = VoltarInicioView(self.bot)
-        await interaction.response.edit_message(embed=embed, view=view)
+        if self.callback_voltar:
+            from painel_navegacao import view_so_com_voltar
+            view = view_so_com_voltar(self.callback_voltar)
+        else:
+            view = VoltarInicioView(self.bot)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception):
         log.exception("Erro no modal de configuração", exc_info=error)
@@ -1747,11 +1889,18 @@ class NumberModal(discord.ui.Modal):
 # Botões de ação dentro das seções
 # ────────────────────────────────────────────────────────────────
 
-class SectionActionView(VoltarInicioView):
-    """View com botões de 'Configurar X' para cada chave da seção + voltar."""
+class SectionActionView(discord.ui.View):
+    """Configurações em contexto: volta à categoria de origem, não reinicia o /adm."""
 
-    def __init__(self, bot, keys: list[str]):
-        super().__init__(bot)
+    def __init__(self, bot, keys: list[str], callback_voltar=None):
+        super().__init__(timeout=600)
+        self.bot = bot
+        self.callback_voltar = callback_voltar
+        if callback_voltar:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar à categoria")
+        else:
+            self.add_item(AdminVoltarButton(bot))
         row = 0
         for i, key in enumerate(keys):
             label = LABELS.get(key, key)
@@ -1771,7 +1920,7 @@ class SectionActionView(VoltarInicioView):
         async def callback(interaction: discord.Interaction):
             tipo = _tipo_chave(key)
             if tipo == "channel":
-                view = ChannelSelectView(self.bot, key, label)
+                view = ChannelSelectView(self.bot, key, label, callback_voltar=self.callback_voltar)
                 embed = discord.Embed(
                     title=f"⚙️ {label}",
                     description="Use o seletor abaixo para escolher o canal.",
@@ -1779,7 +1928,7 @@ class SectionActionView(VoltarInicioView):
                 )
                 await interaction.response.edit_message(embed=embed, view=view)
             elif tipo == "role":
-                view = RoleSelectView(self.bot, key, label)
+                view = RoleSelectView(self.bot, key, label, callback_voltar=self.callback_voltar)
                 embed = discord.Embed(
                     title=f"⚙️ {label}",
                     description="Use o seletor abaixo para escolher o cargo.",
@@ -1788,7 +1937,7 @@ class SectionActionView(VoltarInicioView):
                 await interaction.response.edit_message(embed=embed, view=view)
             else:
                 current = await GuildConfig.get(self.bot.db, interaction.guild_id, key)
-                modal = NumberModal(self.bot, key, label, current)
+                modal = NumberModal(self.bot, key, label, current, callback_voltar=self.callback_voltar)
                 await interaction.response.send_modal(modal)
         return callback
 
@@ -1798,36 +1947,70 @@ class SectionActionView(VoltarInicioView):
 # ────────────────────────────────────────────────────────────────
 
 async def _mostrar_painel_principal(interaction: discord.Interaction, bot):
-    """Renderiza o painel principal com resumo de status."""
+    """Renderiza o início do /adm com sinais de estado e ações frequentes."""
     db = bot.db
     gid = interaction.guild_id
-    total = len(KEYS)
-    configurados = 0
-    for k in KEYS:
-        if await GuildConfig.is_custom(db, gid, k):
-            configurados += 1
-    pendentes = total - configurados
+    personalizados = usando_padrao = ausentes = 0
+    for key in KEYS:
+        valor = await GuildConfig.get(db, gid, key)
+        custom = await GuildConfig.is_custom(db, gid, key)
+        if custom:
+            personalizados += 1
+        elif valor not in (None, "", 0, "0"):
+            usando_padrao += 1
+        else:
+            ausentes += 1
+
+    pendentes = None
+    try:
+        dados_operacionais = await _dados_dashboard(bot, gid)
+        pendentes = int(dados_operacionais.get("pending", 0))
+    except Exception:
+        # A indisponibilidade de um indicador nunca deve impedir a abertura do /adm.
+        log.exception("Não foi possível carregar o resumo de pendências na tela inicial do /adm.")
 
     embed = discord.Embed(
-        title="⚙️ Painel Administrativo — Nara",
+        title="⚙️ Central administrativa",
         description=(
-            "Central de controle da NARA. Escolha uma categoria para configurar o servidor, "
-            "revisar solicitações, gerenciar sistemas ou consultar o diagnóstico. Aqui o caos fica do lado de fora; precisão primeiro.\n\n"
-            f"**Status:** {configurados}/{total} configurações personalizadas\n"
-            + (f"⚠️ **{pendentes} item(ns)** ainda usam valores padrão." if pendentes else "✅ Tudo configurado!")
+            "Gerencie o SoulsBot por áreas. As ações mais usadas ficam no acesso rápido; "
+            "as demais estão organizadas nas categorias abaixo.\n\n"
+            "**Escolha uma categoria ou use o seletor de acesso rápido.**"
         ),
         color=COR_PAINEL,
     )
-    embed.set_footer(text="NARA • Escolha uma categoria • Valores não personalizados usam os padrões do bot")
+    embed.add_field(
+        name="Configuração do servidor",
+        value=(
+            f"🟢 **{personalizados}** personalizadas\n"
+            f"🟡 **{usando_padrao}** usando padrão\n"
+            f"🔴 **{ausentes}** sem valor"
+        ),
+        inline=True,
+    )
+    embed.add_field(
+        name="Fila de aprovação",
+        value=(
+            f"**{pendentes}** solicitações de platinas, zerados e runs pendentes"
+            if pendentes is not None else "Indicador indisponível no momento; abra a fila para consultar."
+        ),
+        inline=True,
+    )
+    embed.add_field(
+        name="Navegação",
+        value="• Categorias para encontrar qualquer ferramenta\n• Acesso rápido para tarefas frequentes\n• Voltar à categoria após configurar",
+        inline=False,
+    )
+    embed.set_footer(text="NARA • Painel privado • As alterações são salvas por servidor")
     is_bot_owner = await _eh_dono_global_bot(bot, interaction.user)
-    view = AdminMainView(bot, interaction.user.id, eh_administrador(interaction.user), is_bot_owner=is_bot_owner)
+    is_admin_panel = await _eh_admin_painel(bot, interaction.user)
+    view = AdminMainView(bot, interaction.user.id, is_admin_panel, is_bot_owner=is_bot_owner)
     if interaction.response.is_done():
         await interaction.edit_original_response(embed=embed, view=view)
     else:
         await interaction.response.edit_message(embed=embed, view=view)
 
 
-async def _abrir_secao(interaction: discord.Interaction, bot, section: str, titulo: str):
+async def _abrir_secao(interaction: discord.Interaction, bot, section: str, titulo: str, callback_voltar=None):
     """Abre uma seção genérica (channels, roles, economy)."""
     keys = SECTIONS.get(section, [])
     db = bot.db
@@ -1843,11 +2026,11 @@ async def _abrir_secao(interaction: discord.Interaction, bot, section: str, titu
 
     embed = discord.Embed(title=titulo, description="\n".join(linhas), color=COR_PAINEL)
     embed.set_footer(text="🟢 Personalizado • 🟡 Padrão disponível • 🔴 Sem valor")
-    view = SectionActionView(bot, keys)
+    view = SectionActionView(bot, keys, callback_voltar=callback_voltar)
     await interaction.response.edit_message(embed=embed, view=view)
 
 
-async def _abrir_coliseu(interaction: discord.Interaction, bot):
+async def _abrir_coliseu(interaction: discord.Interaction, bot, callback_voltar=None):
     """Seção Coliseu: combina canais de moderação/platinas com recompensas."""
     db = bot.db
     gid = interaction.guild_id
@@ -1870,11 +2053,11 @@ async def _abrir_coliseu(interaction: discord.Interaction, bot):
     ]
     embed = discord.Embed(title="⚔️ Configurações do Coliseu", description="\n".join(linhas), color=COR_PAINEL)
     keys = ["mod_channel", "platinas_channel", "colizeu_channel", "xp_platina", "denarios_platina"]
-    view = SectionActionView(bot, keys)
+    view = SectionActionView(bot, keys, callback_voltar=callback_voltar)
     await interaction.response.edit_message(embed=embed, view=view)
 
 
-async def _abrir_galeria(interaction: discord.Interaction, bot):
+async def _abrir_galeria(interaction: discord.Interaction, bot, callback_voltar=None):
     """Seção Galeria/Santuário: canal de perfis e informações sobre temas."""
     db = bot.db
     gid = interaction.guild_id
@@ -1887,11 +2070,11 @@ async def _abrir_galeria(interaction: discord.Interaction, bot):
         "_Temas disponíveis: Ouro, Prata, Sangue, Safira, Esmeralda, Violeta._",
     ]
     embed = discord.Embed(title="🏆 Galeria e Santuários", description="\n".join(linhas), color=COR_PAINEL)
-    view = SectionActionView(bot, ["perfis_channel"])
+    view = SectionActionView(bot, ["perfis_channel"], callback_voltar=callback_voltar)
     await interaction.response.edit_message(embed=embed, view=view)
 
 
-async def _abrir_perfis(interaction: discord.Interaction, bot):
+async def _abrir_perfis(interaction: discord.Interaction, bot, callback_voltar=None):
     """Seção Perfis: informação read-only sobre patentes e níveis."""
     from levels import PATENTES, SIMBOLOS_PATENTES
 
@@ -1906,11 +2089,11 @@ async def _abrir_perfis(interaction: discord.Interaction, bot):
         color=COR_PAINEL,
     )
     embed.set_footer(text="Patentes são automáticas e não precisam de configuração manual.")
-    view = VoltarInicioView(bot)
+    view = VoltarInicioView(bot) if callback_voltar is None else SectionActionView(bot, [], callback_voltar=callback_voltar)
     await interaction.response.edit_message(embed=embed, view=view)
 
 
-async def _abrir_jogos(interaction: discord.Interaction, bot):
+async def _abrir_jogos(interaction: discord.Interaction, bot, callback_voltar=None):
     """Seção Jogos: canais de jogos grátis e promoções."""
     db = bot.db
     gid = interaction.guild_id
@@ -1924,16 +2107,16 @@ async def _abrir_jogos(interaction: discord.Interaction, bot):
         "_Ofertas são verificadas periodicamente via GamerPower e Steam Store._",
     ]
     embed = discord.Embed(title="🎮 Jogos e Promoções", description="\n".join(linhas), color=COR_PAINEL)
-    view = SectionActionView(bot, ["games_channel", "promos_channel"])
+    view = SectionActionView(bot, ["games_channel", "promos_channel"], callback_voltar=callback_voltar)
     await interaction.response.edit_message(embed=embed, view=view)
 
 
-async def _abrir_economia(interaction: discord.Interaction, bot):
+async def _abrir_economia(interaction: discord.Interaction, bot, callback_voltar=None):
     """Seção Economia: todas as recompensas e limites."""
-    await _abrir_secao(interaction, bot, "economy", "💰 Economia e Recompensas")
+    await _abrir_secao(interaction, bot, "economy", "💰 Economia e Recompensas", callback_voltar=callback_voltar)
 
 
-async def _abrir_personalizacao(interaction: discord.Interaction, bot):
+async def _abrir_personalizacao(interaction: discord.Interaction, bot, callback_voltar=None):
     """Seção Personalização: cores e preferências visuais (expansível)."""
     embed = discord.Embed(
         title="🎨 Personalização",
@@ -1946,11 +2129,11 @@ async def _abrir_personalizacao(interaction: discord.Interaction, bot):
         ),
         color=COR_PAINEL,
     )
-    view = VoltarInicioView(bot)
+    view = VoltarInicioView(bot) if callback_voltar is None else SectionActionView(bot, [], callback_voltar=callback_voltar)
     await interaction.response.edit_message(embed=embed, view=view)
 
 
-async def _abrir_status(interaction: discord.Interaction, bot):
+async def _abrir_status(interaction: discord.Interaction, bot, callback_voltar=None):
     """Diagnóstico completo: lista cada configuração com seu estado."""
     db = bot.db
     gid = interaction.guild_id
@@ -1984,7 +2167,7 @@ async def _abrir_status(interaction: discord.Interaction, bot):
     total = len(KEYS)
     ok = len(linhas_ok)
     embed.set_footer(text=f"{ok}/{total} personalizados • {len(linhas_warn)} padrão • {len(linhas_err)} ausentes")
-    view = VoltarInicioView(bot)
+    view = VoltarInicioView(bot) if callback_voltar is None else SectionActionView(bot, [], callback_voltar=callback_voltar)
     await interaction.response.edit_message(embed=embed, view=view)
 
 
@@ -2095,7 +2278,7 @@ async def _executar_configuracao_automatica(interaction: discord.Interaction, bo
     await interaction.followup.send(embed=embed, ephemeral=True)
 
 
-async def _confirmar_reset(interaction: discord.Interaction, bot):
+async def _confirmar_reset(interaction: discord.Interaction, bot, callback_voltar=None):
     """Tela de confirmação antes de resetar tudo."""
     count = 0
     for k in KEYS:
@@ -2113,7 +2296,7 @@ async def _confirmar_reset(interaction: discord.Interaction, bot):
         ),
         color=discord.Color.orange(),
     )
-    view = ResetConfirmView(bot)
+    view = ResetConfirmView(bot, callback_voltar=callback_voltar)
     await interaction.response.edit_message(embed=embed, view=view)
 
 
@@ -2140,7 +2323,7 @@ class Admin(commands.Cog):
     async def adm(self, interaction: discord.Interaction):
         """Comando único de entrada para todo o painel administrativo."""
         from cogs.platinas import eh_moderador
-        if not await eh_moderador(interaction.user, self.bot.db) and not await _eh_dono_global_bot(self.bot, interaction.user):
+        if not await eh_moderador(interaction.user, self.bot.db) and not await _eh_admin_painel(self.bot, interaction.user):
             return await interaction.response.send_message(
                 "Este painel é restrito à equipe autorizada.", ephemeral=True,
             )

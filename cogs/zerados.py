@@ -46,8 +46,8 @@ class Zerados(commands.Cog):
         self.bot.add_view(ZeradosPublicoView(self))
         self.bot.add_view(ZeradoRevisaoView(self))
 
-    def painel_view(self, user) -> "ZeradosPainelView":
-        return ZeradosPainelView(self, user)
+    def painel_view(self, user, callback_voltar=None) -> "ZeradosPainelView":
+        return ZeradosPainelView(self, user, callback_voltar=callback_voltar)
 
     # ------------------------------------------------------------ comandos
     @app_commands.command(name="zerados", description="Abre seu painel de jogos zerados.")
@@ -510,9 +510,13 @@ class ZeradoRevisaoView(discord.ui.View):
 
 # ------------------------------------------------------------------ painel do usuário
 class ZeradosPainelView(discord.ui.View):
-    def __init__(self, cog: Zerados, user):
+    def __init__(self, cog: Zerados, user, callback_voltar=None):
         super().__init__(timeout=900)
         self.cog, self.user = cog, user
+        self.callback_voltar = callback_voltar
+        # Este painel já tem botão Voltar próprio; a central da Nara não deve
+        # acrescentar um segundo botão de retorno.
+        self._nara_has_return = callback_voltar is not None
         self.alvo = None  # membro consultado (padrão: você)
         self.sel_membro = discord.ui.UserSelect(placeholder="🔎 Consultar outro membro (opcional)", row=0)
         self.sel_membro.callback = self.trocar_membro
@@ -559,22 +563,24 @@ class ZeradosPainelView(discord.ui.View):
     async def lista(self, interaction: discord.Interaction, button: discord.ui.Button):
         membro = self._membro()
         texto = await self.cog.texto_lista(membro)
-        await interaction.response.edit_message(content=texto, embeds=[], view=VoltarZeradosView(self.cog, self.user, self.alvo))
+        await interaction.response.edit_message(content=texto, embeds=[], view=VoltarZeradosView(self.cog, self.user, self.alvo, self.callback_voltar))
 
     @discord.ui.button(label="Galeria", style=discord.ButtonStyle.primary, emoji="🖼️", row=2)
     async def galeria_zerados(self, interaction: discord.Interaction, button: discord.ui.Button):
         membro = self._membro()
         rows = await self.cog.bot.db.zerados_do_usuario(membro.id)
-        view = GaleriaZeradosView(self.cog, self.user, membro, rows)
+        view = GaleriaZeradosView(self.cog, self.user, membro, rows, callback_voltar=self.callback_voltar)
         await interaction.response.edit_message(content=None, embeds=await view.embeds(), view=view)
 
     @discord.ui.button(label="Ranking", style=discord.ButtonStyle.secondary, emoji="🏆", row=1)
     async def ranking(self, interaction: discord.Interaction, button: discord.ui.Button):
         texto = await self.cog.texto_ranking("total")
-        await interaction.response.edit_message(content=texto, embeds=[], view=RankingZeradosView(self.cog, self.user, self.alvo))
+        await interaction.response.edit_message(content=texto, embeds=[], view=RankingZeradosView(self.cog, self.user, self.alvo, self.callback_voltar))
 
-    @discord.ui.button(label="Voltar ao Coliseu", style=discord.ButtonStyle.secondary, emoji="↩️", row=2)
+    @discord.ui.button(label="Voltar", style=discord.ButtonStyle.secondary, emoji="↩️", row=2)
     async def voltar_coliseu(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.callback_voltar is not None:
+            return await self.callback_voltar(interaction)
         from cogs.platinas import ColiseuView
         platinas = self.cog.bot.get_cog("Platinas")
         if platinas is None:
@@ -587,9 +593,10 @@ class GaleriaZeradosView(discord.ui.View):
     """Galeria paginada de jogos concluídos, usando comprovante real quando disponível."""
     PAGE_SIZE = 5
 
-    def __init__(self, cog, owner, alvo, rows, page=0):
+    def __init__(self, cog, owner, alvo, rows, page=0, callback_voltar=None):
         super().__init__(timeout=900)
         self.cog, self.owner, self.alvo = cog, owner, alvo
+        self.callback_voltar = callback_voltar
         self.rows = list(rows)
         self.page = max(0, min(page, max(0, (len(self.rows) - 1) // self.PAGE_SIZE)))
         self._sync()
@@ -676,10 +683,10 @@ class GaleriaZeradosView(discord.ui.View):
 
     async def lista(self, interaction):
         texto = await self.cog.texto_lista(self.alvo)
-        await interaction.response.edit_message(content=texto, embeds=[], view=VoltarZeradosView(self.cog, self.owner, self.alvo))
+        await interaction.response.edit_message(content=texto, embeds=[], view=VoltarZeradosView(self.cog, self.owner, self.alvo, self.callback_voltar))
 
     async def voltar(self, interaction):
-        view = ZeradosPainelView(self.cog, self.owner)
+        view = ZeradosPainelView(self.cog, self.owner, callback_voltar=self.callback_voltar)
         view.alvo = self.alvo if self.alvo.id != self.owner.id else None
         await interaction.response.edit_message(content=None, embed=await view.embed(), view=view)
 
@@ -687,9 +694,13 @@ class GaleriaZeradosView(discord.ui.View):
 class VoltarZeradosView(discord.ui.View):
     """Volta ao painel sem criar uma nova mensagem."""
 
-    def __init__(self, cog: Zerados, owner, alvo=None):
+    def __init__(self, cog: Zerados, owner, alvo=None, callback_voltar=None):
         super().__init__(timeout=900)
         self.cog, self.owner, self.alvo = cog, owner, alvo
+        self.callback_voltar = callback_voltar
+        if callback_voltar is not None:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar ao Coliseu", emoji="🏠")
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.owner.id:
@@ -699,14 +710,14 @@ class VoltarZeradosView(discord.ui.View):
 
     @discord.ui.button(label="Voltar ao painel", style=discord.ButtonStyle.secondary, emoji="↩️", row=1)
     async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = ZeradosPainelView(self.cog, self.owner)
+        view = ZeradosPainelView(self.cog, self.owner, callback_voltar=self.callback_voltar)
         view.alvo = self.alvo
         await interaction.response.edit_message(content=None, embed=await view.embed(), view=view)
 
 
 class RankingZeradosView(VoltarZeradosView):
-    def __init__(self, cog: Zerados, owner, alvo=None):
-        super().__init__(cog, owner, alvo)
+    def __init__(self, cog: Zerados, owner, alvo=None, callback_voltar=None):
+        super().__init__(cog, owner, alvo, callback_voltar)
         self.sel = discord.ui.Select(
             placeholder="Filtrar ranking",
             options=[

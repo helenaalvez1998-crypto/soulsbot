@@ -698,11 +698,21 @@ class Soulslike(commands.Cog):
 
 
 # ------------------------------------------------------------------ views
+def _callback_nara_soulslike(cog, user_id: int | None):
+    if user_id is None:
+        return None
+    return getattr(cog, "_retornos_nara", {}).get(int(user_id))
+
+
 class VoltarCentralView(discord.ui.View):
     """Estado vazio do Soulslike: mantém o caminho de volta e oferece ações contextuais."""
-    def __init__(self, cog):
+    def __init__(self, cog, callback_voltar=None):
         super().__init__(timeout=600)
         self.cog = cog
+        self.callback_voltar = callback_voltar
+        if callback_voltar is not None:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar", emoji="↩️")
         from cogs.comunidade import adicionar_botao_contribuicao_contextual
         adicionar_botao_contribuicao_contextual(
             self, "game_suggestion", "runs", "Sugerir jogo ausente", "🎮", row=1,
@@ -715,23 +725,33 @@ class VoltarCentralView(discord.ui.View):
 
     @discord.ui.button(label="Voltar à central", emoji="↩️", style=discord.ButtonStyle.secondary, row=0)
     async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(content=self.cog.texto_central(), embeds=[], view=CentralView(self.cog))
+        callback = self.callback_voltar or _callback_nara_soulslike(self.cog, interaction.user.id)
+        await interaction.response.edit_message(content=self.cog.texto_central(), embeds=[], view=CentralView(self.cog, callback_voltar=callback, user_id=interaction.user.id))
 
 
 class VoltarCentralButton(discord.ui.Button):
-    def __init__(self, cog, row=1):
+    def __init__(self, cog, row=1, callback_voltar=None):
         self.cog = cog
+        self.callback_voltar = callback_voltar
         super().__init__(label="Voltar à central", emoji="↩️", style=discord.ButtonStyle.secondary, row=row)
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.edit_message(content=self.cog.texto_central(), embeds=[], view=CentralView(self.cog))
+        callback = self.callback_voltar or _callback_nara_soulslike(self.cog, interaction.user.id)
+        await interaction.response.edit_message(content=self.cog.texto_central(), embeds=[], view=CentralView(self.cog, callback_voltar=callback, user_id=interaction.user.id))
 
 
 class CentralView(discord.ui.View):
-    """View persistente: custom_id estável e timeout=None permitem reutilizar a mensagem após reinício."""
-    def __init__(self, cog):
-        super().__init__(timeout=None)
+    """Central de runs; no fluxo privado mantém retorno à Nara sem alterar a versão pública persistente."""
+    def __init__(self, cog, callback_voltar=None, user_id: int | None = None):
+        super().__init__(timeout=None if callback_voltar is None else 600)
         self.cog = cog
+        self.callback_voltar = callback_voltar
+        if callback_voltar is not None and user_id is not None:
+            if not hasattr(cog, "_retornos_nara"):
+                cog._retornos_nara = {}
+            cog._retornos_nara[int(user_id)] = callback_voltar
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar", emoji="↩️")
         from cogs.comunidade import adicionar_botao_contribuicao_contextual
         adicionar_botao_contribuicao_contextual(
             self, "game_suggestion", "runs", "Sugerir jogo ausente", "🎮", row=2,
@@ -750,7 +770,7 @@ class CentralView(discord.ui.View):
             return await substituir_ou_responder(
                 interaction,
                 content="## ⚔️ Ritual de entrada\n\nAinda não há jogos cadastrados. Você pode sugerir um jogo diretamente nesta tela; a equipe revisará a inclusão.",
-                view=VoltarCentralView(self.cog),
+                view=VoltarCentralView(self.cog, self.callback_voltar),
             )
         view = RegistrarView(self.cog, jogos, desafios, parent_interaction=interaction)
         orientacao = (
@@ -774,12 +794,12 @@ class CentralView(discord.ui.View):
             motivo = "Ainda não há jogos cadastrados." if not jogos else "Ainda não há desafios cadastrados."
             return await substituir_ou_responder(
                 interaction, content=f"## 🏆 Hall da Fama\n\n{motivo} Você pode sugerir o conteúdo que está faltando nesta mesma tela.",
-                view=VoltarCentralView(self.cog),
+                view=VoltarCentralView(self.cog, self.callback_voltar),
             )
         g = jogos[0]
         desafios_compativeis = [c for c in desafios if c["game_id"] is None or int(c["game_id"]) == int(g["id"])]
         if not desafios_compativeis:
-            return await substituir_ou_responder(interaction, content="## 🏆 Hall da Fama\n\nEste jogo ainda não possui desafios compatíveis.", view=VoltarCentralView(self.cog))
+            return await substituir_ou_responder(interaction, content="## 🏆 Hall da Fama\n\nEste jogo ainda não possui desafios compatíveis.", view=VoltarCentralView(self.cog, self.callback_voltar))
         c = desafios_compativeis[0]
         await substituir_ou_responder(
             interaction, content=await self.cog.texto_ranking(g['id'], c['id']),
@@ -862,7 +882,7 @@ class RegistrarView(discord.ui.View):
             default_game=game_name, style=discord.ButtonStyle.primary,
         )
         linha_voltar = next(linha for linha in (2, 3, 4) if linha not in linhas_usadas)
-        self.add_item(VoltarCentralButton(self.cog, row=linha_voltar))
+        self.add_item(VoltarCentralButton(self.cog, row=linha_voltar, callback_voltar=getattr(self.cog, "_retornos_nara", {}).get(getattr(self.parent_interaction, "user", None).id) if getattr(self.parent_interaction, "user", None) else None))
 
     async def _choose_game(self, interaction: discord.Interaction):
         self.game_id = int(self.game_select.values[0])
@@ -891,7 +911,7 @@ class RegistrarView(discord.ui.View):
         if not g or not c or (c["game_id"] is not None and int(c["game_id"]) != self.game_id):
             return await interaction.response.edit_message(
                 content="⚠️ Jogo ou desafio incompatível. Volte à central e tente novamente.",
-                embeds=[], view=VoltarCentralView(self.cog),
+                embeds=[], view=VoltarCentralView(self.cog, self.callback_voltar),
             )
         await interaction.response.send_modal(RunDadosModal(self.cog, g['id'], c['id'], parent_interaction=self.parent_interaction or interaction))
 
@@ -922,13 +942,17 @@ class RunDadosModal(discord.ui.Modal, title="Registrar run Soulslike"):
     def __init__(
         self, cog, game_id: int, challenge_id: int, parent_interaction=None,
         tempo_padrao: int | None = None, build_padrao: str | None = None,
-        motivo_rejeicao: str | None = None,
+        motivo_rejeicao: str | None = None, callback_voltar=None,
     ):
         super().__init__(timeout=300)
         self.cog = cog
         self.game_id = game_id
         self.challenge_id = challenge_id
         self.parent_interaction = parent_interaction
+        user_obj = getattr(parent_interaction, "user", None)
+        self.callback_voltar = callback_voltar or _callback_nara_soulslike(
+            cog, getattr(user_obj, "id", None)
+        )
         if tempo_padrao:
             self.tempo.default = fmt_tempo(int(tempo_padrao))
         if build_padrao is not None:
@@ -972,7 +996,7 @@ class RunDadosModal(discord.ui.Modal, title="Registrar run Soulslike"):
             try:
                 await self.parent_interaction.edit_original_response(
                     content="Conclua a avaliação na tela privada aberta. Depois, enviarei as instruções do comprovante.",
-                    embeds=[], view=VoltarCentralView(self.cog),
+                    embeds=[], view=VoltarCentralView(self.cog, self.callback_voltar),
                 )
             except discord.HTTPException:
                 log.debug("Não foi possível atualizar a tela anterior ao iniciar avaliação da run")

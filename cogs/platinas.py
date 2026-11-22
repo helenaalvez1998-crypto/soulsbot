@@ -312,10 +312,9 @@ class ColiseuView(discord.ui.View):
 
     @discord.ui.button(label="Platinas", emoji="🏆", style=discord.ButtonStyle.primary, custom_id="nara:coliseu:platinas", row=0)
     async def abrir_platinas(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = PainelView(self.platinas_cog, interaction.user)
+        view = PainelView(self.platinas_cog, interaction.user, callback_voltar=self._voltar_coliseu if self.back_callback is not None else None)
         if self.user_id is not None and self.back_callback is not None:
-            from painel_navegacao import adicionar_botao_voltar
-            adicionar_botao_voltar(view, self._voltar_coliseu)
+            view.callback_voltar = self._voltar_coliseu
         if self.user_id is None:
             # No painel público, cada pessoa recebe a navegação em uma resposta privada.
             await interaction.response.send_message(embed=await view.embed(), view=view, ephemeral=True)
@@ -327,7 +326,10 @@ class ColiseuView(discord.ui.View):
         cog = self.platinas_cog.bot.get_cog("Zerados")
         if cog is None:
             return await interaction.response.send_message("O painel de zerados não está disponível agora. Avise a moderação; não vou abrir uma porta que não existe.", ephemeral=True)
-        view = cog.painel_view(interaction.user)
+        view = cog.painel_view(
+            interaction.user,
+            callback_voltar=self._voltar_coliseu if self.user_id is not None and self.back_callback is not None else None,
+        )
         if self.user_id is not None and self.back_callback is not None:
             from painel_navegacao import adicionar_botao_voltar
             adicionar_botao_voltar(view, self._voltar_coliseu)
@@ -345,10 +347,8 @@ class ColiseuView(discord.ui.View):
         if self.user_id is None:
             await interaction.response.send_message(content=cog.texto_central(), view=CentralView(cog), ephemeral=True)
         else:
-            view = CentralView(cog)
-            if self.back_callback is not None:
-                from painel_navegacao import adicionar_botao_voltar
-                adicionar_botao_voltar(view, self._voltar_coliseu)
+            callback = self._voltar_coliseu if self.back_callback is not None else None
+            view = CentralView(cog, callback_voltar=callback, user_id=interaction.user.id if callback else None)
             await interaction.response.edit_message(content=cog.texto_central(), embeds=[], view=view)
 
 
@@ -569,10 +569,14 @@ class Platinas(commands.Cog):
 
 # ------------------------------------------------------------------ painel do usuário
 class PainelView(discord.ui.View):
-    def __init__(self, cog, user):
+    def __init__(self, cog, user, callback_voltar=None):
         super().__init__(timeout=900)
         self.cog, self.user = cog, user
+        self.callback_voltar = callback_voltar
         self.alvo: discord.Member | None = None  # membro consultado (padrão: você)
+        if callback_voltar is not None:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar", emoji="↩️")
         self.sel_membro = discord.ui.UserSelect(placeholder="🔎 Consultar outro membro (opcional)", row=0)
         self.sel_membro.callback = self.trocar_membro
         self.add_item(self.sel_membro)
@@ -618,7 +622,7 @@ class PainelView(discord.ui.View):
     @discord.ui.button(label="Perfil", style=discord.ButtonStyle.primary, emoji="👤", row=1)
     async def perfil(self, interaction: discord.Interaction, button: discord.ui.Button):
         e = await self.cog.bot.get_cog("Perfil").embed_perfil(self._membro())
-        await interaction.response.edit_message(content=None, embed=e, view=VoltarPainelView(self.cog, self.user, self.alvo))
+        await interaction.response.edit_message(content=None, embed=e, view=VoltarPainelView(self.cog, self.user, self.alvo, self.callback_voltar))
 
     @discord.ui.button(label="Platinas", style=discord.ButtonStyle.secondary, emoji="📜", row=1)
     async def platinas(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -626,29 +630,29 @@ class PainelView(discord.ui.View):
         texto = await self.cog.bot.get_cog("Perfil").texto_platinas(membro)
         if texto is None:
             texto = f"## 📜 Coleção de {membro.display_name}\n\nAinda não há platinas aprovadas para exibir."
-        await interaction.response.edit_message(content=texto, embeds=[], view=VoltarPainelView(self.cog, self.user, membro))
+        await interaction.response.edit_message(content=texto, embeds=[], view=VoltarPainelView(self.cog, self.user, membro, self.callback_voltar))
 
     @discord.ui.button(label="Galeria", style=discord.ButtonStyle.primary, emoji="🖼️", row=2)
     async def galeria_platinas(self, interaction: discord.Interaction, button: discord.ui.Button):
         membro = self._membro()
         rows = await self.cog.bot.db.platinas_do_usuario(membro.id)
-        view = GaleriaPlatinasView(self.cog, self.user, membro, rows)
+        view = GaleriaPlatinasView(self.cog, self.user, membro, rows, callback_voltar=self.callback_voltar)
         await interaction.response.edit_message(content=None, embeds=view.embeds(), view=view)
 
     @discord.ui.button(label="Ranking", style=discord.ButtonStyle.secondary, emoji="🏆", row=1)
     async def ranking(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = RankingView(self.cog, "platinas", self.user, self._membro())
+        view = RankingView(self.cog, "platinas", self.user, self._membro(), callback_voltar=self.callback_voltar)
         texto = await self.cog.bot.get_cog("Ranking").texto_ranking("platinas")
         await interaction.response.edit_message(content=texto, embeds=[], view=view)
 
     @discord.ui.button(label="Ajuda", style=discord.ButtonStyle.secondary, emoji="❓", row=1)
     async def ajuda(self, interaction: discord.Interaction, button: discord.ui.Button):
         texto = self.cog.bot.get_cog("Perfil").texto_ajuda()
-        await interaction.response.edit_message(content=texto, embeds=[], view=VoltarPainelView(self.cog, self.user, self.alvo))
+        await interaction.response.edit_message(content=texto, embeds=[], view=VoltarPainelView(self.cog, self.user, self.alvo, self.callback_voltar))
 
     @discord.ui.button(label="Meu santuário", style=discord.ButtonStyle.success, emoji="🏛️", row=2)
     async def meu_santuario(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.cog.bot.get_cog("Santuario").abrir_meu(interaction)
+        await self.cog.bot.get_cog("Santuario").abrir_meu(interaction, callback_voltar=self.callback_voltar)
 
     @discord.ui.button(label="Visitar santuário", style=discord.ButtonStyle.primary, emoji="🚪", row=2)
     async def visitar_santuario(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -657,16 +661,17 @@ class PainelView(discord.ui.View):
                 content="🔎 **Antes de visitar:** selecione um membro no menu superior e tente novamente.",
                 embed=await self.embed(), view=self,
             )
-        await self.cog.bot.get_cog("Santuario").visitar(interaction, self.alvo.id)
+        await self.cog.bot.get_cog("Santuario").visitar(interaction, self.alvo.id, callback_voltar=self.callback_voltar)
 
 
 class GaleriaPlatinasView(discord.ui.View):
     """Galeria paginada de platinas aprovadas; mantém a lista textual como alternativa."""
     PAGE_SIZE = 5
 
-    def __init__(self, cog, owner, alvo, rows, page=0):
+    def __init__(self, cog, owner, alvo, rows, page=0, callback_voltar=None):
         super().__init__(timeout=900)
         self.cog, self.owner, self.alvo = cog, owner, alvo
+        self.callback_voltar = callback_voltar
         self.rows = list(rows)
         self.page = max(0, min(page, max(0, (len(self.rows) - 1) // self.PAGE_SIZE)))
         self._sync()
@@ -739,20 +744,24 @@ class GaleriaPlatinasView(discord.ui.View):
     async def lista(self, interaction):
         texto = await self.cog.bot.get_cog("Perfil").texto_platinas(self.alvo)
         await interaction.response.edit_message(content=texto or "Ainda não há platinas aprovadas.",
-                                                embeds=[], view=VoltarPainelView(self.cog, self.owner, self.alvo))
+                                                embeds=[], view=VoltarPainelView(self.cog, self.owner, self.alvo, self.callback_voltar))
 
     async def voltar(self, interaction):
-        view = PainelView(self.cog, self.owner)
+        view = PainelView(self.cog, self.owner, callback_voltar=self.callback_voltar)
         view.alvo = self.alvo if self.alvo.id != self.owner.id else None
         await interaction.response.edit_message(content=None, embed=await view.embed(), view=view)
 
 
 class VoltarPainelView(discord.ui.View):
     """Retorna à tela de perfil sem publicar uma nova mensagem."""
-    def __init__(self, cog, owner, alvo=None):
+    def __init__(self, cog, owner, alvo=None, callback_voltar=None):
         super().__init__(timeout=900)
         self.cog, self.owner_id = cog, owner.id
         self.owner, self.alvo = owner, alvo
+        self.callback_voltar = callback_voltar
+        if callback_voltar is not None:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar", emoji="↩️")
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.owner_id:
@@ -762,18 +771,19 @@ class VoltarPainelView(discord.ui.View):
 
     @discord.ui.button(label="Voltar ao painel", style=discord.ButtonStyle.secondary, emoji="↩️")
     async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = PainelView(self.cog, self.owner)
+        view = PainelView(self.cog, self.owner, callback_voltar=self.callback_voltar)
         view.alvo = self.alvo
         await interaction.response.edit_message(content=None, embed=await view.embed(), view=view)
 
 
 class RankingView(discord.ui.View):
-    def __init__(self, cog, tipo: str, owner=None, alvo=None):
+    def __init__(self, cog, tipo: str, owner=None, alvo=None, callback_voltar=None):
         super().__init__(timeout=900)
         from cogs.ranking import TIPOS
         self.cog = cog
         self.owner = owner
         self.alvo = alvo
+        self.callback_voltar = callback_voltar
         self.sel = discord.ui.Select(
             placeholder="Filtrar ranking",
             options=[discord.SelectOption(label=nome, value=k, default=k == tipo) for k, nome in TIPOS.items()],
@@ -792,7 +802,7 @@ class RankingView(discord.ui.View):
     @discord.ui.button(label="Voltar ao painel", style=discord.ButtonStyle.secondary, emoji="↩️", row=1)
     async def voltar(self, interaction: discord.Interaction, button: discord.ui.Button):
         owner = self.owner or interaction.user
-        view = PainelView(self.cog, owner)
+        view = PainelView(self.cog, owner, callback_voltar=self.callback_voltar)
         view.alvo = self.alvo
         await interaction.response.edit_message(content=None, embed=await view.embed(), view=view)
 

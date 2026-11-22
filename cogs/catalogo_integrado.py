@@ -535,15 +535,16 @@ class CatalogView(discord.ui.View):
     TITULOS = {"ver": "📚 Catálogo de ports", "editar": "✏️ Editar port",
                "remover": "🗑 Remover port", "pendentes": "📥 Envios pendentes"}
 
-    def __init__(self, mode="ver", plataforma=None, query=None, page=0):
+    def __init__(self, mode="ver", plataforma=None, query=None, page=0, callback_voltar=None):
         super().__init__(timeout=900)
         self.mode, self.plataforma, self.query, self.page = mode, plataforma, query, page
+        self.callback_voltar = callback_voltar
         self.status = "pendente" if mode == "pendentes" else "aprovado"
         self.rows, self.total = [], 0
         self.build()
 
     def estado(self):
-        return dict(mode=self.mode, plataforma=self.plataforma, query=self.query, page=self.page)
+        return dict(mode=self.mode, plataforma=self.plataforma, query=self.query, page=self.page, callback_voltar=self.callback_voltar)
 
     def build(self):
         self.clear_items()
@@ -585,6 +586,9 @@ class CatalogView(discord.ui.View):
         self.add_item(PageButton(+1, self.page >= pages - 1))
         if self.mode != "ver":
             self.add_item(PainelButton())
+        if self.callback_voltar is not None:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, self.callback_voltar, label="Voltar à Nara", emoji="🏠")
 
     def render(self):
         page_size = 1 if self.mode == "ver" else PAGE_SIZE
@@ -665,9 +669,13 @@ class DetalheView(discord.ui.View):
 class BuscaModal(discord.ui.Modal, title="Buscar port"):
     nome = discord.ui.TextInput(label="Nome do port", max_length=100, placeholder="Ex.: nome do jogo portado")
 
+    def __init__(self, callback_voltar=None):
+        super().__init__()
+        self.callback_voltar = callback_voltar
+
     async def on_submit(self, interaction: discord.Interaction):
         termo = self.nome.value.strip()
-        v = CatalogView(query=termo)
+        v = CatalogView(query=termo, callback_voltar=self.callback_voltar)
         if v.total == 1:
             jogo = get_jogo(v.rows[0]["id"])
             emb, file = jogo_embed(jogo)
@@ -685,9 +693,13 @@ class BuscarModModal(discord.ui.Modal, title="Buscar mod"):
     termo = discord.ui.TextInput(label="Nome do mod ou do port", max_length=100,
                                  placeholder="Ex.: Skyrim, texturas HD, roupa do Leon")
 
+    def __init__(self, callback_voltar=None):
+        super().__init__()
+        self.callback_voltar = callback_voltar
+
     async def on_submit(self, interaction: discord.Interaction):
         termo = self.termo.value.strip()
-        v = ModsCatalogView(query=termo)
+        v = ModsCatalogView(query=termo, callback_voltar=self.callback_voltar)
         embed, file = v.render()
         kwargs = {"embed": embed, "view": v, "ephemeral": True}
         if file:
@@ -1208,20 +1220,26 @@ class RemoverView(discord.ui.View):
 
 
 class MainView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)  # não expira; continua funcionando após reiniciar o bot
+    def __init__(self, callback_voltar=None):
+        super().__init__(timeout=None if callback_voltar is None else 600)  # canal público persistente ou central privada
+        self.callback_voltar = callback_voltar
+        if callback_voltar is not None:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar à Nara", emoji="🏠")
 
     @discord.ui.button(label="Catálogo de ports", emoji="📚", style=discord.ButtonStyle.primary, custom_id="catalogo:ver", row=0)
     async def ver(self, interaction: discord.Interaction, button: discord.ui.Button):
-        v = CatalogView()
+        v = CatalogView(callback_voltar=self.callback_voltar)
         emb, file = v.render()
-        await interaction.response.send_message(
-            **send_kwargs(emb, file, v), ephemeral=True
-        )
+        if self.callback_voltar is not None:
+            kwargs = edit_kwargs(emb, file, v)
+            await interaction.response.edit_message(**kwargs)
+        else:
+            await interaction.response.send_message(**send_kwargs(emb, file, v), ephemeral=True)
 
     @discord.ui.button(label="Buscar port", emoji="🔎", style=discord.ButtonStyle.secondary, custom_id="catalogo:buscar", row=2)
     async def buscar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(BuscaModal())
+        await interaction.response.send_modal(BuscaModal(callback_voltar=self.callback_voltar))
 
     @discord.ui.button(label="Enviar port", emoji="📤", style=discord.ButtonStyle.success, custom_id="catalogo:enviar", row=1)
     async def enviar(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1237,16 +1255,19 @@ class MainView(discord.ui.View):
 
     @discord.ui.button(label="Catálogo de mods", emoji="🧩", style=discord.ButtonStyle.primary, custom_id="catalogo:mods", row=0)
     async def abrir_mods(self, interaction: discord.Interaction, button: discord.ui.Button):
-        v = ModsCatalogView()
+        v = ModsCatalogView(callback_voltar=self.callback_voltar)
         emb, file = v.render()
-        kwargs = {"embed": emb, "view": v}
-        if file:
-            kwargs["file"] = file
-        await interaction.response.send_message(**kwargs, ephemeral=True)
+        if self.callback_voltar is not None:
+            await interaction.response.edit_message(embed=emb, attachments=[file] if file else [], view=v)
+        else:
+            kwargs = {"embed": emb, "view": v, "ephemeral": True}
+            if file:
+                kwargs["file"] = file
+            await interaction.response.send_message(**kwargs)
 
     @discord.ui.button(label="Buscar mod", emoji="🔎", style=discord.ButtonStyle.secondary, custom_id="catalogo:buscarmod", row=2)
     async def buscar_mod(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(BuscarModModal())
+        await interaction.response.send_modal(BuscarModModal(callback_voltar=self.callback_voltar))
 
 
 
@@ -1369,7 +1390,7 @@ class ModSelect(discord.ui.Select):
                                         style=discord.ButtonStyle.link, url=mod["link"]))
         back = discord.ui.Button(label="Voltar ao catálogo", emoji="⬅️", style=discord.ButtonStyle.secondary)
         async def voltar(i: discord.Interaction):
-            v = ModsCatalogView(self.view.query, self.view.page)
+            v = ModsCatalogView(self.view.query, self.view.page, callback_voltar=getattr(self.view, "callback_voltar", None))
             e, f = v.render()
             await i.response.edit_message(embed=e, attachments=[f] if f else [], view=v)
         back.callback = voltar
@@ -1409,7 +1430,7 @@ class ModCardButton(discord.ui.Button):
                                         style=discord.ButtonStyle.link, url=mod["link"]))
         back = discord.ui.Button(label="Voltar ao catálogo", emoji="⬅️", style=discord.ButtonStyle.secondary)
         async def voltar(i: discord.Interaction):
-            v = ModsCatalogView(self.view.query, self.view.page)
+            v = ModsCatalogView(self.view.query, self.view.page, callback_voltar=getattr(self.view, "callback_voltar", None))
             e, f = v.render()
             await i.response.edit_message(embed=e, attachments=[f] if f else [], view=v)
         back.callback = voltar
@@ -1432,9 +1453,10 @@ class ModsPageButton(discord.ui.Button):
 
 
 class ModsCatalogView(discord.ui.View):
-    def __init__(self, query=None, page=0):
+    def __init__(self, query=None, page=0, callback_voltar=None):
         super().__init__(timeout=900)
         self.query, self.page = query, page
+        self.callback_voltar = callback_voltar
         self.rebuild()
 
     def rebuild(self):
@@ -1457,6 +1479,9 @@ class ModsCatalogView(discord.ui.View):
         self.add_item(enviar)
         self.add_item(ModsPageButton(-1, self.page <= 0))
         self.add_item(ModsPageButton(1, self.page >= pages - 1))
+        if self.callback_voltar is not None:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, self.callback_voltar, label="Voltar à Nara", emoji="🏠")
 
     def render(self):
         pages = max(1, math.ceil(self.total / PAGE_SIZE))
@@ -1797,13 +1822,13 @@ class CatalogoIntegrado(commands.Cog):
         # View persistente para mensagens antigas do catálogo que ainda estejam publicadas.
         self.bot.add_view(MainView())
 
-    async def abrir_membros(self, interaction: discord.Interaction):
-        view = MainView()
-        await interaction.response.send_message(
-            content=main_content(),
-            view=view,
-            ephemeral=True,
-        )
+    async def abrir_membros(self, interaction: discord.Interaction, callback_voltar=None):
+        """Abre o catálogo dentro da mensagem da Nara quando há caminho de retorno."""
+        view = MainView(callback_voltar=callback_voltar)
+        if callback_voltar is not None:
+            await interaction.response.edit_message(content=main_content(), embed=None, attachments=[], view=view)
+        else:
+            await interaction.response.send_message(content=main_content(), view=view, ephemeral=True)
 
     async def abrir_admin_jogos(self, interaction: discord.Interaction):
         if not eh_admin(interaction):

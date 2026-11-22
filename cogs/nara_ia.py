@@ -861,6 +861,11 @@ class NaraIA(commands.Cog):
 
     @app_commands.command(name="nara_memoria", description="Abre os controles privados da sua memória com a Nara.")
     async def nara_memoria(self, interaction: discord.Interaction):
+        """Comando legado. As pontuações e controles administrativos não aparecem neste painel."""
+        await self.abrir_painel_memoria(interaction)
+
+    async def abrir_painel_memoria(self, interaction: discord.Interaction, callback_voltar=None):
+        """Abre os mesmos controles de privacidade dentro da central /nara ou pelo comando legado."""
         if interaction.guild_id is None:
             return await interaction.response.send_message(
                 "Este controle está disponível dentro de um servidor.", ephemeral=True
@@ -963,7 +968,26 @@ class NaraIA(commands.Cog):
             "O relacionamento individual mantém afinidade, paciência e eventos resumidos por até 90 dias. "
             "Apagar o histórico também apaga os dados de personalização associados."
         )
-        await interaction.response.send_message(descricao_memoria, view=view, ephemeral=True)
+        if callback_voltar is not None:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(view, callback_voltar, label="Voltar à Nara", emoji="🏠")
+            await interaction.response.edit_message(content=descricao_memoria, embed=None, view=view)
+        else:
+            await interaction.response.send_message(descricao_memoria, view=view, ephemeral=True)
+
+    async def abrir_central_ajuda(self, interaction: discord.Interaction, callback_voltar=None):
+        """Abre a FAQ reutilizando as mesmas categorias do comando /central_ajuda."""
+        from nara_help_panel import CentralAjudaView
+        embed = discord.Embed(
+            title="Central de Ajuda da Nara",
+            description="Escolha o assunto e depois a pergunta. As respostas abrem nesta mesma tela, com caminho de volta.",
+            color=discord.Color.dark_teal(),
+        )
+        view = CentralAjudaView(self.bot, callback_voltar=callback_voltar)
+        if callback_voltar is not None:
+            await interaction.response.edit_message(content=None, embed=embed, view=view)
+        else:
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     @app_commands.command(name="nara_relatorio", description="Mostra indicadores de uso e disponibilidade da Nara para a equipe.")
     async def nara_relatorio(self, interaction: discord.Interaction):

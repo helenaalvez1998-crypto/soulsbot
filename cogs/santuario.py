@@ -450,7 +450,10 @@ class Santuario(commands.Cog):
     def _fonte_ephemeral(self, interaction: discord.Interaction) -> bool:
         return bool(interaction.message and getattr(interaction.message.flags, "ephemeral", False))
 
-    def _view_voltar_painel(self, interaction: discord.Interaction, alvo=None):
+    def _view_voltar_painel(self, interaction: discord.Interaction, alvo=None, callback_voltar=None):
+        if callback_voltar is not None:
+            from painel_navegacao import view_so_com_voltar
+            return view_so_com_voltar(callback_voltar)
         mensagem = interaction.message
         if not mensagem or not self._fonte_ephemeral(interaction):
             return None
@@ -477,9 +480,9 @@ class Santuario(commands.Cog):
         await interaction.edit_original_response(content=texto, embeds=[], view=view)
 
     # ------------------------------------------------------------ criar / abrir o próprio santuário
-    async def abrir_meu(self, interaction: discord.Interaction):
+    async def abrir_meu(self, interaction: discord.Interaction, callback_voltar=None):
         privado_origem = self._fonte_ephemeral(interaction)
-        view_voltar = self._view_voltar_painel(interaction, interaction.user)
+        view_voltar = self._view_voltar_painel(interaction, interaction.user, callback_voltar=callback_voltar)
         perfis_ch_id = await GuildConfig.get(self.bot.db, interaction.guild_id, "perfis_channel")
         if not perfis_ch_id:
             return await self._responder_fluxo(
@@ -546,10 +549,10 @@ class Santuario(commands.Cog):
         )
 
     # ------------------------------------------------------------ visitar
-    async def visitar(self, interaction: discord.Interaction, alvo_id: int):
+    async def visitar(self, interaction: discord.Interaction, alvo_id: int, callback_voltar=None):
         privado_origem = self._fonte_ephemeral(interaction)
         alvo_membro = interaction.guild.get_member(alvo_id) if interaction.guild else None
-        view_voltar = self._view_voltar_painel(interaction, alvo_membro or interaction.user)
+        view_voltar = self._view_voltar_painel(interaction, alvo_membro or interaction.user, callback_voltar=callback_voltar)
         if privado_origem:
             await interaction.response.defer()
         else:

@@ -407,9 +407,13 @@ def adicionar_botao_contribuicao_contextual(
 
 
 class ContributionCategoryView(discord.ui.View):
-    def __init__(self, cog: "Comunidade", category: str):
+    def __init__(self, cog: "Comunidade", category: str, callback_voltar=None):
         super().__init__(timeout=180)
         self.cog, self.category = cog, category
+        self.callback_voltar = callback_voltar
+        if callback_voltar is not None:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar à Nara", emoji="🏠")
         choices = {
             "lore": [("lore", "Lore", "📜"), ("theory", "Teoria", "🔍"), ("discovery", "Descoberta", "🧩"), ("timeline", "Cronologia", "🕰️"), ("debate", "Questão para debate", "💬")],
             "guide": [("guide", "Guia", "📘"), ("tutorial", "Tutorial", "🛠️"), ("faq", "Pergunta para FAQ", "❔")],
@@ -425,8 +429,9 @@ class ContributionCategoryView(discord.ui.View):
 
 
 class ContributionTypeSelect(discord.ui.Select):
-    def __init__(self, cog: "Comunidade"):
+    def __init__(self, cog: "Comunidade", callback_voltar=None):
         self.cog = cog
+        self.callback_voltar = callback_voltar
         options = [
             discord.SelectOption(label="Lore e teorias", value="lore", emoji="📜"),
             discord.SelectOption(label="Guias e tutoriais", value="guide", emoji="📘"),
@@ -445,7 +450,7 @@ class ContributionTypeSelect(discord.ui.Select):
         }
         await interaction.response.edit_message(
             embed=discord.Embed(title="✍️ Nova contribuição", description=descriptions[category], color=config.COR_OURO),
-            view=ContributionCategoryView(self.cog, category),
+            view=ContributionCategoryView(self.cog, category, callback_voltar=self.callback_voltar),
         )
 
 
@@ -477,16 +482,22 @@ class CommunityGuidesView(discord.ui.View):
             row=1, custom_id="community:guides:mine",
         )
         async def _minhas(interaction: discord.Interaction):
+            # Este painel é persistente e publicado em canal público; não possui
+            # callback efêmero de retorno à Nara.
             await self.cog.mostrar_minhas(interaction)
         minhas.callback = _minhas
         self.add_item(minhas)
 
 
 class CommunityHomeView(discord.ui.View):
-    def __init__(self, cog: "Comunidade", *, persistent: bool = False):
+    def __init__(self, cog: "Comunidade", *, persistent: bool = False, callback_voltar=None):
         super().__init__(timeout=None if persistent else 300)
         self.cog = cog
         self.persistent = persistent
+        self.callback_voltar = callback_voltar
+        if callback_voltar is not None:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar à Nara", emoji="🏠")
         # Como este painel fica no canal de Lore, as ações mais usadas são diretas.
         for kind, label, emoji in (
             ("lore", "Publicar lore", "📜"), ("theory", "Publicar teoria", "🔍"),
@@ -503,38 +514,46 @@ class CommunityHomeView(discord.ui.View):
             description="Escolha uma área. Suas propostas serão revisadas pela equipe antes de entrar nos canais e sistemas oficiais.",
             color=config.COR_OURO,
         )
-        await interaction.response.send_message(embed=embed, view=ContributionCategoryLauncher(self.cog), ephemeral=True)
+        if self.callback_voltar is not None:
+            await interaction.response.edit_message(embed=embed, view=ContributionCategoryLauncher(self.cog, self.callback_voltar))
+        else:
+            await interaction.response.send_message(embed=embed, view=ContributionCategoryLauncher(self.cog), ephemeral=True)
 
     @discord.ui.button(label="Explorar Arquivo", emoji="📚", style=discord.ButtonStyle.secondary, custom_id="community:home:archive", row=0)
     async def archive(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.cog.mostrar_arquivo(interaction)
+        await self.cog.mostrar_arquivo(interaction, callback_voltar=self.callback_voltar)
 
     @discord.ui.button(label="Minhas contribuições", emoji="🗂️", style=discord.ButtonStyle.secondary, custom_id="community:home:mine", row=0)
     async def mine(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.cog.mostrar_minhas(interaction)
+        await self.cog.mostrar_minhas(interaction, callback_voltar=self.callback_voltar)
 
     @discord.ui.button(label="Favoritos", emoji="🔖", style=discord.ButtonStyle.secondary, custom_id="community:home:saved", row=1)
     async def saved(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.cog.mostrar_favoritos(interaction)
+        await self.cog.mostrar_favoritos(interaction, callback_voltar=self.callback_voltar)
 
     @discord.ui.button(label="Mural de atividades", emoji="📡", style=discord.ButtonStyle.secondary, custom_id="community:home:activity", row=1)
     async def activity(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.cog.mostrar_atividades(interaction)
+        await self.cog.mostrar_atividades(interaction, callback_voltar=self.callback_voltar)
 
     @discord.ui.button(label="Notificações", emoji="🔔", style=discord.ButtonStyle.secondary, custom_id="community:home:preferences", row=1)
     async def preferences(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.cog.mostrar_preferencias(interaction)
+        await self.cog.mostrar_preferencias(interaction, callback_voltar=self.callback_voltar)
 
 
 class ContributionCategoryLauncher(discord.ui.View):
-    def __init__(self, cog: "Comunidade"):
+    def __init__(self, cog: "Comunidade", callback_voltar=None):
         super().__init__(timeout=180)
-        self.add_item(ContributionTypeSelect(cog))
+        self.callback_voltar = callback_voltar
+        self.add_item(ContributionTypeSelect(cog, callback_voltar=callback_voltar))
+        if callback_voltar is not None:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar à Nara", emoji="🏠")
 
 
 class CommunityMyContributionsSelect(discord.ui.Select):
-    def __init__(self, cog: "Comunidade", rows):
+    def __init__(self, cog: "Comunidade", rows, callback_voltar=None):
         self.cog = cog
+        self.callback_voltar = callback_voltar
         options = []
         for row in rows[:25]:
             label = discord.utils.escape_markdown(str(row["title"]))[:75]
@@ -558,17 +577,29 @@ class CommunityMyContributionsSelect(discord.ui.Select):
             return await interaction.response.send_modal(ContributionEditModal(self.cog, row))
         if row["status"] == "approved" and row["published_channel_id"] and row["published_message_id"]:
             url = f"https://discord.com/channels/{interaction.guild_id}/{row['published_channel_id']}/{row['published_message_id']}"
-            return await interaction.response.send_message(f"✅ Publicação aprovada: [abrir no Discord]({url})", ephemeral=True)
-        await interaction.response.send_message(
-            f"Status atual: **{STATUS_PT.get(row['status'], row['status'])}**. "
-            "Você receberá uma mensagem privada quando a equipe tomar uma decisão.", ephemeral=True
-        )
+            texto = f"✅ Publicação aprovada: [abrir no Discord]({url})"
+        else:
+            texto = (
+                f"Status atual: **{STATUS_PT.get(row['status'], row['status'])}**. "
+                "Você receberá uma mensagem privada quando a equipe tomar uma decisão."
+            )
+        if self.callback_voltar is not None:
+            await _responder_painel_membro(
+                interaction, callback_voltar=self.callback_voltar, content=texto,
+                view=CommunityMyContributionsView(self.cog, [row], self.callback_voltar),
+            )
+        else:
+            await interaction.response.send_message(texto, ephemeral=True)
 
 
 class CommunityMyContributionsView(discord.ui.View):
-    def __init__(self, cog: "Comunidade", rows):
+    def __init__(self, cog: "Comunidade", rows, callback_voltar=None):
         super().__init__(timeout=300)
-        self.add_item(CommunityMyContributionsSelect(cog, rows))
+        self.callback_voltar = callback_voltar
+        self.add_item(CommunityMyContributionsSelect(cog, rows, callback_voltar))
+        if callback_voltar is not None:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar à Nara", emoji="🏠")
 
 
 class CommunityArchiveSelect(discord.ui.Select):
@@ -598,14 +629,18 @@ class CommunityArchiveSelect(discord.ui.Select):
                 content="Esta publicação não está mais disponível. Atualize o arquivo ou envie uma nova contribuição pelos botões abaixo.",
                 embed=None, view=self.view,
             )
-        await self.cog.mostrar_publicacao(interaction, row)
+        await self.cog.mostrar_publicacao(interaction, row, callback_voltar=getattr(self.view, "callback_voltar", None))
 
 
 class CommunityArchiveView(discord.ui.View):
     """Arquivo com ações de criação alinhadas ao assunto de origem."""
-    def __init__(self, cog: "Comunidade", rows, origin_sector: str = "lore"):
+    def __init__(self, cog: "Comunidade", rows, origin_sector: str = "lore", callback_voltar=None):
         super().__init__(timeout=300)
+        self.callback_voltar = callback_voltar
         self.add_item(CommunityArchiveSelect(cog, rows))
+        if callback_voltar is not None:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar à Nara", emoji="🏠")
         if origin_sector == "guias":
             for kind, label, emoji in (
                 ("guide", "Enviar guia", "📘"), ("tutorial", "Enviar tutorial", "🛠️"),
@@ -1161,14 +1196,21 @@ class CommunityPreferenceButton(discord.ui.Button):
         await self.cog.bot.db.definir_preferencias_atividade(interaction.guild_id, self.user_id, **{self.key: not prefs[self.key]})
         await interaction.response.edit_message(
             content="Escolha quais novidades de quem você acompanha deseja receber por mensagem direta. As opções desligadas continuam disponíveis no Mural de Atividades.",
-            view=await CommunityPreferencesView.criar(self.cog, self.user_id, interaction.guild_id),
+            view=await CommunityPreferencesView.criar(
+                self.cog, self.user_id, interaction.guild_id,
+                callback_voltar=getattr(self.view, "callback_voltar", None),
+            ),
         )
 
 
 class CommunityPreferencesView(discord.ui.View):
-    def __init__(self, cog: "Comunidade", user_id: int, prefs: dict):
+    def __init__(self, cog: "Comunidade", user_id: int, prefs: dict, callback_voltar=None):
         super().__init__(timeout=300)
         self.cog, self.user_id = cog, int(user_id)
+        self.callback_voltar = callback_voltar
+        if callback_voltar is not None:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar à Nara", emoji="🏠")
         keys = list(CommunityPreferenceButton.LABELS)
         for i, key in enumerate(keys):
             self.add_item(CommunityPreferenceButton(cog, user_id, key, bool(prefs.get(key, True)), row=i // 3))
@@ -1180,9 +1222,22 @@ class CommunityPreferencesView(discord.ui.View):
         return True
 
     @classmethod
-    async def criar(cls, cog: "Comunidade", user_id: int, guild_id: int):
+    async def criar(cls, cog: "Comunidade", user_id: int, guild_id: int, callback_voltar=None):
         prefs = await cog.bot.db.get_preferencias_atividade(guild_id, user_id)
-        return cls(cog, user_id, prefs)
+        return cls(cog, user_id, prefs, callback_voltar=callback_voltar)
+
+
+
+
+async def _responder_painel_membro(interaction: discord.Interaction, *, callback_voltar=None, content=None, embed=None, view=None):
+    """Edita a mensagem de origem quando veio da Nara; evita empilhar respostas efêmeras."""
+    if callback_voltar is not None:
+        from painel_navegacao import adicionar_botao_voltar
+        if view is None:
+            view = discord.ui.View(timeout=600)
+        adicionar_botao_voltar(view, callback_voltar, label="Voltar à Nara", emoji="🏠")
+        return await interaction.response.edit_message(content=content, embed=embed, view=view, attachments=[])
+    return await interaction.response.send_message(content=content, embed=embed, view=view, ephemeral=True)
 
 
 class Comunidade(commands.Cog):
@@ -1620,7 +1675,7 @@ class Comunidade(commands.Cog):
         from notificacoes import notificar_usuario
         await notificar_usuario(self.bot, row["guild_id"], int(row["user_id"]), categoria, msg)
 
-    async def mostrar_minhas(self, interaction: discord.Interaction):
+    async def mostrar_minhas(self, interaction: discord.Interaction, callback_voltar=None):
         rows = await self.bot.db.listar_contribuicoes(guild_id=interaction.guild_id, user_id=interaction.user.id, limit=10)
         embed = discord.Embed(title="🗂️ Minhas contribuições", color=config.COR_OURO)
         if not rows:
@@ -1634,9 +1689,9 @@ class Comunidade(commands.Cog):
                     lines.append(f"> Orientação: {discord.utils.escape_markdown(row['review_note'][:250])}")
         embed.description = "\n\n".join(lines)[:4000] if rows else embed.description
         embed.set_footer(text="Mostrando até 10 propostas recentes. O XP é creditado somente após aprovação. Use o seletor para responder a pedidos de ajuste.")
-        await interaction.response.send_message(embed=embed, view=CommunityMyContributionsView(self, rows), ephemeral=True)
+        await _responder_painel_membro(interaction, callback_voltar=callback_voltar, embed=embed, view=CommunityMyContributionsView(self, rows, callback_voltar))
 
-    async def mostrar_favoritos(self, interaction: discord.Interaction):
+    async def mostrar_favoritos(self, interaction: discord.Interaction, callback_voltar=None):
         rows = await self.bot.db.listar_favoritos(interaction.guild_id, interaction.user.id, 20)
         embed = discord.Embed(title="🔖 Meus favoritos", color=config.COR_OURO)
         if not rows:
@@ -1657,9 +1712,9 @@ class Comunidade(commands.Cog):
                     description += f" · [Abrir](https://discord.com/channels/{interaction.guild_id}/{post['channel_id']}/{post['message_id']})"
                 lines.append(description)
             embed.description = "\n".join(lines)[:4000]
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await _responder_painel_membro(interaction, callback_voltar=callback_voltar, embed=embed) 
 
-    async def mostrar_arquivo(self, interaction: discord.Interaction, origin_sector: str = "lore"):
+    async def mostrar_arquivo(self, interaction: discord.Interaction, origin_sector: str = "lore", callback_voltar=None):
         rows = await self.bot.db.listar_contribuicoes(guild_id=interaction.guild_id, status="approved", limit=25)
         embed = discord.Embed(
             title="📚 Arquivo de Mundos e Biblioteca da Comunidade",
@@ -1674,10 +1729,10 @@ class Comunidade(commands.Cog):
                 label = TIPOS.get(row["kind"], ("Contribuição", "", 0))[0]
                 lines.append(f"`#{row['id']}` **{discord.utils.escape_markdown(row['title'])}** · {label} · {row['game_name'] or 'Geral'}")
             embed.add_field(name="Publicações recentes", value="\n".join(lines)[:1024], inline=False)
-        view = CommunityArchiveView(self, rows, origin_sector=origin_sector)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        view = CommunityArchiveView(self, rows, origin_sector=origin_sector, callback_voltar=callback_voltar)
+        await _responder_painel_membro(interaction, callback_voltar=callback_voltar, embed=embed, view=view)
 
-    async def mostrar_publicacao(self, interaction: discord.Interaction, row):
+    async def mostrar_publicacao(self, interaction: discord.Interaction, row, callback_voltar=None):
         label = TIPOS.get(row["kind"], ("Contribuição", "", 0))[0]
         spoilers = {"none": "Sem spoilers", "light": "Spoilers leves", "advanced": "Spoilers avançados", "final": "Spoilers de final/DLC"}.get(row["spoiler_level"], "Não classificado")
         embed = discord.Embed(title=f"{label} · {row['title']}", description=_safe(row["content"], 3900), color=config.COR_OURO)
@@ -1689,9 +1744,9 @@ class Comunidade(commands.Cog):
             embed.add_field(name="Fontes", value=_safe(row["sources"], 1000), inline=False)
         embed.set_footer(text=f"Publicação #{row['id']} · Autor <@{row['user_id']}> · Revisão humana")
         view = await self.criar_view_social(f"contrib_{row['kind']}", int(row["id"]), owner_id=int(row["user_id"]), include_thread=False)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        await _responder_painel_membro(interaction, callback_voltar=callback_voltar, embed=embed, view=view)
 
-    async def mostrar_atividades(self, interaction: discord.Interaction):
+    async def mostrar_atividades(self, interaction: discord.Interaction, callback_voltar=None):
         rows = await self.bot.db._all(
             "SELECT * FROM community_posts WHERE guild_id=? AND is_hidden=0 ORDER BY created_at DESC,id DESC LIMIT 15",
             (interaction.guild_id,),
@@ -1711,15 +1766,16 @@ class Comunidade(commands.Cog):
                         label = f"📖 {contrib['title']}"
                 lines.append(f"{label} · `#{row['target_id']}` · <#{row['channel_id']}> · [Abrir](https://discord.com/channels/{row['guild_id']}/{row['channel_id']}/{row['message_id']})")
             embed.add_field(name="Últimas publicações", value="\n".join(lines)[:4000], inline=False)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await _responder_painel_membro(interaction, callback_voltar=callback_voltar, embed=embed)
 
-    async def mostrar_preferencias(self, interaction: discord.Interaction):
+    async def mostrar_preferencias(self, interaction: discord.Interaction, callback_voltar=None):
         if interaction.guild_id is None:
             return await interaction.response.send_message("Abra estas preferências dentro do servidor.", ephemeral=True)
-        view = await CommunityPreferencesView.criar(self, interaction.user.id, interaction.guild_id)
-        await interaction.response.send_message(
-            "🔔 **Notificações de quem você acompanha**\nAtive ou desative cada tipo. O Mural de Atividades continua disponível mesmo quando as mensagens diretas estão desligadas.",
-            view=view, ephemeral=True,
+        view = await CommunityPreferencesView.criar(self, interaction.user.id, interaction.guild_id, callback_voltar=callback_voltar)
+        await _responder_painel_membro(
+            interaction, callback_voltar=callback_voltar,
+            content="🔔 **Notificações de quem você acompanha**\nAtive ou desative cada tipo. O Mural de Atividades continua disponível mesmo quando as mensagens diretas estão desligadas.",
+            view=view,
         )
 
     async def publicar_painel_guias(self, interaction: discord.Interaction):
