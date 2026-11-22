@@ -882,6 +882,17 @@ class CommunityJoinChallengeButton(discord.ui.Button):
         )
         if interaction.message:
             await interaction.message.edit(view=await self.cog.criar_view_social(f"contrib_challenge", self.contribution_id))
+        try:
+            await self.cog.atualizar_resumo_desafio(interaction.guild_id, self.contribution_id)
+        except Exception:
+            log.exception("Não foi possível atualizar o resumo do desafio #%s após inscrição", self.contribution_id)
+        desafio = await self.cog.bot.db.get_contribuicao(self.contribution_id)
+        if joined and desafio and int(desafio["user_id"]) != interaction.user.id:
+            from notificacoes import notificar_usuario
+            await notificar_usuario(
+                self.cog.bot, interaction.guild_id, int(desafio["user_id"]), "challenges",
+                f"⚔️ {interaction.user.display_name} entrou no seu desafio **{desafio['title']}**."
+            )
 
 
 class CommunityChallengeProgressModal(discord.ui.Modal):
@@ -913,6 +924,17 @@ class CommunityChallengeProgressModal(discord.ui.Modal):
             "🏁 Conclusão autodeclarada registrada com comprovante. A equipe pode verificar o resultado na discussão do desafio."
             if self.status == "completed" else "📈 Progresso atualizado. Continue sua jornada!", ephemeral=True
         )
+        try:
+            await self.cog.atualizar_resumo_desafio(interaction.guild_id, self.contribution_id)
+        except Exception:
+            log.exception("Não foi possível atualizar o resumo do desafio #%s após progresso", self.contribution_id)
+        if int(row["user_id"]) != interaction.user.id:
+            from notificacoes import notificar_usuario
+            evento = "concluiu" if self.status == "completed" else "atualizou o progresso de"
+            await notificar_usuario(
+                self.cog.bot, interaction.guild_id, int(row["user_id"]), "challenges",
+                f"⚔️ {interaction.user.display_name} {evento} seu desafio **{row['title']}**."
+            )
 
 
 class CommunityChallengeProgressButton(discord.ui.Button):
@@ -1224,6 +1246,34 @@ class Comunidade(commands.Cog):
             row = None
         return int(row["user_id"]) if row else None
 
+    async def atualizar_resumo_desafio(self, guild_id: int, contribution_id: int):
+        """Atualiza no cartão público inscritos, andamento e conclusões autodeclaradas."""
+        post = await self.bot.db.get_post_comunitario(guild_id, "contrib_challenge", contribution_id)
+        if not post:
+            return
+        channel = self.bot.get_channel(int(post["channel_id"]))
+        if channel is None:
+            channel = await self.bot.fetch_channel(int(post["channel_id"]))
+        message = await channel.fetch_message(int(post["message_id"]))
+        if not message.embeds:
+            return
+        counts = await self.bot.db.contar_participantes_desafio(guild_id, contribution_id)
+        total = sum(counts.values())
+        andamento = int(counts.get("in_progress", 0))
+        concluidos = int(counts.get("completed", 0))
+        contribution = await self.bot.db.get_contribuicao(contribution_id)
+        resumo = f"👥 {total} inscritos · 📈 {andamento} em andamento · 🏁 {concluidos} concluídos (autodeclarados)"
+        if contribution and contribution["challenge_mode"] == "collective":
+            meta = int(contribution["challenge_goal"] or 0)
+            resumo += f"\n**Meta coletiva:** {concluidos}/{meta} conclusões"
+        embed = message.embeds[0]
+        idx = next((i for i, field in enumerate(embed.fields) if field.name == "Participação atual"), None)
+        if idx is None:
+            embed.add_field(name="Participação atual", value=resumo[:1024], inline=False)
+        else:
+            embed.set_field_at(idx, name="Participação atual", value=resumo[:1024], inline=False)
+        await message.edit(embed=embed)
+
     async def criar_view_social(self, target_type: str, target_id: int, owner_id: int | None = None,
                                 include_thread: bool = True):
         counts = await self.bot.db.contar_interacoes(
@@ -1512,6 +1562,12 @@ class Comunidade(commands.Cog):
                 if mode == "collective" else "Individual"
             )
             embed.add_field(name="Modalidade", value=mode_label, inline=True)
+            embed.add_field(
+                name="Participação atual",
+                value="👥 0 inscritos · 📈 0 em andamento · 🏁 0 concluídos (autodeclarados)"
+                      + (f"\n**Meta coletiva:** 0/{int(row['challenge_goal'] or 0)} conclusões" if mode == "collective" else ""),
+                inline=False,
+            )
         if row["summary"]:
             embed.add_field(name="Resumo", value=_safe(row["summary"], 1000), inline=False)
         if row["sources"]:
@@ -1544,25 +1600,25 @@ class Comunidade(commands.Cog):
             log.info("Thread automática indisponível para contribuição #%s; o botão de discussão permanece ativo.", row["id"])
 
     async def notificar_autor(self, row, status: str, note: str, xp: int):
-        try:
-            user = self.bot.get_user(int(row["user_id"])) or await self.bot.fetch_user(int(row["user_id"]))
-            if status == "approved":
-                if row["published_message_id"]:
-                    link = f"https://discord.com/channels/{row['guild_id']}/{row['published_channel_id']}/{row['published_message_id']}"
-                    msg = f"✅ Sua contribuição **#{row['id']} — {row['title']}** foi aprovada e publicada.\n{link}"
-                else:
-                    msg = f"✅ Sua contribuição **#{row['id']} — {row['title']}** foi aprovada. A publicação ainda está pendente de conclusão pela equipe."
-                if xp:
-                    msg += f" Você recebeu **+{xp} XP**."
-                else:
-                    msg += " O limite semanal de XP comunitário já foi atingido; não houve crédito adicional."
-            elif status == "changes_requested":
-                msg = f"📝 A equipe solicitou ajustes na contribuição **#{row['id']} — {row['title']}**.\nOrientação: {note}"
+        if status == "approved":
+            if row["published_message_id"] and row["published_channel_id"]:
+                link = f"https://discord.com/channels/{row['guild_id']}/{row['published_channel_id']}/{row['published_message_id']}"
+                msg = f"✅ Sua contribuição **#{row['id']} — {row['title']}** foi aprovada e publicada.\n{link}"
             else:
-                msg = f"❌ Sua contribuição **#{row['id']} — {row['title']}** foi rejeitada.\nMotivo: {note}"
-            await user.send(msg)
-        except (discord.Forbidden, discord.HTTPException):
-            log.info("Não foi possível enviar DM ao autor da contribuição #%s", row["id"])
+                msg = f"✅ Sua contribuição **#{row['id']} — {row['title']}** foi aprovada. A publicação ainda está pendente de conclusão pela equipe."
+            if xp:
+                msg += f" Você recebeu **+{xp} XP**."
+            else:
+                msg += " O limite semanal de XP comunitário já foi atingido; não houve crédito adicional."
+            categoria = "approvals"
+        elif status == "changes_requested":
+            msg = f"📝 A equipe solicitou ajustes na contribuição **#{row['id']} — {row['title']}**.\nOrientação: {note}"
+            categoria = "replies"
+        else:
+            msg = f"❌ Sua contribuição **#{row['id']} — {row['title']}** foi rejeitada.\nMotivo: {note}"
+            categoria = "rejections"
+        from notificacoes import notificar_usuario
+        await notificar_usuario(self.bot, row["guild_id"], int(row["user_id"]), categoria, msg)
 
     async def mostrar_minhas(self, interaction: discord.Interaction):
         rows = await self.bot.db.listar_contribuicoes(guild_id=interaction.guild_id, user_id=interaction.user.id, limit=10)

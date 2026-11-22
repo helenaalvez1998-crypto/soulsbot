@@ -77,11 +77,12 @@ MEMBROS_CATEGORIAS = {
     },
     "biblioteca": {
         "titulo": "📚 Minha biblioteca",
-        "descricao": "Acesse suas platinas, jogos zerados e runs e desafios, ou corrija um registro de zerado.",
+        "descricao": "Acesse suas platinas, jogos zerados e runs. Acompanhe os registros enviados e o resultado da moderação.",
         "acoes": [
             ("biblioteca_platinas", "Platinas", "🏆", discord.ButtonStyle.primary),
             ("zerados", "Zerados", "✅", discord.ButtonStyle.success),
             ("biblioteca_runs", "Runs e desafios", "⚔️", discord.ButtonStyle.danger),
+            ("meus_registros", "Meus registros e aprovações", "📬", discord.ButtonStyle.secondary),
             ("remover_zerado", "Remover zerado", "🗑️", discord.ButtonStyle.secondary),
         ],
     },
@@ -96,9 +97,10 @@ MEMBROS_CATEGORIAS = {
     },
     "preferencias": {
         "titulo": "🧠 Minhas preferências",
-        "descricao": "Acesse as opções pessoais da Nara.",
+        "descricao": "Configure suas notificações e opções pessoais da Nara.",
         "acoes": [
             ("memoria", "Memória da Nara", "🧠", discord.ButtonStyle.secondary),
+            ("notificacoes", "Notificações", "🔔", discord.ButtonStyle.primary),
         ],
     },
     "ajuda": {
@@ -223,6 +225,228 @@ def tutorial_transmissao_embed() -> discord.Embed:
     return embed
 
 
+class MeusRegistrosSelect(discord.ui.Select):
+    def __init__(self, view: "MeusRegistrosView"):
+        self.parent_view = view
+        super().__init__(
+            placeholder="Filtrar meus registros",
+            min_values=1,
+            max_values=1,
+            options=[
+                discord.SelectOption(label="Todos", value="all", default=view.filtro == "all"),
+                discord.SelectOption(label="Aguardando aprovação", value="pending", default=view.filtro == "pending"),
+                discord.SelectOption(label="Aprovados", value="approved", default=view.filtro == "approved"),
+                discord.SelectOption(label="Rejeitados", value="rejected", default=view.filtro == "rejected"),
+                discord.SelectOption(label="Invalidados", value="invalidated", default=view.filtro == "invalidated"),
+            ],
+            row=0,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        nova_view = MeusRegistrosView(
+            self.parent_view.bot, self.parent_view.user_id, self.values[0]
+        )
+        embed = await nova_view.criar_embed()
+        await interaction.response.edit_message(embed=embed, view=nova_view)
+
+
+class CorrigirRegistroSelect(discord.ui.Select):
+    """Permite reabrir um registro rejeitado com os dados anteriores preenchidos."""
+
+    def __init__(self, parent_view: "MeusRegistrosView", rows):
+        self.parent_view = parent_view
+        options = []
+        for row in rows[:25]:
+            tipo = str(row["tipo"])
+            titulo = str(row["titulo"] or "Jogo")
+            motivo = str(row["motivo"] or "Revise os dados e o comprovante")
+            options.append(discord.SelectOption(
+                label=f"{tipo}: {titulo}"[:100],
+                value=f"{tipo}:{int(row['id'])}",
+                description=motivo[:100],
+                emoji="📝",
+            ))
+        super().__init__(
+            placeholder="Corrigir um registro rejeitado (dados pré-preenchidos)",
+            min_values=1, max_values=1, options=options, row=1,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        tipo, raw_id = self.values[0].split(":", 1)
+        try:
+            registro_id = int(raw_id)
+        except ValueError:
+            return await interaction.response.send_message("Não consegui identificar esse registro. Atualize a lista e tente novamente.", ephemeral=True)
+
+        if tipo == "Platina":
+            row = await self.parent_view.bot.db._one(
+                "SELECT * FROM platinas WHERE id=? AND user_id=? AND status='rejected'",
+                (registro_id, self.parent_view.user_id),
+            )
+            cog = self.parent_view.bot.get_cog("Platinas")
+            if not row or cog is None:
+                return await interaction.response.send_message("Esse registro não está mais disponível para correção. Atualize sua lista.", ephemeral=True)
+            from cogs.platinas import PlatinaModal
+            await interaction.response.send_modal(PlatinaModal(
+                cog, row["platform"], row["game"], _data_para_modal(row["earned_at"]), row["reject_reason"]
+            ))
+            return
+
+        if tipo == "Zerado":
+            row = await self.parent_view.bot.db._one(
+                "SELECT * FROM zerados WHERE id=? AND user_id=? AND status='rejected'",
+                (registro_id, self.parent_view.user_id),
+            )
+            cog = self.parent_view.bot.get_cog("Zerados")
+            if not row or cog is None:
+                return await interaction.response.send_message("Esse registro não está mais disponível para correção. Atualize sua lista.", ephemeral=True)
+            from cogs.zerados import ZeradoModal
+            await interaction.response.send_modal(ZeradoModal(
+                cog, row["platform"], row["game"], _data_para_modal(row["finished_at"]), row["reject_reason"]
+            ))
+            return
+
+        if tipo == "Run":
+            row = await self.parent_view.bot.db._one(
+                "SELECT * FROM sl_runs WHERE id=? AND user_id=? AND status='rejected'",
+                (registro_id, self.parent_view.user_id),
+            )
+            cog = self.parent_view.bot.get_cog("Soulslike")
+            if not row or cog is None:
+                return await interaction.response.send_message("Essa run não está mais disponível para correção. Atualize sua lista.", ephemeral=True)
+            from cogs.soulslike import RunDadosModal
+            await interaction.response.send_modal(RunDadosModal(
+                cog, row["game_id"], row["challenge_id"],
+                tempo_padrao=row["seconds"], build_padrao=row["build"],
+                motivo_rejeicao=row["reject_reason"],
+            ))
+            return
+
+        await interaction.response.send_message("Tipo de registro não reconhecido. Atualize sua lista.", ephemeral=True)
+
+
+def _data_para_modal(valor) -> str:
+    """Converte datas ISO armazenadas no banco para o formato DD/MM/AAAA."""
+    texto = str(valor or "").strip()
+    if len(texto) >= 10 and texto[4:5] == "-":
+        try:
+            ano, mes, dia = texto[:10].split("-")
+            return f"{dia}/{mes}/{ano}"
+        except ValueError:
+            pass
+    return texto[:10] if texto else ""
+
+
+class MeusRegistrosView(discord.ui.View):
+    """Linha do tempo privada para acompanhar platinas, zerados e runs."""
+    STATUS = {
+        "pending": "🕒 Pendente",
+        "approved": "✅ Aprovado",
+        "rejected": "❌ Rejeitado",
+        "invalidated": "⚠️ Invalidado",
+    }
+
+    def __init__(self, bot: commands.Bot, user_id: int, filtro: str = "all"):
+        super().__init__(timeout=600)
+        self.bot, self.user_id, self.filtro = bot, int(user_id), filtro
+        self.registros_rejeitados = []
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("Estes registros são privados. Abra `/nara` para consultar os seus.", ephemeral=True)
+            return False
+        return True
+
+    async def criar_embed(self) -> discord.Embed:
+        rows = await self.bot.db.registros_do_usuario(self.user_id, 100)
+        resumo = await self.bot.db.resumo_registros_usuario(self.user_id)
+        self.registros_rejeitados = [r for r in rows if str(r["status"]) == "rejected"]
+        self.clear_items()
+        self.add_item(MeusRegistrosSelect(self))
+        if self.registros_rejeitados:
+            self.add_item(CorrigirRegistroSelect(self, self.registros_rejeitados))
+        self.add_item(MembrosVoltarButton(self.bot, self.user_id))
+        visiveis = [r for r in rows if self.filtro == "all" or str(r["status"]) == self.filtro]
+        counts = {key: int(resumo.get(key, 0)) for key in ("pending", "approved", "rejected", "invalidated")}
+        embed = discord.Embed(
+            title="📬 Meus registros",
+            description=(
+                f"🕒 **{counts['pending']} pendentes** · ✅ **{counts['approved']} aprovados** · "
+                f"❌ **{counts['rejected']} rejeitados** · ⚠️ **{counts['invalidated']} invalidados**\n"
+                "Acompanhe platinas, zerados e runs. Quando houver rejeição, use o seletor de correção: os dados anteriores serão preenchidos automaticamente e você poderá atualizar o que for necessário."
+            ),
+            color=config.COR_OURO,
+        )
+        if not visiveis:
+            embed.add_field(name="Nenhum registro neste filtro", value="Quando você enviar uma conquista, ela aparecerá aqui.", inline=False)
+        else:
+            lines = []
+            for row in visiveis[:12]:
+                status = self.STATUS.get(str(row["status"]), str(row["status"]).title())
+                data = str(row["data"] or row["criado"] or "")[:10]
+                line = (
+                    f"**{row['tipo']} #{row['id']} — {discord.utils.escape_markdown(str(row['titulo']))}**\n"
+                    f"{status} · `{discord.utils.escape_markdown(str(row['detalhe'] or '—'))}` · {data}"
+                )
+                if row["motivo"]:
+                    line += f"\n> Motivo: {str(row['motivo'])[:220]}"
+                lines.append(line)
+            embed.add_field(name="Histórico recente", value="\n\n".join(lines)[:3900], inline=False)
+            if len(visiveis) > 12:
+                embed.set_footer(text=f"Mostrando 12 de {len(visiveis)} registros recentes neste filtro (até 100 carregados).")
+            elif len(rows) >= 100:
+                embed.set_footer(text="Linha do tempo limitada aos 100 registros mais recentes; as contagens acima incluem o histórico completo.")
+        return embed
+
+
+class NotificacaoToggleButton(discord.ui.Button):
+    LABELS = {
+        "approvals": ("Aprovações", "✅"),
+        "rejections": ("Rejeições e correções", "📝"),
+        "levels": ("Subidas de nível", "⬆️"),
+        "replies": ("Respostas e atualizações", "💬"),
+        "challenges": ("Desafios e participantes", "⚔️"),
+    }
+
+    def __init__(self, bot, guild_id: int, user_id: int, key: str, enabled: bool, row: int):
+        label, emoji = self.LABELS[key]
+        super().__init__(
+            label=f"{label}: {'ON' if enabled else 'OFF'}",
+            emoji=emoji,
+            style=discord.ButtonStyle.success if enabled else discord.ButtonStyle.secondary,
+            row=row,
+        )
+        self.bot, self.guild_id, self.user_id, self.key = bot, int(guild_id), int(user_id), key
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("Estas preferências pertencem a outro membro.", ephemeral=True)
+        prefs = await self.bot.db.get_preferencias_notificacao(self.guild_id, self.user_id)
+        await self.bot.db.definir_preferencia_notificacao(self.guild_id, self.user_id, self.key, not prefs[self.key])
+        view = await NotificacoesView.criar(self.bot, self.guild_id, self.user_id)
+        await interaction.response.edit_message(view=view)
+
+
+class NotificacoesView(discord.ui.View):
+    def __init__(self, bot, guild_id: int, user_id: int, prefs: dict):
+        super().__init__(timeout=600)
+        self.bot, self.guild_id, self.user_id = bot, int(guild_id), int(user_id)
+        for i, key in enumerate(NotificacaoToggleButton.LABELS):
+            self.add_item(NotificacaoToggleButton(bot, guild_id, user_id, key, bool(prefs.get(key, True)), row=i // 3))
+        self.add_item(MembrosVoltarButton(bot, user_id))
+
+    @classmethod
+    async def criar(cls, bot, guild_id: int, user_id: int):
+        prefs = await bot.db.get_preferencias_notificacao(guild_id, user_id)
+        return cls(bot, guild_id, user_id, prefs)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("Estas preferências pertencem a outro membro.", ephemeral=True)
+            return False
+        return True
+
+
 async def _executar_acao_membro(
     interaction: discord.Interaction,
     bot: commands.Bot,
@@ -276,6 +500,24 @@ async def _executar_acao_membro(
         if cog is None:
             return await interaction.response.send_message("O gerenciamento de jogos zerados está indisponível no momento.", ephemeral=True)
         return await interaction.response.send_modal(RemoverZeradoModal(cog, callback_voltar=voltar))
+
+    if action == "meus_registros":
+        view = MeusRegistrosView(bot, interaction.user.id)
+        return await interaction.response.edit_message(
+            content=None, embed=await view.criar_embed(), view=view,
+        )
+
+    if action == "notificacoes":
+        if interaction.guild_id is None:
+            return await interaction.response.send_message("Abra as preferências dentro do servidor.", ephemeral=True)
+        view = await NotificacoesView.criar(bot, interaction.guild_id, interaction.user.id)
+        return await interaction.response.edit_message(
+            content=(
+                "🔔 **Notificações pessoais**\n"
+                "Ative apenas os avisos que deseja receber por mensagem direta. "
+                "Se as DMs estiverem fechadas, o SoulsBot não consegue entregá-los."
+            ), embed=None, view=view,
+        )
 
     if action == "loja":
         cog = bot.get_cog("Loja")
@@ -525,10 +767,29 @@ class PainelMembros(commands.Cog):
     @app_commands.command(name="nara", description="Abra sua central de Ports & Mods, biblioteca, progresso, recompensas e suporte.")
     @app_commands.guild_only()
     async def nara(self, interaction: discord.Interaction):
+        db = self.bot.db
+        user = await db.get_user(interaction.user.id)
+        xp = int(user["xp"] or 0)
+        nivel_atual = nivel_por_xp(xp)
+        platinas = await db.contar_platinas(interaction.user.id)
+        zerados = await db.contar_zerados(interaction.user.id)
+        stats = await db.stats_runs(interaction.user.id)
+        analytics = await db.estatisticas_gamer(interaction.user.id)
+        pendentes = await db.registros_pendentes_usuario(interaction.user.id)
+        resumo = (
+            f"**Nível {nivel_atual} · {patente_por_nivel(nivel_atual)}**\n"
+            f"{barra_progresso(xp)}\n"
+            f"🏆 {platinas} platinas · ✅ {zerados} zerados · ⚔️ {stats['runs']} runs aprovadas\n"
+            f"🪙 {int(user['denarios'] or 0)} Denários"
+        )
+        if analytics["media_nota"] is not None:
+            resumo += f" · ⭐ {analytics['media_nota']:.1f}/10 em {analytics['qtd_notas']} avaliações"
+        if pendentes:
+            resumo += f"\n📬 **{pendentes} registro(s) aguardando moderação.**"
         embed = discord.Embed(
-            title="🌙 NARA — CENTRAL DO MEMBRO",
+            title="🌙 NARA — SUA CENTRAL",
             description=(
-                "**Bem-vindo à sua central NARA.**\n\n"
+                "**Seu progresso agora**\n" + resumo + "\n\n"
                 "🎮 **Ports & Mods:** explore ports de jogos e mods da comunidade, pesquise e envie sugestões.\n"
                 "📚 **Minha biblioteca:** acesse Platinas, Zerados e Runs e desafios.\n"
                 "🏆 **Meu progresso:** acompanhe nível, XP, ranking e Loja.\n"

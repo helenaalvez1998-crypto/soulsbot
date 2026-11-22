@@ -681,6 +681,12 @@ class Soulslike(commands.Cog):
                         log.exception("Run #%s publicada, mas as interações sociais não foram anexadas", run["id"])
         except Exception:
             log.exception("Run #%s aprovada, mas falhou a publicação no canal Soulslike", run["id"])
+        from notificacoes import notificar_usuario
+        await notificar_usuario(
+            self.bot, interaction.guild_id, int(run["user_id"]), "approvals",
+            f"✅ Sua run de **{run['jogo']} — {run['desafio']}** foi aprovada. "
+            f"Tempo registrado: {fmt_tempo(run['seconds'])}. Recompensa: +{resultado['xp_awarded']} XP."
+        )
 
     async def rejeitar(self, interaction: discord.Interaction):
         if not await eh_moderador(interaction.user, self.bot.db):
@@ -913,12 +919,21 @@ class RunDadosModal(discord.ui.Modal, title="Registrar run Soulslike"):
     tempo = discord.ui.TextInput(label="Tempo da run", placeholder="Ex.: 1:30:45 ou 1h30m", max_length=30)
     build = discord.ui.TextInput(label="Build / classe / arma (opcional)", required=False, default="Não informada", max_length=100)
 
-    def __init__(self, cog, game_id: int, challenge_id: int, parent_interaction=None):
+    def __init__(
+        self, cog, game_id: int, challenge_id: int, parent_interaction=None,
+        tempo_padrao: int | None = None, build_padrao: str | None = None,
+        motivo_rejeicao: str | None = None,
+    ):
         super().__init__(timeout=300)
         self.cog = cog
         self.game_id = game_id
         self.challenge_id = challenge_id
         self.parent_interaction = parent_interaction
+        if tempo_padrao:
+            self.tempo.default = fmt_tempo(int(tempo_padrao))
+        if build_padrao is not None:
+            self.build.default = str(build_padrao)[:100]
+        self.motivo_rejeicao = str(motivo_rejeicao or "").strip()[:180]
 
     async def on_submit(self, interaction: discord.Interaction):
         seg = parse_tempo(str(self.tempo))
@@ -946,7 +961,11 @@ class RunDadosModal(discord.ui.Modal, title="Registrar run Soulslike"):
         await interaction.response.send_message(
             "**Avaliação — 1/3: Nota da experiência**\nQuanto você gostou desta run? Escolha uma nota de 1 a 10.",
             view=NotaJogoView(
-                concluir, "Na sua experiência, qual foi a dificuldade para concluir esta run/desafio?"
+                concluir, "Na sua experiência, qual foi a dificuldade para concluir esta run/desafio?",
+                contexto=(f"Jogo: **{discord.utils.escape_markdown(g['name'])}**\n"
+                          f"Desafio: **{discord.utils.escape_markdown(c['name'])}** · Tempo: **{fmt_tempo(seg)}**\n"
+                          f"Build: **{discord.utils.escape_markdown(build or 'Não informada')}**"
+                          + (f"\n**Motivo da rejeição anterior:** {discord.utils.escape_markdown(self.motivo_rejeicao)}" if self.motivo_rejeicao else "")),
             ), ephemeral=True,
         )
         if self.parent_interaction is not None:
@@ -1114,11 +1133,12 @@ class MotivoModal(discord.ui.Modal, title="Rejeitar run"):
         embed.color = discord.Color.red()
         embed.add_field(name="Resultado", value=f"❌ Rejeitada por {interaction.user.mention}\nMotivo: {self.motivo}", inline=False)
         await interaction.response.edit_message(embed=embed, view=None)
-        try:
-            user = self.cog.bot.get_user(run["user_id"]) or await self.cog.bot.fetch_user(run["user_id"])
-            await user.send(f"Sua run `#{self.run_id}` foi rejeitada.\nMotivo: {self.motivo}\nVocê pode enviar novamente pela Central Soulslike no servidor.")
-        except discord.HTTPException:
-            pass
+        from notificacoes import notificar_usuario
+        await notificar_usuario(
+            self.cog.bot, interaction.guild_id, int(run["user_id"]), "rejections",
+            f"❌ Sua run `#{self.run_id}` foi rejeitada.\nMotivo: {self.motivo}\n"
+            "Você pode corrigir os dados e enviar novamente pela Central Soulslike."
+        )
 
 
 class RankingView(discord.ui.View):

@@ -178,6 +178,7 @@ class Zerados(commands.Cog):
             linhas = await self.gravar_zerado(
                 interaction.guild, interaction.user, d, jogo, plataforma, comentario, capturas, nota, dificuldade
             )
+            await db.set_ultima_plataforma(interaction.user.id, plataforma)
         except ValueError as exc:
             return await interaction.edit_original_response(content=str(exc))
         await interaction.edit_original_response(content="\n".join(linhas))
@@ -363,7 +364,7 @@ class ZeradoRevisaoView(discord.ui.View):
         super().__init__(timeout=None)
         self.cog = cog
 
-    async def _processar(self, interaction: discord.Interaction, aprovar: bool):
+    async def _processar(self, interaction: discord.Interaction, aprovar: bool, motivo: str = ""):
         if not await eh_moderador(interaction.user, self.cog.bot.db):
             return await interaction.response.send_message("Apenas moderadores podem revisar este registro.", ephemeral=True)
         if not interaction.message or not interaction.message.embeds:
@@ -446,15 +447,23 @@ class ZeradoRevisaoView(discord.ui.View):
                     await santuario.atualizar(int(resultado["user_id"]))
                 except Exception:
                     log.exception("Falha ao atualizar santuário após aprovação do zerado #%s", zerado_id)
+            from notificacoes import notificar_usuario
+            await notificar_usuario(
+                self.cog.bot, interaction.guild_id, int(resultado["user_id"]), "approvals",
+                f"✅ Seu zerado de **{pendente['game']}** foi aprovado e registrado no Coliseu."
+            )
             return
 
-        alterado = await db.rejeitar_zerado(zerado_id, interaction.user.id)
+        alterado = await db.rejeitar_zerado(zerado_id, interaction.user.id, motivo)
         if not alterado:
             return await interaction.response.send_message("Outro moderador já processou este registro.", ephemeral=True)
         embed = interaction.message.embeds[0]
         embed.color = discord.Color.red()
         embed.set_footer(text=f"ZeradoID:{zerado_id} · REJEITADO")
-        embed.add_field(name="Resultado", value=f"❌ Rejeitado por {interaction.user.mention}", inline=False)
+        resultado_texto = f"❌ Rejeitado por {interaction.user.mention}"
+        if motivo:
+            resultado_texto += f"\n**Motivo:** {discord.utils.escape_markdown(motivo[:300])}"
+        embed.add_field(name="Resultado", value=resultado_texto, inline=False)
         try:
             await interaction.response.edit_message(
                 content=f"❌ Solicitação `#{zerado_id}` rejeitada por {interaction.user.mention}.",
@@ -470,15 +479,13 @@ class ZeradoRevisaoView(discord.ui.View):
             await db.log(interaction.user.id, "zerado_rejeitado", f"id={zerado_id} user={pendente['user_id']}")
         except Exception:
             log.exception("Zerado #%s rejeitado, mas falhou o log de auditoria", zerado_id)
-        membro = interaction.guild.get_member(int(pendente["user_id"])) if interaction.guild else None
-        if membro:
-            try:
-                await membro.send(
-                    f"Seu registro de jogo zerado **{pendente['game']}** foi rejeitado pela moderação. "
-                    "Você pode conferir os dados e enviar uma mensagem à equipe se precisar de esclarecimentos."
-                )
-            except discord.Forbidden:
-                pass
+        from notificacoes import notificar_usuario
+        texto_motivo = f"\nMotivo: {motivo}" if motivo else ""
+        await notificar_usuario(
+            self.cog.bot, interaction.guild_id, int(pendente["user_id"]), "rejections",
+            f"❌ Seu registro de zerado **{pendente['game']}** foi rejeitado.{texto_motivo}\n"
+            "Você pode corrigir os dados e enviar novamente pelo painel de Zerados."
+        )
 
     @discord.ui.button(label="Aprovar", style=discord.ButtonStyle.success, emoji="✅", custom_id="zer:approve")
     async def aprovar(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -495,7 +502,7 @@ class ZeradoRevisaoView(discord.ui.View):
             return await interaction.response.send_message("Não foi possível identificar o registro.", ephemeral=True)
         from cogs.moderacao_utils import MotivoDecisaoModal
         async def decidir(inter, motivo):
-            await self._processar(inter, False)
+            await self._processar(inter, False, motivo)
             from cogs.moderacao_utils import sincronizar_cartao
             await sincronizar_cartao(self.cog.bot, inter.guild_id, "zerados", int(match.group(1)), "rejected", inter.user.id, motivo)
         await interaction.response.send_modal(MotivoDecisaoModal(self.cog.bot, "zerado", int(match.group(1)), decidir))
@@ -545,7 +552,8 @@ class ZeradosPainelView(discord.ui.View):
 
     @discord.ui.button(label="Registrar zerado", style=discord.ButtonStyle.success, emoji="📤", row=1)
     async def registrar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(ZeradoModal(self.cog))
+        plataforma_padrao = await self.cog.bot.db.get_ultima_plataforma(interaction.user.id)
+        await interaction.response.send_modal(ZeradoModal(self.cog, plataforma_padrao))
 
     @discord.ui.button(label="Lista", style=discord.ButtonStyle.primary, emoji="📜", row=1)
     async def lista(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -721,15 +729,26 @@ class RankingZeradosView(VoltarZeradosView):
 class ZeradoModal(discord.ui.Modal):
     """Dados do registro; a nota e o comentário são solicitados em duas etapas seguintes."""
 
-    def __init__(self, cog: Zerados):
-        super().__init__(title="Registrar jogo zerado")
+    def __init__(
+        self, cog: Zerados, plataforma_padrao: str | None = None,
+        jogo_padrao: str | None = None, data_padrao: str | None = None,
+        motivo_rejeicao: str | None = None,
+    ):
+        super().__init__(title="Corrigir zerado rejeitado" if jogo_padrao else "Registrar jogo zerado")
         self.cog = cog
-        self.jogo = discord.ui.TextInput(placeholder="Ex.: Hollow Knight", max_length=100)
+        self.jogo = discord.ui.TextInput(
+            placeholder="Ex.: Hollow Knight", max_length=100,
+            default=(str(jogo_padrao)[:100] if jogo_padrao else None),
+        )
         self.plataforma = discord.ui.Select(
             placeholder="Escolha a plataforma",
-            options=[discord.SelectOption(label=p, value=p) for p in PLATAFORMAS],
+            options=[discord.SelectOption(label=p, value=p, default=(p == plataforma_padrao)) for p in PLATAFORMAS],
         )
-        self.data = discord.ui.TextInput(default=hoje().strftime("%d/%m/%Y"), placeholder="DD/MM/AAAA", max_length=10)
+        self.data = discord.ui.TextInput(
+            default=(str(data_padrao)[:10] if data_padrao else hoje().strftime("%d/%m/%Y")),
+            placeholder="DD/MM/AAAA", max_length=10,
+        )
+        self.motivo_rejeicao = str(motivo_rejeicao or "").strip()[:180]
         self.prova = discord.ui.FileUpload(required=False, min_values=0, max_values=5)
         self.add_item(discord.ui.Label(text="Jogo", component=self.jogo))
         self.add_item(discord.ui.Label(text="Plataforma", component=self.plataforma))
@@ -743,6 +762,13 @@ class ZeradoModal(discord.ui.Modal):
         plataforma = self.plataforma.values[0]
         data = str(self.data.value).strip()
         capturas = list(self.prova.values)
+        semelhantes = await self.cog.bot.db.titulos_semelhantes(jogo)
+        aviso_titulo = (
+            "\n\n**Confira o nome:** encontrei títulos parecidos no catálogo: "
+            + ", ".join(f"**{discord.utils.escape_markdown(t)}**" for t in semelhantes)
+            + ". Confirme se está registrando a edição correta."
+            if semelhantes else ""
+        )
 
         async def concluir(avaliacao_interaction, nota, dificuldade, comentario):
             await self.cog.registrar_zerado(
@@ -750,9 +776,13 @@ class ZeradoModal(discord.ui.Modal):
             )
 
         await interaction.response.send_message(
-            "**Avaliação — 1/3: Nota do jogo**\nQuanto você gostou deste jogo? Escolha uma nota de 1 a 10.",
+            "**Avaliação — 1/3: Nota do jogo**\nQuanto você gostou deste jogo? Escolha uma nota de 1 a 10." + aviso_titulo,
             view=NotaJogoView(
-                concluir, "Na sua experiência, qual foi a dificuldade para zerar este jogo?"
+                concluir, "Na sua experiência, qual foi a dificuldade para zerar este jogo?",
+                contexto=(f"Jogo: **{discord.utils.escape_markdown(jogo)}**\n"
+                          f"Plataforma: **{plataforma}** · Data: **{data}**\n"
+                          f"Comprovantes: **{len(capturas)} arquivo(s)**"
+                          + (f"\n**Motivo da rejeição anterior:** {discord.utils.escape_markdown(self.motivo_rejeicao)}" if self.motivo_rejeicao else "")),
             ), ephemeral=True,
         )
 

@@ -58,7 +58,7 @@ class RevisaoView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
 
-    async def _processar(self, interaction: discord.Interaction, aprovar: bool):
+    async def _processar(self, interaction: discord.Interaction, aprovar: bool, motivo: str = ""):
         if not await eh_moderador(interaction.user, self.bot.db):
             return await interaction.response.send_message("Apenas moderadores.", ephemeral=True)
         if not interaction.message or not interaction.message.embeds:
@@ -101,7 +101,7 @@ class RevisaoView(discord.ui.View):
             antigo, novo = decision["old_level"], decision["new_level"]
             user_id = decision["user_id"]
         else:
-            changed = await db.decidir_platina(platina_id, "rejected", interaction.user.id)
+            changed = await db.decidir_platina(platina_id, "rejected", interaction.user.id, motivo)
             if not changed:
                 return await interaction.response.send_message("Outro moderador já processou esta platina.", ephemeral=True)
             antigo = novo = None
@@ -121,11 +121,10 @@ class RevisaoView(discord.ui.View):
                 log.exception("Falha ao sincronizar cartão original da platina #%s", platina_id)
         embed = interaction.message.embeds[0]
         embed.color = discord.Color.green() if aprovar else discord.Color.red()
-        embed.add_field(
-            name="Resultado",
-            value=f"{'✅ Aprovada' if aprovar else '❌ Rejeitada'} por {interaction.user.mention}",
-            inline=False,
-        )
+        texto_resultado = f"{'✅ Aprovada' if aprovar else '❌ Rejeitada'} por {interaction.user.mention}"
+        if not aprovar and motivo:
+            texto_resultado += f"\n**Motivo:** {discord.utils.escape_markdown(motivo[:300])}"
+        embed.add_field(name="Resultado", value=texto_resultado, inline=False)
         try:
             await interaction.response.edit_message(embed=embed, view=None)
         except discord.HTTPException:
@@ -239,11 +238,20 @@ class RevisaoView(discord.ui.View):
                     await santuario.atualizar(user_id)
                 except Exception:
                     logging.getLogger("colizeu").exception("Falha ao atualizar o santuário")
-        elif membro:
-            try:
-                await membro.send(f"Sua platina de **{p['game']}** foi rejeitada. Envie uma mensagem à moderação se tiver dúvidas.")
-            except discord.Forbidden:
-                pass
+            from notificacoes import notificar_usuario
+            await notificar_usuario(
+                self.bot, interaction.guild_id, user_id, "approvals",
+                f"✅ Sua platina de **{p['game']}** foi aprovada e publicada no Coliseu. "
+                "Ela também foi reconhecida em Jogos Zerados."
+            )
+        else:
+            from notificacoes import notificar_usuario
+            texto_motivo = f"\nMotivo: {motivo}" if motivo else ""
+            await notificar_usuario(
+                self.bot, interaction.guild_id, user_id, "rejections",
+                f"❌ Sua platina de **{p['game']}** foi rejeitada.{texto_motivo}\n"
+                "Você pode corrigir os dados e enviar novamente pelo Coliseu."
+            )
 
     @discord.ui.button(label="Aprovar", style=discord.ButtonStyle.success, custom_id="plat:approve")
     async def aprovar(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -260,7 +268,7 @@ class RevisaoView(discord.ui.View):
             return await interaction.response.send_message("Não foi possível identificar a platina.", ephemeral=True)
         from cogs.moderacao_utils import MotivoDecisaoModal
         async def decidir(inter, motivo):
-            await self._processar(inter, False)
+            await self._processar(inter, False, motivo)
             from cogs.moderacao_utils import sincronizar_cartao
             await sincronizar_cartao(self.bot, inter.guild_id, "platinas", int(match.group(1)), "rejected", inter.user.id, motivo)
         await interaction.response.send_modal(MotivoDecisaoModal(self.bot, "platina", int(match.group(1)), decidir))
@@ -549,6 +557,10 @@ class Platinas(commands.Cog):
                 content="Não consegui concluir o registro. Nenhuma platina pendente foi mantida; tente novamente."
             )
         try:
+            await db.set_ultima_plataforma(interaction.user.id, plataforma)
+        except Exception:
+            log.exception("Platina #%s registrada, mas não foi possível salvar a plataforma preferida", platina_id)
+        try:
             await db.log(interaction.user.id, "platina_registrada", f"id={platina_id} jogo={jogo}")
         except Exception:
             log.exception("Platina #%s registrada, mas falhou o log de auditoria", platina_id)
@@ -600,7 +612,8 @@ class PainelView(discord.ui.View):
 
     @discord.ui.button(label="Registrar platina", style=discord.ButtonStyle.success, emoji="📤", row=1)
     async def registrar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(PlatinaModal(self.cog))
+        plataforma_padrao = await self.cog.bot.db.get_ultima_plataforma(interaction.user.id)
+        await interaction.response.send_modal(PlatinaModal(self.cog, plataforma_padrao))
 
     @discord.ui.button(label="Perfil", style=discord.ButtonStyle.primary, emoji="👤", row=1)
     async def perfil(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -785,17 +798,28 @@ class RankingView(discord.ui.View):
 
 
 class PlatinaModal(discord.ui.Modal):
-    """Dados da platina; nota e comentário são solicitados em seguida."""
+    """Dados da platina; avaliação e conferência acontecem em seguida."""
 
-    def __init__(self, cog):
-        super().__init__(title="Registrar platina")
+    def __init__(
+        self, cog, plataforma_padrao: str | None = None,
+        jogo_padrao: str | None = None, data_padrao: str | None = None,
+        motivo_rejeicao: str | None = None,
+    ):
+        super().__init__(title="Corrigir platina rejeitada" if jogo_padrao else "Registrar platina")
         self.cog = cog
-        self.jogo = discord.ui.TextInput(placeholder="Ex.: Elden Ring", max_length=100)
+        self.jogo = discord.ui.TextInput(
+            placeholder="Ex.: Elden Ring", max_length=100,
+            default=(str(jogo_padrao)[:100] if jogo_padrao else None),
+        )
         self.plataforma = discord.ui.Select(
             placeholder="Escolha a plataforma",
-            options=[discord.SelectOption(label=p, value=p) for p in PLATAFORMAS],
+            options=[discord.SelectOption(label=p, value=p, default=(p == plataforma_padrao)) for p in PLATAFORMAS],
         )
-        self.data = discord.ui.TextInput(default=hoje().strftime("%d/%m/%Y"), placeholder="DD/MM/AAAA", max_length=10)
+        self.data = discord.ui.TextInput(
+            default=(str(data_padrao)[:10] if data_padrao else hoje().strftime("%d/%m/%Y")),
+            placeholder="DD/MM/AAAA", max_length=10,
+        )
+        self.motivo_rejeicao = str(motivo_rejeicao or "").strip()[:180]
         self.prova = discord.ui.FileUpload(required=True, min_values=1, max_values=10)
         self.add_item(discord.ui.Label(text="Jogo", component=self.jogo))
         self.add_item(discord.ui.Label(text="Plataforma", component=self.plataforma))
@@ -809,6 +833,13 @@ class PlatinaModal(discord.ui.Modal):
         plataforma = self.plataforma.values[0]
         data = str(self.data.value).strip()
         capturas = list(self.prova.values)
+        semelhantes = await self.cog.bot.db.titulos_semelhantes(jogo)
+        aviso_titulo = (
+            "\n\n**Confira o nome:** encontrei títulos parecidos no catálogo: "
+            + ", ".join(f"**{discord.utils.escape_markdown(t)}**" for t in semelhantes)
+            + ". Confirme se está registrando a edição correta."
+            if semelhantes else ""
+        )
 
         async def concluir(avaliacao_interaction, nota, dificuldade, comentario):
             await self.cog.registrar_platina(
@@ -816,9 +847,13 @@ class PlatinaModal(discord.ui.Modal):
             )
 
         await interaction.response.send_message(
-            "**Avaliação — 1/3: Nota do jogo**\nQuanto você gostou deste jogo? Escolha uma nota de 1 a 10.",
+            "**Avaliação — 1/3: Nota do jogo**\nQuanto você gostou deste jogo? Escolha uma nota de 1 a 10." + aviso_titulo,
             view=NotaJogoView(
-                concluir, "Na sua experiência, qual foi a dificuldade para conquistar esta platina?"
+                concluir, "Na sua experiência, qual foi a dificuldade para conquistar esta platina?",
+                contexto=(f"Jogo: **{discord.utils.escape_markdown(jogo)}**\n"
+                          f"Plataforma: **{plataforma}** · Data: **{data}**\n"
+                          f"Comprovantes: **{len(capturas)} arquivo(s)**"
+                          + (f"\n**Motivo da rejeição anterior:** {discord.utils.escape_markdown(self.motivo_rejeicao)}" if self.motivo_rejeicao else "")),
             ), ephemeral=True,
         )
 
