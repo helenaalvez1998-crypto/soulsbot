@@ -806,3 +806,39 @@ def render_carta_bytes(card: dict[str, Any], illustration_bytes: bytes) -> io.By
     imagem.save(saida, format="PNG", optimize=True)
     saida.seek(0)
     return saida
+
+def render_deck_preview_bytes(
+    cards: list[dict[str, Any]],
+    illustrations: dict[str, bytes] | None = None,
+) -> io.BytesIO:
+    """Renderiza uma prévia do deck em memória, incluindo artes personalizadas disponíveis."""
+    illustrations = illustrations or {}
+    card_width, card_height = 210, 310
+    gap = 18
+    header_height = 66
+    columns = 3
+    rows = max(1, math.ceil(min(len(cards), 5) / columns))
+    width = columns * card_width + (columns + 1) * gap
+    height = header_height + rows * card_height + (rows + 1) * gap
+
+    canvas = Image.new("RGB", (width, height), (7, 10, 16))
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    draw.text((gap + 2, 17), "DECK DO COLISEU", font=_font(24, True),
+              fill=(238, 220, 180, 255))
+    draw.text((gap + 3, 44), f"{min(len(cards), 5)} / 5 CARTAS", font=_font(10, True),
+              fill=(150, 164, 177, 255))
+
+    for index, card in enumerate(cards[:5]):
+        column = index % columns
+        row = index // columns
+        x = gap + column * (card_width + gap)
+        y = header_height + gap + row * (card_height + gap)
+        illustration = illustrations.get(str(card.get("id", "")))
+        artwork = _draw_card(card, illustration_bytes=illustration)
+        artwork = artwork.resize((card_width, card_height), Image.Resampling.LANCZOS)
+        canvas.paste(artwork, (x, y))
+
+    output = io.BytesIO()
+    canvas.save(output, format="PNG", optimize=True)
+    output.seek(0)
+    return output
