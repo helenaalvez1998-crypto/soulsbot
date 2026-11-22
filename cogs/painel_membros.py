@@ -216,7 +216,7 @@ async def _montar_embed_central_nara(bot: commands.Bot, user_id: int):
     embed = discord.Embed(
         title="🌙 NARA — SUA CENTRAL",
         description=(
-            "Sua jornada em um só lugar. Consulte seu progresso, veja seu deck e acesse as atividades sem precisar memorizar comandos. Os painéis são privados e você pode voltar ou fechar quando quiser."
+            "Sua jornada em um só lugar. Consulte seu progresso, veja seu deck, acompanhe registros e ajuste avisos sem precisar memorizar comandos. Os painéis são privados e você pode voltar ou fechar quando quiser."
         ),
         color=config.COR_OURO,
     )
@@ -239,6 +239,12 @@ async def _montar_embed_central_nara(bot: commands.Bot, user_id: int):
             value=f"Você tem **{pendentes}** registro(s) aguardando moderação. Consulte **Minha biblioteca → Meus registros**.",
             inline=True,
         )
+
+    embed.add_field(
+        name="Atalhos rápidos",
+        value="📬 **Meus registros** para acompanhar aprovações · 🔔 **Notificações** para escolher avisos · 👤 **Meu perfil** para consultar sua trajetória.",
+        inline=False,
+    )
 
     deck_file = None
     coliseu = bot.get_cog("ColiseuCartas") if hasattr(bot, "get_cog") else None
@@ -540,6 +546,9 @@ class MeusRegistrosView(discord.ui.View):
                 embed.set_footer(text="Linha do tempo limitada aos 100 registros mais recentes; as contagens acima incluem o histórico completo.")
         return embed
 
+    async def on_timeout(self) -> None:
+        await _marcar_painel_nara_expirado(self)
+
 
 class NotificacaoToggleButton(discord.ui.Button):
     LABELS = {
@@ -594,6 +603,9 @@ class NotificacoesView(discord.ui.View):
             await interaction.response.send_message("Estas preferências pertencem a outro membro.", ephemeral=True)
             return False
         return True
+
+    async def on_timeout(self) -> None:
+        await _marcar_painel_nara_expirado(self)
 
 
 async def _executar_acao_membro(
@@ -887,6 +899,9 @@ class PainelMembrosView(discord.ui.View):
         self.add_item(MembrosAcessoDiretoButton(self, "cartas_coliseu", "Meu deck", "🃏", discord.ButtonStyle.success))
         self.add_item(MembrosAcessoDiretoButton(self, "perfil", "Meu perfil", "👤", discord.ButtonStyle.secondary))
         self.add_item(MembrosAcessoDiretoButton(self, "santuario", "Meu Santuário", "🏛️", discord.ButtonStyle.secondary))
+        # Atalhos frequentes na tela inicial: reduzem navegação sem duplicar regras de negócio.
+        self.add_item(MembrosAcessoDiretoButton(self, "meus_registros", "Meus registros", "📬", discord.ButtonStyle.secondary))
+        self.add_item(MembrosAcessoDiretoButton(self, "notificacoes", "Notificações", "🔔", discord.ButtonStyle.secondary))
         self.add_item(GuiaMembrosSelect(bot, user_id))
         adicionar_fechar_nara(self, user_id)
 

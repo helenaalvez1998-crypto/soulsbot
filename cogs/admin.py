@@ -538,6 +538,24 @@ class DashboardOperacionalView(discord.ui.View):
         self.add_item(DashboardHistoricoButton(bot))
         if callback_voltar:
             adicionar_botao_voltar(self, callback_voltar, label="Voltar à categoria")
+        self._admin_message = None
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            if hasattr(item, "disabled"):
+                item.disabled = True
+        if self._admin_message is None:
+            return
+        try:
+            embeds = getattr(self._admin_message, "embeds", []) or []
+            if embeds:
+                embed = embeds[0].copy()
+                embed.set_footer(text="NARA • Dashboard · Sessão encerrada; use /adm para reabrir")
+                await self._admin_message.edit(embed=embed, view=self)
+            else:
+                await self._admin_message.edit(content="Dashboard encerrado. Use `/adm` para reabrir.", view=self)
+        except (discord.HTTPException, AttributeError):
+            log.debug("Não foi possível atualizar o dashboard expirado.", exc_info=True)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         from cogs.platinas import eh_moderador
@@ -621,6 +639,25 @@ class HistoricoAuditoriaView(discord.ui.View):
         self.add_item(HistoricoAtualizarButton(self))
         if callback_voltar:
             adicionar_botao_voltar(self, callback_voltar, label="Voltar à categoria")
+        self._admin_message = None
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            if hasattr(item, "disabled"):
+                item.disabled = True
+        if self._admin_message is None:
+            return
+        try:
+            embeds = getattr(self._admin_message, "embeds", []) or []
+            if embeds:
+                embed = embeds[0].copy()
+                footer = embed.footer.text or "NARA • Auditoria"
+                embed.set_footer(text=f"{footer} · Sessão encerrada; use /adm para reabrir"[:2048])
+                await self._admin_message.edit(embed=embed, view=self)
+            else:
+                await self._admin_message.edit(content="Histórico encerrado. Use `/adm` para reabrir.", view=self)
+        except (discord.HTTPException, AttributeError):
+            log.debug("Não foi possível atualizar o histórico expirado.", exc_info=True)
 
     async def _buscar(self):
         where, args = [], []
@@ -703,6 +740,7 @@ class PublicarPaineisView(discord.ui.View):
             discord.SelectOption(label="Painel de Jogos Zerados", value="zerados", emoji="✅"),
             discord.SelectOption(label="Central de Ajuda da NARA", value="ajuda", emoji="📚"),
             discord.SelectOption(label="Catálogo de Ports e Mods", value="catalogo", emoji="🕹️"),
+            discord.SelectOption(label="Painel LuaTools", value="luatools", emoji="🧰"),
         ]
         seletor = discord.ui.Select(placeholder="1. Escolha o painel", options=opcoes)
         seletor.callback = self._selecionar_tipo
@@ -763,7 +801,13 @@ class PublicarPaineisView(discord.ui.View):
         await interaction.response.defer(ephemeral=True, thinking=True)
         canal = self.canal
         try:
-            if self.tipo == "catalogo":
+            if self.tipo == "luatools":
+                from cogs.painel_membros import luatools_embed, LuaToolsLinksView
+                key = f"panel:luatools:{canal.guild.id}:{canal.id}"
+                marker = "nara:luatools"
+                kwargs = {"embed": luatools_embed(), "view": LuaToolsLinksView()}
+                message, _created = await upsert_panel(self.bot, canal, key, marker=marker, **kwargs)
+            elif self.tipo == "catalogo":
                 from cogs.catalogo_integrado import main_content, MainView, get_config, set_config
                 cog = self.bot.get_cog("CatalogoIntegrado")
                 if cog is None:
@@ -1190,12 +1234,14 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
         if not await eh_moderador(interaction.user, bot.db) and not await _eh_admin_painel(bot, interaction.user):
             return await interaction.response.send_message("Acesso restrito à moderação.", ephemeral=True)
         view = DashboardOperacionalView(bot, interaction.user.id, callback_voltar=voltar)
+        view._admin_message = interaction.message
         return await interaction.response.edit_message(embed=await _embed_dashboard(bot, interaction.guild_id), view=view)
     if action == "history":
         from cogs.platinas import eh_moderador
         if not await eh_moderador(interaction.user, bot.db) and not await _eh_admin_painel(bot, interaction.user):
             return await interaction.response.send_message("Acesso restrito à moderação.", ephemeral=True)
         view = HistoricoAuditoriaView(bot, interaction.user.id, callback_voltar=voltar)
+        view._admin_message = interaction.message
         return await interaction.response.edit_message(embed=await view.embed(), view=view)
     if action == "status":
         return await _abrir_status(interaction, bot, callback_voltar=voltar)
@@ -1419,6 +1465,26 @@ class AdminCategoriaView(discord.ui.View):
         self.bot = bot
         self.categoria = categoria
         self.user_id = user_id
+        self._admin_message = None
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            if hasattr(item, "disabled"):
+                item.disabled = True
+        mensagem = self._admin_message
+        if mensagem is None:
+            return
+        try:
+            embeds = getattr(mensagem, "embeds", []) or []
+            if embeds:
+                embed = embeds[0].copy()
+                footer = embed.footer.text or "NARA • Administração"
+                embed.set_footer(text=f"{footer} · Sessão encerrada; use /adm para reabrir"[:2048])
+                await mensagem.edit(embed=embed, view=self)
+            else:
+                await mensagem.edit(content="Esta sessão administrativa terminou. Use `/adm` para abrir uma nova.", view=self)
+        except (discord.HTTPException, AttributeError):
+            log.debug("Não foi possível atualizar a categoria administrativa expirada.", exc_info=True)
         dados = ADMIN_CATEGORIAS[categoria]
         acoes = [a for a in dados["acoes"] if is_admin or a[0] not in ACOES_SO_ADMIN]
         for index, (action, label, emoji) in enumerate(acoes):
@@ -1465,7 +1531,9 @@ class AdminCategoriaButton(discord.ui.Button):
         acoes_visiveis = [a for a in dados["acoes"] if admin or a[0] not in ACOES_SO_ADMIN]
         embed.add_field(name="Ferramentas disponíveis", value=f"{len(acoes_visiveis)} opção(ões) nesta área", inline=True)
         embed.set_footer(text="NARA • Use ‘Voltar ao início’ para trocar de categoria")
-        await interaction.response.edit_message(embed=embed, view=AdminCategoriaView(self.bot, self.categoria, self.user_id or interaction.user.id, admin))
+        view = AdminCategoriaView(self.bot, self.categoria, self.user_id or interaction.user.id, admin)
+        view._admin_message = interaction.message
+        await interaction.response.edit_message(embed=embed, view=view)
 
 
 async def _eh_dono_global_bot(bot, user) -> bool:
