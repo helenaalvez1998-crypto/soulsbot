@@ -1044,31 +1044,38 @@ def _draw_card_com_template(card: dict[str, Any], illustration_bytes: bytes) -> 
     _texto_no_slot(draw, (cx2 - 130, cy1, cx2, cy2), custo, maximo=44, minimo=22, cor=creme,
                    alinhamento="direita", margem=22, contorno=2)
 
-    # Habilidade: nome em destaque e descrição ajustada ao espaço disponível.
+    # Habilidade: o guia reserva uma placa de 92 px. O título e até duas linhas
+    # de descrição são dimensionados dentro da área segura, sem invadir o relevo.
     habilidade = HABILIDADES.get(str(card.get("habilidade", "")), {})
     nome_hab = str(habilidade.get("nome", "")).strip()
     texto_hab = str(habilidade.get("texto", "") or card.get("descricao", "")).strip()
     hx1, hy1, hx2, hy2 = layout["habilidade"]
-    margem_x, margem_y = 24, 10
+    margem_x, margem_y = 24, 9
     y_texto = hy1 + margem_y
+    largura_util = (hx2 - hx1) - margem_x * 2
     if nome_hab:
-        fonte_nome = _font(26, True)
-        draw.text((hx1 + margem_x, y_texto), nome_hab.upper()[:40], font=fonte_nome,
-                  fill=(*accent, 255), stroke_width=1, stroke_fill=(8, 10, 16, 255))
-        y_texto += 34
-    if texto_hab:
-        fonte, linhas, altura_linha = _ajustar_texto(
-            draw, texto_hab, (hx2 - hx1) - margem_x * 2, max(20, hy2 - margem_y - y_texto),
-            maximo=26, minimo=15, max_linhas=4, espaco=1.2,
+        fonte_nome, linhas_nome, altura_nome = _ajustar_texto(
+            draw, nome_hab.upper(), largura_util, 27,
+            maximo=23, minimo=15, negrito=True, max_linhas=1, espaco=1.0,
         )
-        for indice, linha in enumerate(linhas):
+        titulo = linhas_nome[0] if linhas_nome else nome_hab.upper()[:36]
+        draw.text((hx1 + margem_x, y_texto), titulo, font=fonte_nome,
+                  fill=(*accent, 255), stroke_width=1, stroke_fill=(8, 10, 16, 255))
+        y_texto += max(25, altura_nome) + 1
+    if texto_hab and y_texto < hy2 - margem_y:
+        altura_disponivel = hy2 - margem_y - y_texto
+        fonte, linhas, altura_linha = _ajustar_texto(
+            draw, texto_hab, largura_util, altura_disponivel,
+            maximo=19, minimo=13, max_linhas=2, espaco=1.08,
+        )
+        for indice, linha in enumerate(linhas[:2]):
             draw.text((hx1 + margem_x, y_texto + indice * altura_linha), linha, font=fonte,
                       fill=(230, 231, 227, 255), stroke_width=1, stroke_fill=(8, 10, 16, 255))
     return imagem.convert("RGB")
 
 
 def desenhar_calibracao(imagem: Image.Image, raridade: str) -> Image.Image:
-    """Contorna os slots do layout sobre uma carta já montada (apoio para ajustar o JSON)."""
+    """Contorna os slots do guia oficial sobre uma carta montada para verificar alinhamento."""
     layout = templates_cartas.carregar_layout(raridade)
     carregado = templates_cartas.carregar_template(raridade)
     if carregado:
@@ -1089,10 +1096,18 @@ def desenhar_calibracao(imagem: Image.Image, raridade: str) -> Image.Image:
 
 
 def _arte_de_exemplo(card: dict[str, Any]) -> bytes:
-    """Ilustração gerada pelo próprio bot, usada só nas prévias do painel administrativo."""
+    """Ilustração procedural limpa, usada só nas prévias administrativas dos templates.
+
+    O renderizador tradicional inclui uma etiqueta de tipo/categoria sobre sua própria arte.
+    Como os templates já desenham essas informações nas placas inferiores, removemos essa
+    etiqueta apenas da imagem de demonstração para não simular uma duplicação na carta final.
+    """
     base = _draw_card(dict(card))
+    demo = base.convert("RGBA")
+    demo_draw = ImageDraw.Draw(demo, "RGBA")
+    demo_draw.rounded_rectangle((38, 391, 205, 416), radius=8, fill=(9, 13, 20, 255))
     x1, y1, x2, y2 = 32, 132, LARGURA_PADRAO - 32, 419
-    recorte = base.crop((x1, y1, x2, y2)).resize((1092, 861), Image.Resampling.LANCZOS)
+    recorte = demo.crop((x1, y1, x2, y2)).resize((1092, 861), Image.Resampling.LANCZOS)
     saida = io.BytesIO()
     recorte.save(saida, format="PNG")
     return saida.getvalue()

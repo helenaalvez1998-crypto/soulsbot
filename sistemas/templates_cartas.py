@@ -1,12 +1,12 @@
 """Templates completos de carta (um por raridade) usados nas cartas com arte enviada.
 
-Um template é um PNG 840 × 1240 *opaco*, com fundo, moldura e as placas vazias de cada
-informação (nome, poder, tipo, custo, habilidade). Somente a janela da arte é
-transparente. O bot cola a arte do membro por trás do template e escreve os textos nas
-posições definidas pelo layout (`LAYOUT_PADRAO`, sobrescrevível por arquivos JSON).
+Cada template é um PNG RGBA 840 × 1240: fundo e placas opacos, com somente a janela
+exata da ilustração transparente. Os cinco templates padrão são distribuídos em
+`assets/cartas_templates`; uploads administrativos em DATA_DIR/cartas_templates os
+substituem sem alterar os arquivos do projeto.
 
-Este módulo cuida de armazenar, validar, detectar a janela e carregar o layout. O desenho
-das cartas continua em `arte_cartas.py`. As cartas sem arte enviada não usam templates.
+O layout dos textos é compartilhado e fixo. A janela transparente precisa coincidir
+com `LAYOUT_PADRAO["arte"]`, pois os demais campos não devem mudar por raridade.
 """
 from __future__ import annotations
 
@@ -31,8 +31,10 @@ TAMANHO_TEMPLATE = (840, 1240)
 TAMANHO_MINIMO = (420, 620)
 TAMANHO_MAXIMO_BYTES = 8 * 1024 * 1024
 PIXELS_MAXIMOS = 20_000_000
-# Geradores de imagem raramente entregam exatamente 420:620; até 6% é esticado com segurança.
-TOLERANCIA_PROPORCAO = 0.06
+# Imagens enviadas podem ter poucos pixels de diferença no canvas, mas a janela deve
+# coincidir com o guia para que os textos e os elementos da carta não se desloquem.
+TOLERANCIA_PROPORCAO = 0.005
+TOLERANCIA_JANELA_PX = 3
 FORMATOS_ACEITOS = {"PNG", "JPEG", "WEBP"}
 
 # Coordenadas na grade de referência 840 × 1240.
@@ -45,9 +47,8 @@ LAYOUT_PADRAO: dict[str, Any] = {
     "custo": [254, 992, 780, 1052],
     "habilidade": [56, 1084, 784, 1176],
 }
-CAMPOS_RETANGULO = ("raridade", "nome", "arte", "tipo", "custo", "habilidade")
 
-_CACHE: dict[str, tuple[int, int, Image.Image, dict[str, Any]]] = {}
+_CACHE: dict[str, tuple[str, int, int, Image.Image, dict[str, Any]]] = {}
 _LOCK = threading.RLock()
 
 
@@ -60,19 +61,56 @@ def pasta_templates() -> Path:
     return get_data_dir() / "cartas_templates"
 
 
-def caminho_template(raridade: str) -> Path:
+def caminho_template_persistente(raridade: str) -> Path:
+    """Caminho de um template enviado pelo proprietário (volume persistente)."""
     slug = RARIDADES_TEMPLATE.get(str(raridade))
     if not slug:
         raise ValueError(f"Raridade sem template configurável: {raridade}")
     return pasta_templates() / f"{slug}.png"
 
 
+def caminho_template_embutido(raridade: str) -> Path:
+    """Template padrão distribuído junto com o código do SoulsBot."""
+    slug = RARIDADES_TEMPLATE.get(str(raridade))
+    if not slug:
+        raise ValueError(f"Raridade sem template configurável: {raridade}")
+    return Path(__file__).resolve().parents[1] / "assets" / "cartas_templates" / f"{slug}.png"
+
+
+def caminho_template(raridade: str) -> Path:
+    """Retorna o upload válido ou o template padrão incluído no projeto."""
+    persistente = caminho_template_persistente(raridade)
+    if persistente.is_file():
+        try:
+            processar_template(persistente.read_bytes())
+            return persistente
+        except (OSError, TemplateInvalido):
+            pass
+    return caminho_template_embutido(raridade)
+
+
 def caminho_layout_raridade(raridade: str) -> Path:
-    return caminho_template(raridade).with_suffix(".json")
+    # Overrides de coordenadas são sempre persistentes e nunca modificam os assets inclusos.
+    return caminho_template_persistente(raridade).with_suffix(".json")
 
 
 def listar_templates() -> dict[str, bool]:
-    return {raridade: caminho_template(raridade).is_file() for raridade in RARIDADES_TEMPLATE}
+    return {raridade: carregar_template(raridade) is not None for raridade in RARIDADES_TEMPLATE}
+
+
+def origem_template(raridade: str) -> str | None:
+    """Origem efetiva; uploads antigos inválidos não substituem o padrão do projeto."""
+    persistente = caminho_template_persistente(raridade)
+    embutido = caminho_template_embutido(raridade)
+    if persistente.is_file():
+        try:
+            processar_template(persistente.read_bytes())
+            return "personalizado"
+        except (OSError, TemplateInvalido):
+            return "padrão (upload inválido ignorado)" if embutido.is_file() else "inválido"
+    if embutido.is_file():
+        return "padrão"
+    return None
 
 
 def limpar_cache_templates(raridade: str | None = None) -> None:
@@ -84,48 +122,13 @@ def limpar_cache_templates(raridade: str | None = None) -> None:
 
 
 # ---------------------------------------------------------------- layout
-def _retangulo_valido(valor: Any) -> list[int] | None:
-    try:
-        x1, y1, x2, y2 = (int(round(float(n))) for n in valor)
-    except (TypeError, ValueError):
-        return None
-    largura, altura = TAMANHO_TEMPLATE
-    if not (0 <= x1 < x2 <= largura and 0 <= y1 < y2 <= altura):
-        return None
-    return [x1, y1, x2, y2]
-
-
-def _ler_json(caminho: Path) -> dict[str, Any]:
-    try:
-        dados = json.loads(caminho.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    return dados if isinstance(dados, dict) else {}
-
-
-def _aplicar_override(layout: dict[str, Any], override: dict[str, Any]) -> None:
-    for campo in CAMPOS_RETANGULO:
-        retangulo = _retangulo_valido(override.get(campo))
-        if retangulo:
-            layout[campo] = retangulo
-    poder = override.get("poder")
-    if isinstance(poder, dict):
-        try:
-            cx, cy = (int(round(float(n))) for n in poder.get("centro", ()))
-            raio = int(round(float(poder.get("raio", 0))))
-        except (TypeError, ValueError):
-            return
-        if 20 <= raio <= 200 and 0 <= cx <= TAMANHO_TEMPLATE[0] and 0 <= cy <= TAMANHO_TEMPLATE[1]:
-            layout["poder"] = {"centro": [cx, cy], "raio": raio}
-
-
 def carregar_layout(raridade: str | None = None) -> dict[str, Any]:
-    """Layout padrão + `layout.json` global + `<raridade>.json` (cada um opcional)."""
-    layout = json.loads(json.dumps(LAYOUT_PADRAO))
-    _aplicar_override(layout, _ler_json(pasta_templates() / "layout.json"))
-    if raridade in RARIDADES_TEMPLATE:
-        _aplicar_override(layout, _ler_json(caminho_layout_raridade(str(raridade))))
-    return layout
+    """Retorna uma cópia do guia oficial; coordenadas antigas em JSON são ignoradas.
+
+    A geometria é única para as cinco raridades. Ajustar slots por raridade faria os
+    dados escritos pelo renderizador divergirem do guia e não é mais permitido.
+    """
+    return json.loads(json.dumps(LAYOUT_PADRAO))
 
 
 # ---------------------------------------------------------------- janela
@@ -192,6 +195,13 @@ def detectar_janela(imagem: Image.Image) -> list[int]:
         )
     if not (0.85 <= janela_w / janela_h <= 1.9):
         raise TemplateInvalido("A janela da arte precisa ter formato horizontal próximo de 5:4.")
+    esperado = LAYOUT_PADRAO["arte"]
+    diferencas = [abs(atual - padrao) for atual, padrao in zip((x1, y1, x2, y2), esperado)]
+    if any(delta > TOLERANCIA_JANELA_PX for delta in diferencas):
+        raise TemplateInvalido(
+            "A janela transparente não coincide com o guia oficial: use exatamente "
+            "56,256 → 784,846 (728 × 590 px). As placas e textos dependem dessas coordenadas."
+        )
     recorte = alfa.crop((x1, y1, x2, y2)).histogram()
     transparentes = sum(recorte[:limite])
     if transparentes / max(1, janela_w * janela_h) < 0.90:
@@ -203,16 +213,31 @@ def detectar_janela(imagem: Image.Image) -> list[int]:
 
 
 def _validar_opacidade(imagem: Image.Image, janela: list[int]) -> None:
+    """Exige uma janela limpa e superfícies sólidas fora dela.
+
+    Pequenas franjas de alpha dentro da janela ou transparência fora dela podem criar
+    halos e vazamentos na composição. Os templates são cartas completas, não overlays.
+    """
     alfa = imagem.getchannel("A")
     largura, altura = imagem.size
     x1, y1, x2, y2 = janela
-    total_fora = largura * altura - (x2 - x1) * (y2 - y1)
-    opacos_total = sum(alfa.histogram()[200:])
-    opacos_janela = sum(alfa.crop((x1, y1, x2, y2)).histogram()[200:])
-    if (opacos_total - opacos_janela) / max(1, total_fora) < 0.90:
+    hist_total = alfa.histogram()
+    hist_janela = alfa.crop((x1, y1, x2, y2)).histogram()
+    total_janela = (x2 - x1) * (y2 - y1)
+    total_fora = largura * altura - total_janela
+
+    transparentes_janela = sum(hist_janela[:16])
+    if transparentes_janela / max(1, total_janela) < 0.995:
         raise TemplateInvalido(
-            "Fora da janela da arte o template precisa ser opaco (carta completa, com fundo e moldura). "
-            "Para enviar só uma borda, use o painel de Molduras fixas."
+            "A janela da arte precisa estar totalmente limpa: pelo menos 99,5% dos pixels com alpha 0. "
+            "Não deixe textura, reflexos ou partes da moldura dentro da área transparente."
+        )
+
+    opacos_fora = hist_total[255] - hist_janela[255]
+    if opacos_fora / max(1, total_fora) < 0.995:
+        raise TemplateInvalido(
+            "Fora da janela da arte o template precisa ser opaco (alpha 255): fundo, placas e moldura "
+            "devem formar uma carta completa. Não envie uma borda isolada nem cantos transparentes."
         )
 
 
@@ -258,7 +283,7 @@ def processar_template(dados: bytes) -> tuple[Image.Image, list[int]]:
 
 def salvar_template(raridade: str, dados: bytes) -> tuple[Path, list[int]]:
     imagem, janela = processar_template(dados)
-    destino = caminho_template(raridade)
+    destino = caminho_template_persistente(raridade)
     destino.parent.mkdir(parents=True, exist_ok=True)
     temporario = destino.with_suffix(".png.tmp")
     imagem.save(temporario, format="PNG", optimize=True)
@@ -268,7 +293,8 @@ def salvar_template(raridade: str, dados: bytes) -> tuple[Path, list[int]]:
 
 
 def remover_template(raridade: str) -> bool:
-    caminho = caminho_template(raridade)
+    """Remove o upload personalizado e restaura o template padrão incluso no projeto."""
+    caminho = caminho_template_persistente(raridade)
     existia = caminho.is_file()
     if existia:
         caminho.unlink(missing_ok=True)
@@ -277,37 +303,50 @@ def remover_template(raridade: str) -> bool:
 
 
 def carregar_template(raridade: str) -> tuple[Image.Image, dict[str, Any]] | None:
-    """Template RGBA 840 × 1240 + layout efetivo, ou `None` se a raridade não tem template.
+    """Carrega um template validado; se um upload antigo estiver inválido, usa o padrão.
 
-    A janela da arte vem da detecção no próprio PNG (a menos que um JSON a sobrescreva), de modo
-    que o encaixe segue sempre a imagem aprovada, mesmo que o gerador tenha errado alguns pixels.
+    A janela é detectada e validada contra o guia oficial. Nenhum JSON legado pode
+    deslocar os textos ou a ilustração para compensar uma placa fora de posição.
     """
     if raridade not in RARIDADES_TEMPLATE:
         return None
-    caminho = caminho_template(raridade)
-    try:
-        info = caminho.stat()
-    except OSError:
-        limpar_cache_templates(raridade)
-        return None
+
+    candidatos = [caminho_template_persistente(raridade), caminho_template_embutido(raridade)]
+    vistos: set[str] = set()
     with _LOCK:
-        existente = _CACHE.get(raridade)
-        if existente and existente[0] == info.st_mtime_ns and existente[1] == info.st_size:
-            return existente[2].copy(), json.loads(json.dumps(existente[3]))
-        try:
-            with Image.open(caminho) as arquivo:
-                imagem = arquivo.convert("RGBA")
-            if imagem.size != TAMANHO_TEMPLATE:
-                imagem = imagem.resize(TAMANHO_TEMPLATE, Image.Resampling.LANCZOS)
-            layout = carregar_layout(raridade)
-            override_arte = _retangulo_valido(_ler_json(caminho_layout_raridade(raridade)).get("arte"))
-            if not override_arte:
-                try:
-                    layout["arte"] = detectar_janela(imagem)
-                except TemplateInvalido:
-                    pass  # mantém a janela do layout padrão
-        except (OSError, ValueError):
-            _CACHE.pop(raridade, None)
-            return None
-        _CACHE[raridade] = (info.st_mtime_ns, info.st_size, imagem.copy(), json.loads(json.dumps(layout)))
-        return imagem, layout
+        for caminho in candidatos:
+            try:
+                if not caminho.is_file():
+                    continue
+                origem_path = str(caminho.resolve())
+                if origem_path in vistos:
+                    continue
+                vistos.add(origem_path)
+                info = caminho.stat()
+            except OSError:
+                continue
+
+            existente = _CACHE.get(raridade)
+            if (existente and existente[0] == origem_path
+                    and existente[1] == info.st_mtime_ns and existente[2] == info.st_size):
+                return existente[3].copy(), json.loads(json.dumps(existente[4]))
+
+            try:
+                imagem, janela = processar_template(caminho.read_bytes())
+                layout = carregar_layout(raridade)
+                layout["arte"] = janela
+            except (OSError, TemplateInvalido, ValueError):
+                # Um upload persistente inválido não deve inutilizar a raridade:
+                # tenta o template oficial incluído no próprio pacote.
+                _CACHE.pop(raridade, None)
+                continue
+
+            _CACHE[raridade] = (
+                origem_path, info.st_mtime_ns, info.st_size, imagem.copy(),
+                json.loads(json.dumps(layout)),
+            )
+            return imagem, layout
+
+    limpar_cache_templates(raridade)
+    return None
+

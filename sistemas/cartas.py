@@ -14,7 +14,7 @@ from typing import Any
 
 from levels import PATENTES
 
-VERSAO_ARTES = 3
+VERSAO_ARTES = 5
 
 TIPOS = ("Destreza", "Força", "Magia")
 EMOJIS_TIPO = {"Destreza": "🌀", "Força": "⚔️", "Magia": "🔮"}
