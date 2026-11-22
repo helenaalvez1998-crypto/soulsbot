@@ -43,6 +43,8 @@ GUILD_ID = _env_int("GUILD_ID", 0) or None
 MOD_CHANNEL_ID = _env_int("MOD_CHANNEL_ID", 0)
 SOULSLIKE_CHANNEL_ID = _env_int("SOULSLIKE_CHANNEL_ID", 0)
 COLIZEU_CHANNEL_ID = _env_int("COLIZEU_CHANNEL_ID", 0)
+# Canal privado único para a biblioteca de artes e a fila de aprovação do Ateliê.
+COLISEU_ART_CHANNEL_ID = _env_int("COLISEU_ART_CHANNEL_ID", 0)
 NARA_CHANNEL_ID = _env_int("NARA_CHANNEL_ID", 0)
 PLATINAS_CHANNEL_ID = _env_int("PLATINAS_CHANNEL_ID", 0)
 MOD_ROLE_ID = _env_int("MOD_ROLE_ID", 0)

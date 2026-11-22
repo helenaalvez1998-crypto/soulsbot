@@ -582,6 +582,65 @@ CREATE TABLE IF NOT EXISTS cartas_transacoes (
     FOREIGN KEY(user_id) REFERENCES users(user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_cartas_transacoes_user_time ON cartas_transacoes(user_id, created_at);
+CREATE TABLE IF NOT EXISTS cartas_duelo_participacoes (
+    duel_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    opponent_id INTEGER NOT NULL,
+    won INTEGER NOT NULL DEFAULT 0,
+    xp_awarded INTEGER NOT NULL DEFAULT 0,
+    week_key TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(duel_id, user_id),
+    FOREIGN KEY(duel_id) REFERENCES cartas_duelos(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES users(user_id),
+    FOREIGN KEY(opponent_id) REFERENCES users(user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_cartas_participacao_user_week
+    ON cartas_duelo_participacoes(user_id, week_key, created_at);
+CREATE TABLE IF NOT EXISTS cartas_missoes_recompensas (
+    user_id INTEGER NOT NULL,
+    week_key TEXT NOT NULL,
+    mission_code TEXT NOT NULL,
+    reward_almas INTEGER NOT NULL,
+    trigger_duel_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(user_id, week_key, mission_code),
+    FOREIGN KEY(user_id) REFERENCES users(user_id),
+    FOREIGN KEY(trigger_duel_id) REFERENCES cartas_duelos(id)
+);
+CREATE INDEX IF NOT EXISTS idx_cartas_missoes_duel
+    ON cartas_missoes_recompensas(trigger_duel_id, user_id);
+CREATE TABLE IF NOT EXISTS cartas_atelie_sessoes (
+    user_id INTEGER PRIMARY KEY,
+    guild_id INTEGER NOT NULL,
+    card_id TEXT NOT NULL,
+    game_name TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'awaiting_upload',
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS cartas_atelie_artes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    guild_id INTEGER NOT NULL,
+    card_id TEXT NOT NULL,
+    game_name TEXT NOT NULL DEFAULT '',
+    channel_id INTEGER,
+    message_id INTEGER,
+    attachment_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'uploading',
+    reviewed_by INTEGER,
+    rejection_reason TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at TEXT,
+    FOREIGN KEY(user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_cartas_atelie_user_card_status
+    ON cartas_atelie_artes(user_id, card_id, status, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cartas_atelie_pending_unique
+    ON cartas_atelie_artes(user_id, card_id)
+    WHERE status IN ('uploading','pending');
 """
 
 
@@ -2564,8 +2623,308 @@ class Database:
             (int(user_id),),
         )
 
+    # ---------- Ateliê de artes do Coliseu ----------
+    async def coliseu_atelie_criar_sessao(self, user_id: int, guild_id: int, card_id: str, game_name: str = ""):
+        """Abre uma sessão de upload por DM, válida por 30 minutos."""
+        async with self.transaction() as tx:
+            owned = await tx._one(
+                "SELECT 1 FROM cartas_colecao WHERE user_id=? AND card_id=?",
+                (int(user_id), str(card_id)),
+            )
+            if not owned:
+                return {"status": "not_owned"}
+            pending = await tx._one(
+                """SELECT id FROM cartas_atelie_artes
+                   WHERE user_id=? AND card_id=? AND status IN ('uploading','pending') LIMIT 1""",
+                (int(user_id), str(card_id)),
+            )
+            if pending:
+                return {"status": "pending", "art_id": int(pending["id"])}
+            total_pending = await tx._one(
+                """SELECT COUNT(*) AS total FROM cartas_atelie_artes
+                   WHERE user_id=? AND status IN ('uploading','pending')""",
+                (int(user_id),),
+            )
+            if int(total_pending["total"] or 0) >= 3:
+                return {"status": "pending_limit"}
+            await tx.conn.execute(
+                """INSERT INTO cartas_atelie_sessoes(user_id,guild_id,card_id,game_name,status,expires_at)
+                   VALUES (?,?,?,?, 'awaiting_upload', datetime('now','+30 minutes'))
+                   ON CONFLICT(user_id) DO UPDATE SET guild_id=excluded.guild_id,
+                     card_id=excluded.card_id,game_name=excluded.game_name,status='awaiting_upload',
+                     expires_at=excluded.expires_at,created_at=CURRENT_TIMESTAMP""",
+                (int(user_id), int(guild_id), str(card_id), str(game_name or "")),
+            )
+            return {"status": "ok"}
+
+    async def coliseu_atelie_obter_sessao(self, user_id: int):
+        row = await self._one(
+            """SELECT * FROM cartas_atelie_sessoes WHERE user_id=? AND status='awaiting_upload'
+               AND expires_at>CURRENT_TIMESTAMP""",
+            (int(user_id),),
+        )
+        return row
+
+    async def coliseu_atelie_reservar_sessao(self, user_id: int):
+        """Reserva o upload para impedir que duas DMs criem pedidos duplicados."""
+        async with self.transaction() as tx:
+            row = await tx._one(
+                """SELECT * FROM cartas_atelie_sessoes WHERE user_id=? AND status='awaiting_upload'
+                   AND expires_at>CURRENT_TIMESTAMP""",
+                (int(user_id),),
+            )
+            if not row:
+                return None
+            await tx.conn.execute(
+                "UPDATE cartas_atelie_sessoes SET status='processing' WHERE user_id=? AND status='awaiting_upload'",
+                (int(user_id),),
+            )
+            return dict(row)
+
+    async def coliseu_atelie_reabrir_sessao(self, user_id: int):
+        await self.conn.execute(
+            "UPDATE cartas_atelie_sessoes SET status='awaiting_upload' WHERE user_id=? AND expires_at>CURRENT_TIMESTAMP",
+            (int(user_id),),
+        )
+        await self.conn.commit()
+
+    async def coliseu_atelie_encerrar_sessao(self, user_id: int):
+        await self.conn.execute("DELETE FROM cartas_atelie_sessoes WHERE user_id=?", (int(user_id),))
+        await self.conn.commit()
+
+    async def coliseu_atelie_criar_pedido(self, user_id: int, guild_id: int, card_id: str, game_name: str = ""):
+        async with self.transaction() as tx:
+            owned = await tx._one(
+                "SELECT 1 FROM cartas_colecao WHERE user_id=? AND card_id=?",
+                (int(user_id), str(card_id)),
+            )
+            if not owned:
+                return {"status": "not_owned"}
+            pending = await tx._one(
+                """SELECT id FROM cartas_atelie_artes
+                   WHERE user_id=? AND card_id=? AND status IN ('uploading','pending') LIMIT 1""",
+                (int(user_id), str(card_id)),
+            )
+            if pending:
+                return {"status": "pending", "art_id": int(pending["id"])}
+            total_pending = await tx._one(
+                """SELECT COUNT(*) AS total FROM cartas_atelie_artes
+                   WHERE user_id=? AND status IN ('uploading','pending')""",
+                (int(user_id),),
+            )
+            if int(total_pending["total"] or 0) >= 3:
+                return {"status": "pending_limit"}
+            cur = await tx.conn.execute(
+                """INSERT INTO cartas_atelie_artes(user_id,guild_id,card_id,game_name,status)
+                   VALUES (?,?,?,?,'uploading')""",
+                (int(user_id), int(guild_id), str(card_id), str(game_name or "")),
+            )
+            return {"status": "ok", "art_id": int(cur.lastrowid)}
+
+    async def coliseu_atelie_publicar_pedido(self, art_id: int, channel_id: int, message_id: int, attachment_id: int):
+        cur = await self.conn.execute(
+            """UPDATE cartas_atelie_artes SET channel_id=?,message_id=?,attachment_id=?,status='pending'
+               WHERE id=? AND status='uploading'""",
+            (int(channel_id), int(message_id), int(attachment_id), int(art_id)),
+        )
+        await self.conn.commit()
+        return cur.rowcount == 1
+
+    async def coliseu_atelie_cancelar_pedido(self, art_id: int):
+        await self.conn.execute(
+            "UPDATE cartas_atelie_artes SET status='failed' WHERE id=? AND status='uploading'",
+            (int(art_id),),
+        )
+        await self.conn.commit()
+
+    async def coliseu_atelie_obter_pedido(self, art_id: int):
+        return await self._one("SELECT * FROM cartas_atelie_artes WHERE id=?", (int(art_id),))
+
+    async def coliseu_atelie_decidir_pedido(self, art_id: int, reviewer_id: int, aprovado: bool, motivo: str = ""):
+        """Aprova uma arte e arquiva a anterior; nunca altera atributos da carta."""
+        async with self.transaction() as tx:
+            row = await tx._one(
+                "SELECT * FROM cartas_atelie_artes WHERE id=? AND status='pending'",
+                (int(art_id),),
+            )
+            if not row:
+                return {"status": "processed"}
+            novo_status = "approved" if aprovado else "rejected"
+            if aprovado:
+                await tx.conn.execute(
+                    """UPDATE cartas_atelie_artes SET status='archived'
+                       WHERE user_id=? AND card_id=? AND status='approved'""",
+                    (int(row["user_id"]), str(row["card_id"])),
+                )
+            await tx.conn.execute(
+                """UPDATE cartas_atelie_artes SET status=?,reviewed_by=?,rejection_reason=?,
+                   reviewed_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending'""",
+                (novo_status, int(reviewer_id), str(motivo or "")[:500], int(art_id)),
+            )
+            return {"status": "ok", "pedido": dict(row), "new_status": novo_status}
+
+    async def coliseu_atelie_arte_ativa(self, user_id: int, card_id: str):
+        return await self._one(
+            """SELECT * FROM cartas_atelie_artes WHERE user_id=? AND card_id=? AND status='approved'
+               ORDER BY reviewed_at DESC,id DESC LIMIT 1""",
+            (int(user_id), str(card_id)),
+        )
+
+    async def coliseu_atelie_remover_arte_ativa(self, user_id: int, card_id: str):
+        """Volta à arte-base sem apagar o histórico de aprovações anteriores."""
+        async with self.transaction() as tx:
+            cur = await tx.conn.execute(
+                """UPDATE cartas_atelie_artes SET status='archived'
+                   WHERE user_id=? AND card_id=? AND status='approved'""",
+                (int(user_id), str(card_id)),
+            )
+            return cur.rowcount > 0
+
+    @staticmethod
+    def _coliseu_semana_atual() -> str:
+        """Semana ISO no fuso do servidor/comunidade (São Paulo)."""
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("America/Sao_Paulo")).strftime("%G-W%V")
+
+    async def _coliseu_registrar_participacoes_tx(self, tx, duel, winner_id: int | None):
+        """Credita XP de participação e missões semanais sem duplicar recompensas."""
+        week_key = self._coliseu_semana_atual()
+        participants = (
+            (int(duel["creator_id"]), int(duel["opponent_id"])),
+            (int(duel["opponent_id"]), int(duel["creator_id"])),
+        )
+        rewards = {uid: {"xp": 0, "almas": 0} for uid, _ in participants}
+
+        for user_id, opponent_id in participants:
+            recent_xp = await tx._one(
+                """SELECT COUNT(*) AS n FROM cartas_duelo_participacoes
+                   WHERE user_id=? AND xp_awarded>0 AND created_at>=datetime('now','-1 day')""",
+                (user_id,),
+            )
+            xp_awarded = 8 if int(recent_xp["n"] or 0) < 3 else 0
+            xp_row = await tx._one("SELECT xp FROM users WHERE user_id=?", (user_id,))
+            xp_before = int(xp_row["xp"] or 0) if xp_row else 0
+            cur = await tx.conn.execute(
+                """INSERT OR IGNORE INTO cartas_duelo_participacoes
+                   (duel_id,user_id,opponent_id,won,xp_awarded,week_key)
+                   VALUES (?,?,?,?,?,?)""",
+                (int(duel["id"]), user_id, opponent_id, int(winner_id == user_id), xp_awarded, week_key),
+            )
+            if cur.rowcount == 1 and xp_awarded:
+                await tx.conn.execute("UPDATE users SET xp=xp+? WHERE user_id=?", (xp_awarded, user_id))
+                rewards[user_id]["xp"] = xp_awarded
+                rewards[user_id]["old_level"] = nivel_por_xp(xp_before)
+                rewards[user_id]["new_level"] = nivel_por_xp(xp_before + xp_awarded)
+
+        missoes = (
+            ("primeiro_duelo", "Primeiro combate", 1, "duelos", 2),
+            ("tres_duelos", "Presença na arena", 3, "duelos", 4),
+            ("duas_vitorias", "Duas vitórias", 2, "vitorias", 6),
+        )
+        for user_id, _ in participants:
+            stats = await tx._one(
+                """SELECT COUNT(*) AS duelos, COALESCE(SUM(won),0) AS vitorias
+                   FROM cartas_duelo_participacoes WHERE user_id=? AND week_key=?""",
+                (user_id, week_key),
+            )
+            valores = {"duelos": int(stats["duelos"] or 0), "vitorias": int(stats["vitorias"] or 0)}
+            for code, _titulo, goal, metric, reward_almas in missoes:
+                if valores[metric] < goal:
+                    continue
+                cur = await tx.conn.execute(
+                    """INSERT OR IGNORE INTO cartas_missoes_recompensas
+                       (user_id,week_key,mission_code,reward_almas,trigger_duel_id)
+                       VALUES (?,?,?,?,?)""",
+                    (user_id, week_key, code, reward_almas, int(duel["id"])),
+                )
+                if cur.rowcount != 1:
+                    continue
+                await tx.conn.execute("INSERT OR IGNORE INTO cartas_almas(user_id) VALUES (?)", (user_id,))
+                await tx.conn.execute(
+                    "UPDATE cartas_almas SET quantidade=quantidade+?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?",
+                    (reward_almas, user_id),
+                )
+                await tx.conn.execute(
+                    """INSERT OR IGNORE INTO cartas_transacoes
+                       (tx_key,user_id,kind,almas_delta,duel_id,details_json)
+                       VALUES (?,?, 'missao_semanal', ?, ?, ?)""",
+                    (f"mission:{week_key}:{code}:{user_id}", user_id, reward_almas, int(duel["id"]),
+                     f'{{"mission":"{code}","week":"{week_key}"}}'),
+                )
+                rewards[user_id]["almas"] += reward_almas
+        return rewards
+
+    async def coliseu_missoes_semanais(self, user_id: int):
+        week_key = self._coliseu_semana_atual()
+        stats = await self._one(
+            """SELECT COUNT(*) AS duelos, COALESCE(SUM(won),0) AS vitorias
+               FROM cartas_duelo_participacoes WHERE user_id=? AND week_key=?""",
+            (int(user_id), week_key),
+        )
+        claims = await self._all(
+            "SELECT mission_code,reward_almas FROM cartas_missoes_recompensas WHERE user_id=? AND week_key=?",
+            (int(user_id), week_key),
+        )
+        claimed = {str(row["mission_code"]): int(row["reward_almas"] or 0) for row in claims}
+        valores = {"duelos": int(stats["duelos"] or 0), "vitorias": int(stats["vitorias"] or 0)}
+        definicoes = (
+            ("primeiro_duelo", "Primeiro combate", "Conclua seu primeiro duelo nesta semana.", 1, "duelos", 2),
+            ("tres_duelos", "Presença na arena", "Conclua três duelos nesta semana.", 3, "duelos", 4),
+            ("duas_vitorias", "Duas vitórias", "Vença dois duelos nesta semana.", 2, "vitorias", 6),
+        )
+        return {
+            "week_key": week_key,
+            "missions": [
+                {
+                    "code": code, "title": title, "description": description,
+                    "progress": min(valores[metric], goal), "goal": goal,
+                    "reward_almas": reward, "claimed": code in claimed,
+                }
+                for code, title, description, goal, metric, reward in definicoes
+            ],
+        }
+
+    async def coliseu_rivalidade(self, user_id: int, opponent_id: int, limite: int = 5):
+        where = "((creator_id=? AND opponent_id=?) OR (creator_id=? AND opponent_id=?))"
+        args = (int(user_id), int(opponent_id), int(opponent_id), int(user_id))
+        stats = await self._one(
+            f"""SELECT COUNT(*) AS duelos,
+                       SUM(CASE WHEN winner_id=? THEN 1 ELSE 0 END) AS wins,
+                       SUM(CASE WHEN winner_id=? THEN 1 ELSE 0 END) AS losses,
+                       SUM(CASE WHEN winner_id IS NULL THEN 1 ELSE 0 END) AS draws
+                FROM cartas_duelos WHERE status='finished' AND {where}""",
+            (int(user_id), int(opponent_id), *args),
+        )
+        recent = await self._all(
+            f"""SELECT id,creator_id,opponent_id,winner_id,aposta,created_at
+                FROM cartas_duelos WHERE status='finished' AND {where}
+                ORDER BY id DESC LIMIT ?""",
+            (*args, max(1, min(int(limite), 10))),
+        )
+        return {
+            "duels": int(stats["duelos"] or 0),
+            "wins": int(stats["wins"] or 0),
+            "losses": int(stats["losses"] or 0),
+            "draws": int(stats["draws"] or 0),
+            "recent": [dict(row) for row in recent],
+        }
+
+    async def coliseu_recompensas_duelo(self, duel_id: int):
+        return await self._all(
+            """SELECT p.user_id,p.opponent_id,p.won,p.xp_awarded,
+                      COALESCE(SUM(m.reward_almas),0) AS almas_awarded
+               FROM cartas_duelo_participacoes p
+               LEFT JOIN cartas_missoes_recompensas m
+                 ON m.trigger_duel_id=p.duel_id AND m.user_id=p.user_id
+               WHERE p.duel_id=? GROUP BY p.user_id,p.opponent_id,p.won,p.xp_awarded
+               ORDER BY p.user_id""",
+            (int(duel_id),),
+        )
+
     async def coliseu_abrir_pacote(self, user_id: int, catalogo_por_raridade: dict,
-                                   almas_por_raridade: dict, preco: int = 120, quantidade: int = 3):
+                                   almas_por_raridade: dict, preco: int = 120, quantidade: int = 3,
+                                   limite_pacotes_dia: int = 3):
         """Compra e abre pacote na mesma transação; sorteio, pity e duplicatas são atômicos."""
         import secrets
         async with self.transaction() as tx:
@@ -2573,6 +2932,14 @@ class Database:
             await tx.conn.execute("INSERT OR IGNORE INTO cartas_almas(user_id) VALUES (?)", (int(user_id),))
             await tx.conn.execute("INSERT OR IGNORE INTO cartas_pity(user_id) VALUES (?)", (int(user_id),))
             user = await tx._one("SELECT denarios FROM users WHERE user_id=?", (int(user_id),))
+            abertos = await tx._one(
+                """SELECT COUNT(*) AS n FROM cartas_transacoes
+                   WHERE user_id=? AND kind='pacote_fogueira' AND created_at>=datetime('now','-1 day')""",
+                (int(user_id),),
+            )
+            pacotes_24h = int(abertos["n"] or 0)
+            if pacotes_24h >= int(limite_pacotes_dia):
+                return {"status": "limite_pacotes_dia", "limite": int(limite_pacotes_dia), "abertos": pacotes_24h}
             if int(user["denarios"] or 0) < int(preco):
                 return {"status": "sem_saldo", "saldo": int(user["denarios"] or 0)}
             pity_row = await tx._one("SELECT comuns_seguidas FROM cartas_pity WHERE user_id=?", (int(user_id),))
@@ -2636,7 +3003,8 @@ class Database:
             )
             saldo = await tx._one("SELECT denarios FROM users WHERE user_id=?", (int(user_id),))
             return {"status": "ok", "cards": aberturas, "almas_ganhas": almas_ganhas,
-                    "pity": streak, "saldo": int(saldo["denarios"] or 0)}
+                    "pity": streak, "saldo": int(saldo["denarios"] or 0),
+                    "pacotes_restantes": max(0, int(limite_pacotes_dia) - pacotes_24h - 1)}
 
     async def coliseu_forjar_carta(self, user_id: int, carta: dict, custo_almas: int):
         import json, uuid
@@ -2779,14 +3147,15 @@ class Database:
             )
             if int(par["n"] or 0) >= int(limite_par):
                 return {"status": "limite_par"}
-            recent = await tx._one(
-                """SELECT COUNT(*) AS n FROM cartas_duelos WHERE created_at>=datetime('now',?)
-                   AND (creator_id IN (?,?) OR opponent_id IN (?,?))
-                   AND status IN ('invited','active','finished','cancelled')""",
-                (f"-{int(cooldown_segundos)} seconds", int(creator_id), int(opponent_id), int(creator_id), int(opponent_id)),
-            )
-            if int(recent["n"] or 0):
-                return {"status": "cooldown"}
+            if int(cooldown_segundos) > 0:
+                recent = await tx._one(
+                    """SELECT COUNT(*) AS n FROM cartas_duelos WHERE created_at>=datetime('now',?)
+                       AND (creator_id IN (?,?) OR opponent_id IN (?,?))
+                       AND status IN ('invited','active','finished','cancelled')""",
+                    (f"-{int(cooldown_segundos)} seconds", int(creator_id), int(opponent_id), int(creator_id), int(opponent_id)),
+                )
+                if int(recent["n"] or 0):
+                    return {"status": "cooldown"}
             for uid in (int(creator_id), int(opponent_id)):
                 aposta_dia = await tx._one(
                     """SELECT COALESCE(SUM(aposta),0) AS n FROM cartas_duelos WHERE accepted_at>=datetime('now','-1 day')
@@ -2895,7 +3264,7 @@ class Database:
                     )
             cur = await tx.conn.execute(
                 """UPDATE cartas_duelos SET status='active',accepted_at=CURRENT_TIMESTAMP,
-                       round_deadline=datetime('now','+3 minutes'),current_round=1
+                       round_deadline=datetime('now','+40 seconds'),current_round=1
                    WHERE id=? AND status='invited'""",
                 (int(duel_id),),
             )
@@ -2954,6 +3323,12 @@ class Database:
             participantes = (int(duel["creator_id"]), int(duel["opponent_id"]))
             if int(user_id) not in participantes:
                 return {"status": "nao_autorizado"}
+            prazo = await tx._one(
+                "SELECT round_deadline IS NOT NULL AND round_deadline<=CURRENT_TIMESTAMP AS expirado FROM cartas_duelos WHERE id=?",
+                (int(duel_id),),
+            )
+            if prazo and int(prazo["expirado"] or 0):
+                return {"status": "expirado"}
             existente = await tx._one(
                 "SELECT 1 FROM cartas_duelo_jogadas WHERE duel_id=? AND round_no=? AND user_id=?",
                 (int(duel_id), int(duel["current_round"]), int(user_id)),
@@ -3030,7 +3405,7 @@ class Database:
             )
             if int(round_no) < 5:
                 await tx.conn.execute(
-                    "UPDATE cartas_duelos SET current_round=?,round_deadline=datetime('now','+3 minutes') WHERE id=?",
+                    "UPDATE cartas_duelos SET current_round=?,round_deadline=datetime('now','+40 seconds') WHERE id=?",
                     (int(round_no) + 1, int(duel_id)),
                 )
                 return {"status": "round_ok", "round_no": int(round_no)}
@@ -3050,7 +3425,9 @@ class Database:
                         (f"duel:{duel_id}:draw_refund:{uid}", uid, int(duel["aposta"]), int(duel_id)),
                     )
                 await tx.conn.execute("UPDATE cartas_duelos SET status='finished',winner_id=NULL,payout=0,burned=0,end_reason='empate; apostas devolvidas' WHERE id=?", (int(duel_id),))
-                return {"status": "empate", "wins_a": wins_a, "wins_b": wins_b, "total_a": total_a, "total_b": total_b, "pote": pote}
+                recompensas = await self._coliseu_registrar_participacoes_tx(tx, duel, None)
+                return {"status": "empate", "wins_a": wins_a, "wins_b": wins_b, "total_a": total_a, "total_b": total_b, "pote": pote,
+                        "recompensas": recompensas}
             winner_id = a if lado_vencedor == "a" else b
             payout = (pote * 90) // 100
             burned = pote - payout
@@ -3065,8 +3442,10 @@ class Database:
                 "UPDATE cartas_duelos SET status='finished',winner_id=?,payout=?,burned=?,end_reason='duelo concluído' WHERE id=?",
                 (winner_id, payout, burned, int(duel_id)),
             )
+            recompensas = await self._coliseu_registrar_participacoes_tx(tx, duel, winner_id)
             return {"status": "vitoria", "winner_id": winner_id, "wins_a": wins_a, "wins_b": wins_b,
-                    "total_a": total_a, "total_b": total_b, "pote": pote, "payout": payout, "burned": burned}
+                    "total_a": total_a, "total_b": total_b, "pote": pote, "payout": payout, "burned": burned,
+                    "recompensas": recompensas}
 
     async def coliseu_historico_rodadas(self, duel_id: int):
         return await self._all("SELECT * FROM cartas_duelo_rounds WHERE duel_id=? ORDER BY round_no", (int(duel_id),))
