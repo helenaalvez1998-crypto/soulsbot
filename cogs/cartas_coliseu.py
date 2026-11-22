@@ -5,6 +5,8 @@ persistidas no SQLite. Nenhum resultado depende dos valores enviados pelo client
 """
 from __future__ import annotations
 
+import asyncio
+import io
 import logging
 import re
 from pathlib import Path
@@ -14,7 +16,8 @@ from discord.ext import commands, tasks
 
 import config
 from levels import PATENTES, nivel_por_xp
-from sistemas.arte_cartas import render_carta, render_pacote
+from sistemas.arte_cartas import render_carta, render_carta_bytes, render_pacote
+from sistemas.atelie_coliseu import ArteInvalida, TAMANHO_MAXIMO_UPLOAD, gerar_prompt_carta, normalizar_imagem_carta
 from sistemas.cartas import (
     ALMAS_DUPLICATA,
     CARTAS_PACOTE,
@@ -43,9 +46,10 @@ APOSTA_MAXIMA = 500
 LIMITE_DUELOS_DIA = 5
 LIMITE_DUELOS_PAR_DIA = 2
 LIMITE_APOSTA_DIA = 1500  # soma das apostas individuais iniciadas pelo mesmo membro
+LIMITE_PACOTES_DIA = 3
 COOLDOWN_DESAFIO_SEGUNDOS = 60
 TEMPO_CONVITE_SEGUNDOS = 120
-TEMPO_RODADA_SEGUNDOS = 180
+TEMPO_RODADA_SEGUNDOS = 40  # cinco escolhas simultâneas cabem em cerca de 2–4 minutos
 DIFERENCA_MAXIMA_PODER_DECK = 4
 
 
@@ -62,7 +66,7 @@ def _descricao_habilidade(carta: dict) -> str:
     return f"**{habilidade.get('nome', 'Sem habilidade')}** — {habilidade.get('texto', '')}"
 
 
-class BotaoDueloColiseu(discord.ui.DynamicItem[discord.ui.Button], template=r"coliseu_cartas:(?P<acao>aceitar|recusar|cancelar|jogar):(?P<duelo>[0-9]+)"):
+class BotaoDueloColiseu(discord.ui.DynamicItem[discord.ui.Button], template=r"coliseu_cartas:(?P<acao>aceitar|recusar|cancelar|jogar|revanche):(?P<duelo>[0-9]+)"):
     """Botões dinâmicos; continuam válidos após reiniciar o bot."""
 
     ROTULOS = {
@@ -70,6 +74,7 @@ class BotaoDueloColiseu(discord.ui.DynamicItem[discord.ui.Button], template=r"co
         "recusar": ("Recusar", "✖️", discord.ButtonStyle.secondary),
         "cancelar": ("Cancelar convite", "🛑", discord.ButtonStyle.secondary),
         "jogar": ("Escolher carta", "🃏", discord.ButtonStyle.primary),
+        "revanche": ("Desafiar novamente", "🔁", discord.ButtonStyle.success),
     }
 
     def __init__(self, acao: str, duelo_id: int):
@@ -116,6 +121,7 @@ class PainelColiseuView(discord.ui.View):
         self.add_item(BotaoMenuCartas(cog, user_id, "forja", "Forja de Almas", "💎", discord.ButtonStyle.secondary, 1))
         self.add_item(BotaoMenuCartas(cog, user_id, "duelo", "Desafiar jogador", "⚔️", discord.ButtonStyle.danger, 2))
         self.add_item(BotaoMenuCartas(cog, user_id, "ranking", "Hall da Fama", "🏆", discord.ButtonStyle.secondary, 2))
+        self.add_item(BotaoMenuCartas(cog, user_id, "missoes", "Missões semanais", "📜", discord.ButtonStyle.secondary, 3))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user_id:
@@ -152,10 +158,136 @@ class CollectionSelect(discord.ui.Select):
         super().__init__(placeholder="Selecione uma carta para ver os detalhes...", min_values=1, max_values=1, options=options, row=0)
 
     async def callback(self, interaction: discord.Interaction):
-        carta = self.parent_view.cards_by_id.get(self.values[0])
-        if carta is None:
+        selecionada = self.parent_view.cards_by_id.get(self.values[0])
+        if selecionada is None:
             return await interaction.response.send_message("Não encontrei essa carta na sua coleção.", ephemeral=True)
-        await self.parent_view.cog.mostrar_detalhe_carta(interaction, carta)
+        _, carta = selecionada
+        await self.parent_view.cog.mostrar_detalhe_carta(interaction, carta, self.parent_view.user_id)
+
+
+class PersonalizarCartaButton(discord.ui.Button):
+    def __init__(self, cog: "ColiseuCartas", user_id: int, carta: dict):
+        super().__init__(label="Gerar prompt de arte", emoji="🎨", style=discord.ButtonStyle.primary, row=0)
+        self.cog = cog
+        self.user_id = int(user_id)
+        self.carta = dict(carta)
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("Essa carta pertence à coleção de outro membro.", ephemeral=True)
+        prompt = gerar_prompt_carta(self.carta)
+        embed = discord.Embed(
+            title="🎨 Ateliê do Coliseu · Seu prompt está pronto",
+            description=(
+                "Copie o bloco abaixo e cole no gerador de imagens que preferir. "
+                "A Nara já considerou o jogo de origem, o conceito da carta e a direção artística fixa do Coliseu.\n\n"
+                f"```text\n{prompt}\n```"
+            ),
+            color=config.COR_OURO,
+        )
+        embed.set_footer(text="A raridade não muda a composição. O SoulsBot aplica a moldura, o título e os atributos oficiais.")
+        await interaction.response.send_message(
+            embed=embed,
+            view=EnviarArteAtelieView(self.cog, self.user_id, self.carta),
+            ephemeral=True,
+        )
+
+
+class RemoverArtePersonalizadaButton(discord.ui.Button):
+    def __init__(self, cog: "ColiseuCartas", user_id: int, card_id: str):
+        super().__init__(label="Usar arte original", emoji="↩️", style=discord.ButtonStyle.secondary, row=1)
+        self.cog = cog
+        self.user_id = int(user_id)
+        self.card_id = str(card_id)
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("Essa carta pertence à coleção de outro membro.", ephemeral=True)
+        await self.cog.bot.db.coliseu_atelie_remover_arte_ativa(self.user_id, self.card_id)
+        return await interaction.response.send_message(
+            "A arte personalizada foi desativada. Sua carta voltou à ilustração original do Coliseu.",
+            ephemeral=True,
+        )
+
+
+class DetalheCartaView(discord.ui.View):
+    def __init__(self, cog: "ColiseuCartas", user_id: int, carta: dict, possui_arte: bool):
+        super().__init__(timeout=600)
+        self.add_item(PersonalizarCartaButton(cog, user_id, carta))
+        if possui_arte:
+            self.add_item(RemoverArtePersonalizadaButton(cog, user_id, str(carta["id"])))
+
+
+class EnviarArteAtelieButton(discord.ui.Button):
+    def __init__(self, cog: "ColiseuCartas", user_id: int, carta: dict):
+        super().__init__(label="Enviar minha arte", emoji="📤", style=discord.ButtonStyle.success, row=0)
+        self.cog = cog
+        self.user_id = int(user_id)
+        self.carta = dict(carta)
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("Este pedido de arte pertence a outro membro.", ephemeral=True)
+        await self.cog.iniciar_upload_atelie(interaction, self.carta)
+
+
+class EnviarArteAtelieView(discord.ui.View):
+    def __init__(self, cog: "ColiseuCartas", user_id: int, carta: dict):
+        super().__init__(timeout=600)
+        self.add_item(EnviarArteAtelieButton(cog, user_id, carta))
+
+
+class AtelieReviewButton(discord.ui.DynamicItem[discord.ui.Button], template=r"coliseu_atelie:(?P<acao>aprovar|rejeitar):(?P<arte_id>[0-9]+)"):
+    def __init__(self, acao: str, arte_id: int):
+        aprovar = acao == "aprovar"
+        super().__init__(discord.ui.Button(
+            label="Aprovar arte" if aprovar else "Rejeitar arte",
+            emoji="✅" if aprovar else "✖️",
+            style=discord.ButtonStyle.success if aprovar else discord.ButtonStyle.danger,
+            custom_id=f"coliseu_atelie:{acao}:{int(arte_id)}",
+        ))
+        self.acao = str(acao)
+        self.arte_id = int(arte_id)
+
+    @classmethod
+    async def from_custom_id(cls, interaction: discord.Interaction, item: discord.ui.Button, match: re.Match[str]):
+        return cls(match["acao"], int(match["arte_id"]))
+
+    async def callback(self, interaction: discord.Interaction):
+        cog = interaction.client.get_cog("ColiseuCartas")
+        if cog is None:
+            return await interaction.response.send_message("O Ateliê está temporariamente indisponível.", ephemeral=True)
+        if not isinstance(interaction.user, discord.Member) or not cog._pode_revisar_arte(interaction.user):
+            return await interaction.response.send_message("Somente a moderação pode avaliar artes do Coliseu.", ephemeral=True)
+        if self.acao == "aprovar":
+            return await cog.revisar_arte_atelie(interaction, self.arte_id, True)
+        return await interaction.response.send_modal(RejeitarArteAtelieModal(cog, self.arte_id))
+
+
+class AtelieReviewView(discord.ui.View):
+    def __init__(self, arte_id: int):
+        super().__init__(timeout=None)
+        self.add_item(AtelieReviewButton("aprovar", arte_id))
+        self.add_item(AtelieReviewButton("rejeitar", arte_id))
+
+
+class RejeitarArteAtelieModal(discord.ui.Modal, title="Rejeitar arte personalizada"):
+    motivo = discord.ui.TextInput(
+        label="Motivo da rejeição",
+        placeholder="Explique o que precisa ser corrigido.",
+        min_length=5,
+        max_length=500,
+        required=True,
+        style=discord.TextStyle.paragraph,
+    )
+
+    def __init__(self, cog: "ColiseuCartas", arte_id: int):
+        super().__init__(timeout=300)
+        self.cog = cog
+        self.arte_id = int(arte_id)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await self.cog.revisar_arte_atelie(interaction, self.arte_id, False, str(self.motivo.value))
 
 
 class CollectionPageButton(discord.ui.Button):
@@ -180,7 +312,7 @@ class CollectionView(discord.ui.View):
         self.cog = cog
         self.user_id = int(user_id)
         self.cards = cards
-        self.cards_by_id = {carta["id"]: carta for _, carta in cards}
+        self.cards_by_id = {carta["id"]: (row, carta) for row, carta in cards}
         self.page = 0
         self.pages = max(1, (len(cards) + self.page_size - 1) // self.page_size)
         self.rebuild()
@@ -216,6 +348,188 @@ class CollectionView(discord.ui.View):
         return True
 
 
+class RevelarProximaCartaButton(discord.ui.Button):
+    def __init__(self, parent_view: "RevelacaoPacoteView"):
+        self.parent_view = parent_view
+        super().__init__(label="Revelar próxima", emoji="✨", style=discord.ButtonStyle.primary,
+                         disabled=parent_view.indice >= len(parent_view.cards) - 1, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        await self.parent_view.revelar_proxima(interaction)
+
+
+class RevelarTodasCartasButton(discord.ui.Button):
+    def __init__(self, parent_view: "RevelacaoPacoteView"):
+        self.parent_view = parent_view
+        label = "Ver resumo do pacote" if parent_view.indice >= len(parent_view.cards) - 1 else "Revelar todas"
+        super().__init__(label=label, emoji="⚡", style=discord.ButtonStyle.success, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        await self.parent_view.revelar_todas(interaction)
+
+
+class RevelacaoPacoteView(discord.ui.View):
+    """Revela as três cartas em sequência, mas permite pular a animação."""
+
+    def __init__(self, cog: "ColiseuCartas", user_id: int, resultado: dict):
+        super().__init__(timeout=300)
+        self.cog = cog
+        self.user_id = int(user_id)
+        self.itens = list(resultado["cards"])
+        self.cards = [item["carta"] for item in self.itens]
+        self.resultado = dict(resultado)
+        self.indice = 0
+        self.todas_reveladas = False
+        self._reveal_lock = asyncio.Lock()
+        self.rebuild()
+
+    def rebuild(self):
+        self.clear_items()
+        if not self.todas_reveladas:
+            if self.indice < len(self.cards) - 1:
+                self.add_item(RevelarProximaCartaButton(self))
+                self.add_item(RevelarTodasCartasButton(self))
+            else:
+                self.add_item(RevelarTodasCartasButton(self))
+        self.add_item(VoltarColiseuButton(self.cog, self.user_id))
+
+    def embed_carta_atual(self) -> discord.Embed:
+        item = self.itens[self.indice]
+        carta = item["carta"]
+        extra = (
+            f"\n\n↳ Repetida: convertida em **{item['almas']} Almas**."
+            if item["duplicata"] else "\n\n✨ Nova carta adicionada à coleção!"
+        )
+        embed = discord.Embed(
+            title=f"🔥 Pacote Fogueira · Carta {self.indice + 1}/{len(self.cards)}",
+            description=f"{_formatar_carta(carta)}\n\n{_descricao_habilidade(carta)}{extra}",
+            color=config.COR_OURO,
+        )
+        embed.set_image(url="attachment://carta.png")
+        embed.add_field(name="Almas neste pacote", value=f"+{self.resultado['almas_ganhas']}", inline=True)
+        embed.add_field(name="Saldo restante", value=f"{self.resultado['saldo']} Denários", inline=True)
+        embed.add_field(name="Pity", value=f"{self.resultado['pity']}/10", inline=True)
+        if self.indice == len(self.cards) - 1:
+            embed.set_footer(text="Última carta revelada · Você pode ver o pacote completo ou voltar ao Coliseu.")
+        else:
+            embed.set_footer(text="Revele a próxima carta ou veja as três de uma vez. A compra já foi concluída com segurança.")
+        return embed
+
+    def embed_todas(self) -> discord.Embed:
+        linhas = []
+        for i, item in enumerate(self.itens, 1):
+            carta = item["carta"]
+            linha = f"**{i}.** {_formatar_carta(carta)}"
+            if item["duplicata"]:
+                linha += f" · repetida: +{item['almas']} Almas"
+            else:
+                linha += " · nova"
+            linhas.append(linha)
+        embed = discord.Embed(
+            title="🔥 Pacote Fogueira · Todas as cartas",
+            description="\n\n".join(linhas),
+            color=config.COR_OURO,
+        )
+        embed.set_image(url="attachment://pacote_completo.png")
+        embed.add_field(name="Almas recebidas", value=f"+{self.resultado['almas_ganhas']}", inline=True)
+        embed.add_field(name="Saldo restante", value=f"{self.resultado['saldo']} Denários", inline=True)
+        embed.add_field(name="Pacotes restantes hoje", value=str(self.resultado.get("pacotes_restantes", 0)), inline=True)
+        embed.set_footer(text="As três cartas já estão salvas na sua coleção.")
+        return embed
+
+    async def revelar_proxima(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("Esta abertura pertence a outro membro.", ephemeral=True)
+        async with self._reveal_lock:
+            if self.todas_reveladas or self.indice >= len(self.cards) - 1:
+                return await interaction.response.send_message("As três cartas já foram reveladas.", ephemeral=True)
+            self.indice += 1
+            self.rebuild()
+            path = render_carta(self.cards[self.indice])
+            arquivo = discord.File(str(path), filename="carta.png")
+            await interaction.response.edit_message(
+                embed=self.embed_carta_atual(), attachments=[arquivo], view=self,
+            )
+
+    async def revelar_todas(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("Esta abertura pertence a outro membro.", ephemeral=True)
+        async with self._reveal_lock:
+            if self.todas_reveladas:
+                return await interaction.response.send_message("O resumo deste pacote já está aberto.", ephemeral=True)
+            self.todas_reveladas = True
+            self.rebuild()
+            path = render_pacote(self.cards)
+            arquivo = discord.File(str(path), filename="pacote_completo.png")
+            await interaction.response.edit_message(
+                embed=self.embed_todas(), attachments=[arquivo], view=self,
+            )
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("Esta abertura é privada.", ephemeral=True)
+            return False
+        return True
+
+
+class AtualizarMissoesButton(discord.ui.Button):
+    def __init__(self, parent_view: "MissaoSemanalView"):
+        self.parent_view = parent_view
+        super().__init__(label="Atualizar progresso", emoji="🔄", style=discord.ButtonStyle.primary, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        view = self.parent_view
+        if interaction.user.id != view.user_id:
+            return await interaction.response.send_message("Estas missões pertencem a outro membro.", ephemeral=True)
+        view.dados = await view.cog.bot.db.coliseu_missoes_semanais(view.user_id)
+        await interaction.response.edit_message(embed=view.embed(), view=view)
+
+
+class MissaoSemanalView(discord.ui.View):
+    def __init__(self, cog: "ColiseuCartas", user_id: int, dados: dict):
+        super().__init__(timeout=300)
+        self.cog = cog
+        self.user_id = int(user_id)
+        self.dados = dados
+        self.add_item(AtualizarMissoesButton(self))
+        self.add_item(VoltarColiseuButton(cog, user_id))
+
+    def embed(self) -> discord.Embed:
+        embed = discord.Embed(
+            title="📜 Missões semanais do Coliseu",
+            description=(
+                "Objetivos opcionais, sem sequência diária e sem punição por ficar ausente. "
+                "As Almas são creditadas automaticamente quando a meta é concluída.\n\n"
+                f"**Semana:** {self.dados['week_key']}"
+            ),
+            color=config.COR_OURO,
+        )
+        for item in self.dados["missions"]:
+            progresso = int(item["progress"])
+            meta = int(item["goal"])
+            preenchido = "■" * progresso + "□" * max(0, meta - progresso)
+            estado = "Recompensa recebida" if item["claimed"] else "Em andamento"
+            if progresso >= meta:
+                estado = "Concluída" if item["claimed"] else "Meta alcançada"
+            embed.add_field(
+                name=f"{item['title']} · {preenchido}",
+                value=(
+                    f"{item['description']}\n"
+                    f"Progresso: **{progresso}/{meta}** · Recompensa: **{item['reward_almas']} Almas**\n"
+                    f"_{estado}_"
+                ),
+                inline=False,
+            )
+        embed.set_footer(text="As missões reiniciam na semana seguinte. Nenhuma atividade é obrigatória.")
+        return embed
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("Estas missões são privadas. Abra seu próprio Coliseu pela Nara.", ephemeral=True)
+            return False
+        return True
+
+
 class ConfirmarPacoteButton(discord.ui.Button):
     def __init__(self, view: "ConfirmarPacoteView"):
         super().__init__(label=f"Abrir por {PRECO_PACOTE_FOGUEIRA} Denários", emoji="🔥", style=discord.ButtonStyle.success)
@@ -236,33 +550,27 @@ class ConfirmarPacoteButton(discord.ui.Button):
             ALMAS_DUPLICATA,
             PRECO_PACOTE_FOGUEIRA,
             3,
+            LIMITE_PACOTES_DIA,
         )
         if resultado["status"] == "sem_saldo":
             return await interaction.followup.send(
                 f"Você tem {resultado['saldo']} Denários; o pacote custa {PRECO_PACOTE_FOGUEIRA}.", ephemeral=True
             )
+        if resultado["status"] == "limite_pacotes_dia":
+            return await interaction.followup.send(
+                f"Você já abriu {LIMITE_PACOTES_DIA} pacotes nas últimas 24 horas. "
+                "O limite protege seus Denários; você poderá abrir outro quando uma abertura sair da janela de 24 horas.",
+                ephemeral=True,
+            )
         if resultado["status"] != "ok":
             return await interaction.followup.send("Não consegui abrir o pacote. Nenhum Denário foi descontado.", ephemeral=True)
-        cards = [x["carta"] for x in resultado["cards"]]
-        linhas = []
-        for item in resultado["cards"]:
-            carta = item["carta"]
-            linha = _formatar_carta(carta)
-            if item["duplicata"]:
-                linha += f"\n↳ Repetida: convertida em **{item['almas']} Almas**."
-            linhas.append(linha)
-        caminho = render_pacote(cards)
-        arquivo = discord.File(str(caminho), filename="pacote_fogueira.png")
-        embed = discord.Embed(
-            title="🔥 Pacote Fogueira aberto",
-            description="\n\n".join(linhas),
-            color=config.COR_OURO,
+        view_revelacao = RevelacaoPacoteView(view.cog, view.user_id, resultado)
+        primeira_carta = render_carta(view_revelacao.cards[0])
+        arquivo = discord.File(str(primeira_carta), filename="carta.png")
+        await interaction.followup.send(
+            embed=view_revelacao.embed_carta_atual(), file=arquivo,
+            view=view_revelacao, ephemeral=True,
         )
-        embed.set_image(url="attachment://pacote_fogueira.png")
-        embed.add_field(name="Almas recebidas", value=f"+{resultado['almas_ganhas']}", inline=True)
-        embed.add_field(name="Saldo restante", value=f"{resultado['saldo']} Denários", inline=True)
-        embed.add_field(name="Proteção contra azar", value=f"{resultado['pity']}/10 cartas Comuns consecutivas", inline=False)
-        await interaction.followup.send(embed=embed, file=arquivo, ephemeral=True)
 
 
 class ConfirmarPacoteView(discord.ui.View):
@@ -540,56 +848,178 @@ class SelecaoCartaJogo(discord.ui.Select):
             "carta_invalida": "Essa carta não pertence ao deck travado para este duelo.",
             "carta_usada": "Cada carta só pode ser utilizada uma vez por duelo.",
             "snapshot_invalido": "Não consegui validar o deck desta partida.",
+            "expirado": "O prazo de escolha terminou. A partida será encerrada e as duas apostas serão devolvidas.",
         }
         await interaction.followup.send(mensagens.get(resultado["status"], "Não consegui registrar sua jogada."), ephemeral=True)
 
 
 class SelecaoCartaView(discord.ui.View):
     def __init__(self, cog: "ColiseuCartas", duel_id: int, user_id: int, cards: list[dict]):
-        super().__init__(timeout=120)
+        super().__init__(timeout=TEMPO_RODADA_SEGUNDOS)
         self.add_item(SelecaoCartaJogo(cog, duel_id, user_id, cards))
 
 
-class DesafioColiseuModal(discord.ui.Modal, title="Desafiar um gladiador"):
-    def __init__(self, cog: "ColiseuCartas", creator_id: int):
+class MembrosOnlineSelect(discord.ui.Select):
+    """Lista paginada de membros conectados e aptos a receber um desafio."""
+
+    def __init__(self, parent_view: "DesafioColiseuView"):
+        self.parent_view = parent_view
+        start = parent_view.page * parent_view.page_size
+        page_members = parent_view.members[start:start + parent_view.page_size]
+        options = []
+        for item in page_members:
+            member = item["member"]
+            status_label = item["status_label"]
+            options.append(discord.SelectOption(
+                label=member.display_name[:100],
+                value=str(member.id),
+                description=f"{status_label} · Nível {item['nivel']} · Deck {item['poder']} de poder"[:100],
+                emoji=item["status_emoji"],
+            ))
+        super().__init__(
+            placeholder="Escolha um membro conectado...",
+            min_values=1,
+            max_values=1,
+            options=options,
+            row=0,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        view = self.parent_view
+        if interaction.user.id != view.user_id:
+            return await interaction.response.send_message("Esta lista pertence a outro membro.", ephemeral=True)
+        target_id = int(self.values[0])
+        guild = interaction.guild
+        target = guild.get_member(target_id) if guild else None
+        if target is None or target.bot or target.status not in (discord.Status.online, discord.Status.idle, discord.Status.dnd):
+            return await interaction.response.send_message(
+                "Esse membro não está mais conectado. Atualize a lista e escolha outra pessoa.", ephemeral=True
+            )
+        await interaction.response.send_modal(DesafioColiseuModal(view.cog, view.user_id, target.id))
+
+
+class PaginaDesafioButton(discord.ui.Button):
+    def __init__(self, parent_view: "DesafioColiseuView", direcao: int):
+        self.parent_view = parent_view
+        self.direcao = int(direcao)
+        super().__init__(
+            label="Anterior" if direcao < 0 else "Próxima",
+            emoji="◀️" if direcao < 0 else "▶️",
+            style=discord.ButtonStyle.secondary,
+            row=1,
+            disabled=(parent_view.page == 0 if direcao < 0 else parent_view.page + 1 >= parent_view.pages),
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        view = self.parent_view
+        if interaction.user.id != view.user_id:
+            return await interaction.response.send_message("Esta lista pertence a outro membro.", ephemeral=True)
+        view.page = max(0, min(view.pages - 1, view.page + self.direcao))
+        view.rebuild()
+        await interaction.response.edit_message(embed=view.embed(), view=view)
+
+
+class AtualizarMembrosOnlineButton(discord.ui.Button):
+    def __init__(self, parent_view: "DesafioColiseuView"):
+        self.parent_view = parent_view
+        super().__init__(label="Atualizar lista", emoji="🔄", style=discord.ButtonStyle.primary, row=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        view = self.parent_view
+        if interaction.user.id != view.user_id:
+            return await interaction.response.send_message("Esta lista pertence a outro membro.", ephemeral=True)
+        await view.cog.abrir_selecao_desafio(interaction, view.user_id)
+
+
+class DesafioColiseuView(discord.ui.View):
+    page_size = 25
+
+    def __init__(self, cog: "ColiseuCartas", user_id: int, members: list[dict], total_conectados: int):
+        super().__init__(timeout=180)
+        self.cog = cog
+        self.user_id = int(user_id)
+        self.members = list(members)
+        self.total_conectados = int(total_conectados)
+        self.page = 0
+        self.pages = max(1, (len(self.members) + self.page_size - 1) // self.page_size)
+        self.rebuild()
+
+    def rebuild(self):
+        self.clear_items()
+        if self.members:
+            self.add_item(MembrosOnlineSelect(self))
+        if self.pages > 1:
+            self.add_item(PaginaDesafioButton(self, -1))
+            self.add_item(PaginaDesafioButton(self, 1))
+        self.add_item(AtualizarMembrosOnlineButton(self))
+        self.add_item(VoltarColiseuButton(self.cog, self.user_id))
+
+    def embed(self) -> discord.Embed:
+        embed = discord.Embed(title="⚔️ Desafiar jogador", color=config.COR_OURO)
+        if not self.members:
+            if self.total_conectados:
+                embed.description = (
+                    f"Há **{self.total_conectados}** membro(s) conectado(s), mas ninguém atende aos requisitos do Coliseu agora.\n\n"
+                    f"Para aparecer na lista, a pessoa precisa ter nível {NIVEL_MINIMO_DUELO}, saldo mínimo de {APOSTA_MINIMA} Denários, "
+                    f"um deck válido de cinco cartas com diferença máxima de {DIFERENCA_MAXIMA_PODER_DECK} pontos em relação ao seu, "
+                    "e não pode estar em outro duelo."
+                )
+            else:
+                embed.description = (
+                    "Não encontrei membros conectados neste momento. Quando alguém estiver online, "
+                    "aparecerá nesta lista. Você pode atualizá-la sem sair do painel."
+                )
+        else:
+            embed.description = (
+                f"**{len(self.members)}** membro(s) conectado(s) e apto(s) para duelo.\n\n"
+                "Escolha quem deseja desafiar. A próxima etapa será definir sua aposta. "
+                "A lista inclui estados Online, Ausente e Não perturbe. O convidado precisará aceitar e cobrir o mesmo valor."
+            )
+            if self.pages > 1:
+                embed.set_footer(text=f"Página {self.page + 1}/{self.pages} · A lista mostra até 25 membros por página")
+            else:
+                embed.set_footer(text="Somente membros humanos conectados, com nível, saldo e deck válidos aparecem aqui.")
+        return embed
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("Esta lista é privada. Abra seu painel pelo `/nara`.", ephemeral=True)
+            return False
+        return True
+
+
+class DesafioColiseuModal(discord.ui.Modal, title="Definir aposta do duelo"):
+    def __init__(self, cog: "ColiseuCartas", creator_id: int, target_id: int):
         super().__init__(timeout=180)
         self.cog = cog
         self.creator_id = int(creator_id)
-        self.alvo = discord.ui.TextInput(
-            label="Membro que você quer desafiar",
-            placeholder="Mencione o membro ou informe o ID do Discord",
-            min_length=1, max_length=32,
-        )
+        self.target_id = int(target_id)
         self.aposta = discord.ui.TextInput(
             label=f"Aposta por pessoa ({APOSTA_MINIMA}–{APOSTA_MAXIMA} Denários)",
             placeholder="Ex.: 50", min_length=1, max_length=4, default=str(APOSTA_MINIMA),
         )
-        self.add_item(self.alvo)
         self.add_item(self.aposta)
 
     async def on_submit(self, interaction: discord.Interaction):
         if interaction.guild is None or interaction.channel is None:
             return await interaction.response.send_message("Os duelos só podem ser criados dentro de um servidor.", ephemeral=True)
-        match = re.search(r"\d{15,22}", str(self.alvo.value))
-        if not match:
-            return await interaction.response.send_message("Mencione o membro ou informe um ID válido do Discord.", ephemeral=True)
+        alvo = interaction.guild.get_member(self.target_id)
+        if alvo is None:
+            try:
+                alvo = await interaction.guild.fetch_member(self.target_id)
+            except discord.HTTPException:
+                alvo = None
+        if alvo is None or alvo.bot:
+            return await interaction.response.send_message("O membro escolhido não está mais disponível no servidor.", ephemeral=True)
+        if alvo.id == self.creator_id:
+            return await interaction.response.send_message("Você não pode desafiar a si mesmo.", ephemeral=True)
         try:
             aposta = int(str(self.aposta.value).strip())
         except ValueError:
             return await interaction.response.send_message("Informe a aposta usando apenas números.", ephemeral=True)
         if not APOSTA_MINIMA <= aposta <= APOSTA_MAXIMA:
             return await interaction.response.send_message(f"A aposta precisa ficar entre {APOSTA_MINIMA} e {APOSTA_MAXIMA} Denários.", ephemeral=True)
-        alvo_id = int(match.group(0))
-        if alvo_id == self.creator_id:
-            return await interaction.response.send_message("Você não pode desafiar a si mesmo.", ephemeral=True)
-        alvo = interaction.guild.get_member(alvo_id)
-        if alvo is None:
-            try:
-                alvo = await interaction.guild.fetch_member(alvo_id)
-            except discord.HTTPException:
-                alvo = None
-        if alvo is None or alvo.bot:
-            return await interaction.response.send_message("Não encontrei esse membro ativo neste servidor.", ephemeral=True)
+
         await interaction.response.defer(ephemeral=True, thinking=True)
         resultado = await self.cog.bot.db.coliseu_criar_convite(
             interaction.guild.id, interaction.channel.id, self.creator_id, alvo.id, aposta,
@@ -613,6 +1043,7 @@ class DesafioColiseuModal(discord.ui.Modal, title="Desafiar um gladiador"):
                 f"**Poder dos decks:** {resultado['deck_power'][self.creator_id]} × {resultado['deck_power'][alvo.id]} "
                 f"(diferença {resultado['power_gap']}/{DIFERENCA_MAXIMA_PODER_DECK})\n"
                 "As duas apostas só serão travadas quando o convite for aceito.\n"
+                f"Cada rodada tem {TEMPO_RODADA_SEGUNDOS} segundos para escolha; o duelo costuma levar 2–4 minutos com respostas rápidas.\n"
                 "O convite expira em dois minutos."
             ),
             color=config.COR_OURO,
@@ -651,6 +1082,12 @@ class BatalhaDueloView(discord.ui.View):
         self.add_item(BotaoDueloColiseu("jogar", duel_id))
 
 
+class ResultadoDueloView(discord.ui.View):
+    def __init__(self, duel_id: int):
+        super().__init__(timeout=None)
+        self.add_item(BotaoDueloColiseu("revanche", duel_id))
+
+
 class HallFamaView(discord.ui.View):
     def __init__(self, cog: "ColiseuCartas", user_id: int):
         super().__init__(timeout=300)
@@ -662,14 +1099,14 @@ class ColiseuCartas(commands.Cog):
         self.bot = bot
 
     async def cog_load(self):
-        self.bot.add_dynamic_items(BotaoDueloColiseu)
+        self.bot.add_dynamic_items(BotaoDueloColiseu, AtelieReviewButton)
         self.monitorar_prazos.start()
 
     async def cog_unload(self):
-        self.bot.remove_dynamic_items(BotaoDueloColiseu)
+        self.bot.remove_dynamic_items(BotaoDueloColiseu, AtelieReviewButton)
         self.monitorar_prazos.cancel()
 
-    @tasks.loop(seconds=20)
+    @tasks.loop(seconds=5)
     async def monitorar_prazos(self):
         try:
             expirados = await self.bot.db.coliseu_expirar_prazos()
@@ -704,10 +1141,10 @@ class ColiseuCartas(commands.Cog):
                 f"**Proteção contra azar:** {state['pity']}/10 cartas Comuns consecutivas "
                 f"({'próxima carta garantida Rara+' if faltam == 0 else f'faltam {faltam} cartas Comuns'})\n"
                 f"**Deck:** {state['deck']}/5 cartas\n\n"
-                "**Pacote Fogueira:** 3 cartas por 120 Denários. Chances por carta: "
+                f"**Pacote Fogueira:** 3 cartas por 120 Denários. Limite de {LIMITE_PACOTES_DIA} pacotes/24h. Chances por carta: "
                 "70% Comum · 22% Rara · 7% Épica · 1% Lendária.\n"
                 "Duplicatas viram Almas; a Forja permite criar cartas específicas.\n\n"
-                "**Duelos:** apostas de 10 a 500 Denários por jogador. Exigem nível 5 e um deck válido.\n"
+                f"**Duelos:** apostas de 10 a 500 Denários por jogador. Exigem nível 5 e um deck válido. São 5 rodadas, com até {TEMPO_RODADA_SEGUNDOS}s por escolha (cerca de 2–4 min).\n"
                 f"**Pareamento:** os decks precisam ter diferença máxima de {DIFERENCA_MAXIMA_PODER_DECK} pontos de poder total."
             ),
             color=config.COR_OURO,
@@ -718,6 +1155,98 @@ class ColiseuCartas(commands.Cog):
             await interaction.response.edit_message(content=None, embed=embed, view=view)
         else:
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+    async def abrir_selecao_desafio(self, interaction: discord.Interaction, user_id: int):
+        """Mostra apenas membros conectados que já podem entrar em um duelo."""
+        guild = interaction.guild
+        if guild is None:
+            return await interaction.response.edit_message(
+                embed=discord.Embed(title="⚔️ Desafio indisponível", description="Abra o Coliseu dentro de um servidor.", color=config.COR_OURO),
+                view=discord.ui.View(timeout=60).add_item(VoltarColiseuButton(self, user_id)),
+            )
+
+        db = self.bot.db
+        user = await db.get_user(int(user_id))
+        nivel = nivel_por_xp(int(user["xp"] or 0))
+        if nivel < NIVEL_MINIMO_DUELO:
+            texto = f"Você precisa alcançar o nível {NIVEL_MINIMO_DUELO} para desafiar outros membros. Seu nível atual é {nivel}."
+            return await interaction.response.edit_message(
+                embed=discord.Embed(title="⚔️ Ainda não é hora de entrar na arena", description=texto, color=config.COR_OURO),
+                view=discord.ui.View(timeout=60).add_item(VoltarColiseuButton(self, user_id)),
+            )
+        if int(user["denarios"] or 0) < APOSTA_MINIMA:
+            texto = f"Você precisa ter pelo menos {APOSTA_MINIMA} Denários para propor um duelo. Seu saldo atual é {int(user['denarios'] or 0)}."
+            return await interaction.response.edit_message(
+                embed=discord.Embed(title="⚔️ Saldo insuficiente", description=texto, color=config.COR_OURO),
+                view=discord.ui.View(timeout=60).add_item(VoltarColiseuButton(self, user_id)),
+            )
+        deck_proprio = await db.coliseu_obter_deck(int(user_id))
+        deck_valido, motivo = cards_em_deck_validos(deck_proprio)
+        if not deck_valido:
+            texto = f"Antes de desafiar alguém, salve um deck válido de cinco cartas. {motivo}"
+            return await interaction.response.edit_message(
+                embed=discord.Embed(title="🛡️ Seu deck ainda não está pronto", description=texto, color=config.COR_OURO),
+                view=discord.ui.View(timeout=60).add_item(VoltarColiseuButton(self, user_id)),
+            )
+
+        # A consulta ao cache de presença pode levar alguns segundos; confirma a interação
+        # antes de solicitar o chunk para não deixar o Discord expirar o clique.
+        await interaction.response.defer()
+
+        # O cache de membros e os status de presença dependem dos intents de membros/presenças.
+        if not guild.chunked:
+            try:
+                await guild.chunk(cache=True)
+            except (discord.Forbidden, discord.HTTPException):
+                log.warning("Não foi possível completar o cache de membros do servidor %s", guild.id)
+
+        conectados = [
+            member for member in guild.members
+            if member.id != int(user_id)
+            and not member.bot
+            and member.status in (discord.Status.online, discord.Status.idle, discord.Status.dnd)
+        ]
+        prioridade_status = {discord.Status.online: 0, discord.Status.idle: 1, discord.Status.dnd: 2}
+        rotulos_status = {
+            discord.Status.online: ("Online", "🟢"),
+            discord.Status.idle: ("Ausente", "🟡"),
+            discord.Status.dnd: ("Não perturbe", "🔴"),
+        }
+        conectados.sort(key=lambda m: (prioridade_status.get(m.status, 9), m.display_name.casefold()))
+        poder_deck_proprio = poder_total_deck(deck_proprio)
+
+        candidatos: list[dict] = []
+        for member in conectados:
+            dados = await db._one("SELECT xp,denarios FROM users WHERE user_id=?", (int(member.id),))
+            if not dados:
+                continue
+            nivel_membro = nivel_por_xp(int(dados["xp"] or 0))
+            if nivel_membro < NIVEL_MINIMO_DUELO or int(dados["denarios"] or 0) < APOSTA_MINIMA:
+                continue
+            deck = await db.coliseu_obter_deck(int(member.id))
+            valido, _ = cards_em_deck_validos(deck)
+            if not valido:
+                continue
+            poder_deck_membro = poder_total_deck(deck)
+            if abs(poder_deck_proprio - poder_deck_membro) > DIFERENCA_MAXIMA_PODER_DECK:
+                continue
+            ocupado = await db._one(
+                "SELECT id FROM cartas_duelos WHERE status IN ('invited','active') AND (creator_id=? OR opponent_id=?) LIMIT 1",
+                (int(member.id), int(member.id)),
+            )
+            if ocupado:
+                continue
+            status_label, status_emoji = rotulos_status.get(member.status, ("Conectado", "🟢"))
+            candidatos.append({
+                "member": member,
+                "status_label": status_label,
+                "status_emoji": status_emoji,
+                "nivel": nivel_membro,
+                "poder": poder_deck_membro,
+            })
+
+        view = DesafioColiseuView(self, int(user_id), candidatos, len(conectados))
+        await interaction.edit_original_response(embed=view.embed(), view=view)
 
     async def executar_acao_menu(self, interaction: discord.Interaction, acao: str):
         user_id = interaction.user.id
@@ -738,7 +1267,8 @@ class ColiseuCartas(commands.Cog):
                     f"O pacote contém **3 cartas** e custa **{PRECO_PACOTE_FOGUEIRA} Denários**.\n\n"
                     "**Probabilidades por carta:**\n70% Comum · 22% Rara · 7% Épica · 1% Lendária\n\n"
                     "Após 10 cartas Comuns consecutivas, a próxima carta será garantidamente Rara ou melhor. "
-                    "Duplicatas são convertidas automaticamente em Almas.\n\n"
+                    "Duplicatas são convertidas automaticamente em Almas.\n"
+                    f"Limite de uso: até {LIMITE_PACOTES_DIA} pacotes a cada 24 horas.\n\n"
                     "O desconto só acontece ao confirmar a abertura."
                 ),
                 color=config.COR_OURO,
@@ -768,8 +1298,11 @@ class ColiseuCartas(commands.Cog):
             view = ForjaView(self, user_id, disponiveis, state["almas"])
             return await interaction.response.edit_message(embed=view.embed(), view=view)
         if acao == "duelo":
-            modal = DesafioColiseuModal(self, user_id)
-            return await interaction.response.send_modal(modal)
+            return await self.abrir_selecao_desafio(interaction, user_id)
+        if acao == "missoes":
+            dados = await db.coliseu_missoes_semanais(user_id)
+            view = MissaoSemanalView(self, user_id, dados)
+            return await interaction.response.edit_message(embed=view.embed(), view=view)
         if acao == "ranking":
             rows = await db.coliseu_ranking_duelos(10)
             embed = discord.Embed(title="🏆 Hall da Fama do Coliseu", color=config.COR_OURO)
@@ -798,9 +1331,32 @@ class ColiseuCartas(commands.Cog):
                 return None
         return None
 
-    async def mostrar_detalhe_carta(self, interaction: discord.Interaction, carta: dict):
-        path = render_carta(carta)
-        arquivo = discord.File(str(path), filename="carta.png")
+    async def _obter_arte_personalizada(self, user_id: int, card_id: str) -> bytes | None:
+        registro = await self.bot.db.coliseu_atelie_arte_ativa(user_id, card_id)
+        if not registro or not registro["channel_id"] or not registro["message_id"]:
+            return None
+        try:
+            canal = self.bot.get_channel(int(registro["channel_id"]))
+            if canal is None:
+                canal = await self.bot.fetch_channel(int(registro["channel_id"]))
+            mensagem = await canal.fetch_message(int(registro["message_id"]))
+            anexo = next((a for a in mensagem.attachments if int(a.id) == int(registro["attachment_id"])), None)
+            if anexo is None:
+                return None
+            return await anexo.read(use_cached=True)
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException, AttributeError):
+            log.warning("Arte personalizada indisponível para user=%s card=%s", user_id, card_id)
+            return None
+
+    async def mostrar_detalhe_carta(self, interaction: discord.Interaction, carta: dict, user_id: int):
+        arte_bytes = await self._obter_arte_personalizada(user_id, str(carta["id"]))
+        possui_arte = arte_bytes is not None
+        if arte_bytes:
+            buffer = render_carta_bytes(carta, arte_bytes)
+            arquivo = discord.File(buffer, filename="carta.png")
+        else:
+            path = render_carta(carta)
+            arquivo = discord.File(str(path), filename="carta.png")
         embed = discord.Embed(title=carta["nome"], color=config.COR_OURO)
         embed.set_image(url="attachment://carta.png")
         embed.add_field(name="Categoria", value=carta["categoria"], inline=True)
@@ -809,9 +1365,255 @@ class ColiseuCartas(commands.Cog):
         embed.add_field(name="Poder", value=str(carta["poder"]), inline=True)
         embed.add_field(name="Custo de deck", value=str(carta["custo"]), inline=True)
         embed.add_field(name="Habilidade", value=_descricao_habilidade(carta), inline=False)
-        if carta.get("descricao"):
+        if carta.get("jogo_origem"):
+            embed.add_field(name="Jogo de origem", value=str(carta["jogo_origem"])[:200], inline=False)
+        elif carta.get("descricao"):
             embed.add_field(name="Origem", value=carta["descricao"][:500], inline=False)
-        await interaction.response.send_message(embed=embed, file=arquivo, ephemeral=True)
+        embed.set_footer(text=("Sua arte personalizada está ativa. Os atributos oficiais não mudam." if possui_arte
+                               else "Personalização opcional: gere um prompt e envie sua arte para aprovação."))
+        view = DetalheCartaView(self, user_id, carta, possui_arte)
+        await interaction.response.send_message(embed=embed, file=arquivo, view=view, ephemeral=True)
+
+    def _pode_revisar_arte(self, member: discord.Member) -> bool:
+        perms = member.guild_permissions
+        if perms.administrator or perms.manage_guild or perms.manage_messages:
+            return True
+        role_id = int(getattr(config, "MOD_ROLE_ID", 0) or 0)
+        return bool(role_id and any(int(role.id) == role_id for role in member.roles))
+
+    async def iniciar_upload_atelie(self, interaction: discord.Interaction, carta: dict):
+        if interaction.guild is None:
+            return await interaction.response.send_message("Abra a carta dentro do servidor para iniciar a personalização.", ephemeral=True)
+        canal_id = int(getattr(config, "COLISEU_ART_CHANNEL_ID", 0) or 0)
+        if not canal_id:
+            return await interaction.response.send_message(
+                "O Ateliê ainda não foi configurado pela administração. A geração do prompt funciona, mas o envio de artes será liberado quando o canal privado `#biblioteca-coliseu` estiver configurado.",
+                ephemeral=True,
+            )
+        canal = self.bot.get_channel(canal_id)
+        if canal is None:
+            try:
+                canal = await self.bot.fetch_channel(canal_id)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                canal = None
+        if not isinstance(canal, discord.TextChannel) or canal.guild.id != interaction.guild.id:
+            return await interaction.response.send_message(
+                "Configure `COLISEU_ART_CHANNEL_ID` com o ID de um canal de texto deste servidor.",
+                ephemeral=True,
+            )
+        try:
+            permissoes_bot = canal.permissions_for(interaction.guild.me)
+            permissoes_publicas = canal.permissions_for(interaction.guild.default_role)
+            if permissoes_publicas.view_channel:
+                return await interaction.response.send_message(
+                    "A `#biblioteca-coliseu` precisa ser privada. Oculte o canal do cargo @everyone e libere acesso somente ao bot e à moderação.",
+                    ephemeral=True,
+                )
+            if not (permissoes_bot.view_channel and permissoes_bot.send_messages and permissoes_bot.attach_files
+                    and permissoes_bot.embed_links and permissoes_bot.read_message_history):
+                return await interaction.response.send_message(
+                    "Não tenho permissão para ver o canal, enviar imagens, publicar embeds ou ler o histórico da `#biblioteca-coliseu`. Peça à moderação para ajustar minhas permissões.",
+                    ephemeral=True,
+                )
+        except AttributeError:
+            return await interaction.response.send_message(
+                "Não consegui verificar as permissões da biblioteca. Confira o canal e tente novamente.",
+                ephemeral=True,
+            )
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        resultado = await self.bot.db.coliseu_atelie_criar_sessao(
+            interaction.user.id, interaction.guild.id, str(carta["id"]),
+            str(carta.get("jogo_origem") or carta.get("game_name") or ""),
+        )
+        if resultado["status"] == "not_owned":
+            return await interaction.followup.send("Você precisa possuir essa carta para personalizá-la.", ephemeral=True)
+        if resultado["status"] == "pending":
+            return await interaction.followup.send(
+                "Você já tem uma arte dessa carta aguardando avaliação. Aguarde a decisão da moderação antes de enviar outra.",
+                ephemeral=True,
+            )
+        if resultado["status"] == "pending_limit":
+            return await interaction.followup.send(
+                "Você já tem três artes aguardando avaliação. Assim que a moderação analisar uma delas, poderá enviar outra.",
+                ephemeral=True,
+            )
+        try:
+            await interaction.user.send(
+                f"🎨 **Ateliê do Coliseu — {carta['nome']}**\n"
+                "Envie nesta conversa uma imagem PNG, JPG ou WEBP.\n"
+                "Use uma arte horizontal próxima de 5:4, com pelo menos 512 × 512 pixels e até 8 MB. "
+                "Vou ajustá-la à janela oficial da carta, sem alterar moldura, raridade ou atributos.\n"
+                "A sessão fica aberta por 30 minutos. Envie apenas uma imagem."
+            )
+        except discord.Forbidden:
+            await self.bot.db.coliseu_atelie_encerrar_sessao(interaction.user.id)
+            return await interaction.followup.send(
+                "Não consegui abrir sua DM. Ative temporariamente as mensagens diretas deste servidor e tente novamente.",
+                ephemeral=True,
+            )
+        await interaction.followup.send(
+            "Enviei as instruções por mensagem direta. Basta responder à Nara anexando sua imagem; ela será encaminhada para aprovação.",
+            ephemeral=True,
+        )
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        """Recebe apenas imagens enviadas por DM durante uma sessão explícita do Ateliê."""
+        if message.guild is not None or message.author.bot:
+            return
+        sessao = await self.bot.db.coliseu_atelie_obter_sessao(message.author.id)
+        if not sessao:
+            return
+        if len(message.attachments) != 1:
+            await message.reply("Envie uma única imagem PNG, JPG ou WEBP nesta conversa. Sua sessão continua aberta.")
+            return
+        anexo = message.attachments[0]
+        if int(getattr(anexo, "size", 0) or 0) > TAMANHO_MAXIMO_UPLOAD:
+            await message.reply("A imagem ultrapassa 8 MB. Envie uma versão menor; sua sessão continua aberta.")
+            return
+        try:
+            raw = await anexo.read(use_cached=True)
+            imagem = normalizar_imagem_carta(raw)
+        except ArteInvalida as exc:
+            await message.reply(f"Não consegui aceitar essa imagem: {exc}\nSua sessão continua aberta; envie outra imagem dentro de 30 minutos.")
+            return
+        except (discord.HTTPException, OSError):
+            await message.reply("Não consegui baixar o anexo. Tente enviar a imagem novamente.")
+            return
+        reservado = await self.bot.db.coliseu_atelie_reservar_sessao(message.author.id)
+        if not reservado:
+            await message.reply("Sua sessão do Ateliê expirou. Abra a carta novamente e clique em **Enviar minha arte**.")
+            return
+        canal_id = int(getattr(config, "COLISEU_ART_CHANNEL_ID", 0) or 0)
+        canal = self.bot.get_channel(canal_id) if canal_id else None
+        if canal is None and canal_id:
+            try:
+                canal = await self.bot.fetch_channel(canal_id)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                canal = None
+        guild = self.bot.get_guild(int(reservado["guild_id"]))
+        if not isinstance(canal, discord.TextChannel) or guild is None or canal.guild.id != guild.id:
+            await self.bot.db.coliseu_atelie_reabrir_sessao(message.author.id)
+            await message.reply("A biblioteca de artes está temporariamente indisponível. Sua sessão continua aberta; avise a moderação.")
+            return
+        perms_bot = canal.permissions_for(guild.me)
+        perms_publicas = canal.permissions_for(guild.default_role)
+        if perms_publicas.view_channel or not (perms_bot.view_channel and perms_bot.send_messages and perms_bot.attach_files and perms_bot.read_message_history):
+            await self.bot.db.coliseu_atelie_reabrir_sessao(message.author.id)
+            await message.reply("A biblioteca precisa ser privada e permitir que a Nara envie imagens, publique embeds e leia o histórico. Avise a moderação; sua sessão continua aberta.")
+            return
+
+        pedido = await self.bot.db.coliseu_atelie_criar_pedido(
+            message.author.id, int(reservado["guild_id"]), str(reservado["card_id"]), str(reservado["game_name"] or "")
+        )
+        if pedido["status"] == "not_owned":
+            await self.bot.db.coliseu_atelie_encerrar_sessao(message.author.id)
+            return await message.reply("Essa carta não está mais na sua coleção. Reabra a coleção para iniciar outro pedido.")
+        if pedido["status"] == "pending":
+            await self.bot.db.coliseu_atelie_encerrar_sessao(message.author.id)
+            return await message.reply("Já existe uma arte dessa carta aguardando avaliação. Não precisa enviar novamente.")
+        if pedido["status"] == "pending_limit":
+            await self.bot.db.coliseu_atelie_encerrar_sessao(message.author.id)
+            return await message.reply("Você já tem três artes aguardando avaliação. Aguarde a moderação analisar uma delas antes de enviar outra.")
+
+        card = get_carta(str(reservado["card_id"]))
+        card_dict = card.para_dict() if card else {
+            "id": str(reservado["card_id"]), "nome": str(reservado["game_name"] or "Carta de jogo"),
+            "categoria": "Jogo", "raridade": "Conquista", "tipo": "Magia", "poder": 0, "custo": 0,
+            "habilidade": "", "jogo_origem": str(reservado["game_name"] or ""),
+        }
+        if str(reservado["card_id"]).startswith("jogo_") and reservado["game_name"]:
+            try:
+                card_dict = carta_de_jogo_por_id(str(reservado["card_id"]), str(reservado["game_name"])).para_dict()
+            except ValueError:
+                pass
+        embed = discord.Embed(
+            title="🎨 Nova arte para avaliação",
+            description=(
+                f"**Carta:** {card_dict.get('nome', 'Carta')}\n"
+                f"**Jogador:** <@{message.author.id}> (`{message.author.id}`)\n"
+                f"**Jogo de origem:** {reservado['game_name'] or 'Universo original do Coliseu'}\n"
+                f"**Categoria:** {card_dict.get('categoria', 'Carta')} · **Raridade:** {card_dict.get('raridade', '—')}\n\n"
+                "A arte foi normalizada para a janela oficial 5:4. Aprovar ativa a imagem somente na coleção deste jogador."
+            ),
+            color=config.COR_OURO,
+        )
+        embed.set_footer(text=f"Ateliê do Coliseu · Pedido #{pedido['art_id']} · Aguardando avaliação")
+        arquivo = discord.File(io.BytesIO(imagem.dados), filename=f"coliseu_arte_{pedido['art_id']}.jpg")
+        revisao = None
+        try:
+            revisao = await canal.send(embed=embed, file=arquivo)
+            if not revisao.attachments:
+                raise RuntimeError("O Discord não retornou o anexo enviado à biblioteca.")
+            attachment_id = revisao.attachments[0].id
+            publicado = await self.bot.db.coliseu_atelie_publicar_pedido(
+                pedido["art_id"], canal.id, revisao.id, attachment_id
+            )
+            if not publicado:
+                raise RuntimeError("Não foi possível persistir a referência da imagem enviada.")
+        except Exception:
+            if revisao is not None:
+                try:
+                    await revisao.delete()
+                except (discord.Forbidden, discord.HTTPException):
+                    pass
+            await self.bot.db.coliseu_atelie_cancelar_pedido(pedido["art_id"])
+            await self.bot.db.coliseu_atelie_reabrir_sessao(message.author.id)
+            log.exception("Falha ao publicar ou registrar arte do Coliseu no canal configurado")
+            return await message.reply("Não consegui enviar sua arte à biblioteca. Sua sessão continua aberta; tente novamente ou avise a moderação.")
+
+        try:
+            await revisao.edit(view=AtelieReviewView(pedido["art_id"]))
+        except discord.HTTPException:
+            # Mantém a imagem original no arquivo e tenta disponibilizar os botões em uma segunda mensagem.
+            log.exception("Falha ao anexar os botões de moderação na imagem do Ateliê")
+            try:
+                await canal.send(
+                    f"Ações de moderação para o pedido #{pedido['art_id']}:",
+                    view=AtelieReviewView(pedido["art_id"]),
+                )
+            except discord.HTTPException:
+                log.exception("Não foi possível publicar a mensagem alternativa de moderação do pedido #%s", pedido["art_id"])
+        await self.bot.db.coliseu_atelie_encerrar_sessao(message.author.id)
+        await message.reply(
+            f"✅ Recebi sua arte para **{card_dict.get('nome', 'sua carta')}**! Ela foi enviada para avaliação. "
+            "Vou avisar por aqui quando a moderação decidir."
+        )
+
+    async def revisar_arte_atelie(self, interaction: discord.Interaction, arte_id: int, aprovado: bool, motivo: str = ""):
+        if not isinstance(interaction.user, discord.Member) or not self._pode_revisar_arte(interaction.user):
+            return await interaction.response.send_message("Somente a moderação pode avaliar artes do Coliseu.", ephemeral=True)
+        resultado = await self.bot.db.coliseu_atelie_decidir_pedido(
+            arte_id, interaction.user.id, aprovado, motivo,
+        )
+        if resultado["status"] != "ok":
+            return await interaction.response.send_message("Este pedido já foi avaliado ou não está mais disponível.", ephemeral=True)
+        pedido = resultado["pedido"]
+        carta_revisada = self._carta_da_linha(pedido) or {"nome": pedido["card_id"]}
+        nome_carta = str(carta_revisada.get("nome") or pedido["card_id"])
+        if interaction.message and interaction.message.embeds:
+            embed = interaction.message.embeds[0]
+            embed.color = discord.Color.green() if aprovado else discord.Color.red()
+            status_text = "✅ Arte aprovada e ativada na coleção do jogador." if aprovado else f"❌ Arte rejeitada. Motivo: {motivo[:400]}"
+            embed.add_field(name="Avaliação", value=status_text, inline=False)
+            embed.set_footer(text=f"Avaliado por {interaction.user} · Pedido #{arte_id}")
+            await interaction.response.edit_message(embed=embed, view=None)
+        else:
+            await interaction.response.send_message("Avaliação registrada.", ephemeral=True)
+        try:
+            membro = self.bot.get_user(int(pedido["user_id"])) or await self.bot.fetch_user(int(pedido["user_id"]))
+            if aprovado:
+                await membro.send(
+                    f"✅ Sua arte de **{nome_carta}** foi aprovada e já está ativa na sua coleção do Coliseu. "
+                    "Abra a carta pela Nara para conferir."
+                )
+            else:
+                await membro.send(
+                    f"A arte enviada para **{nome_carta}** não foi aprovada.\n"
+                    f"**Motivo:** {motivo}\nVocê pode gerar outra imagem e enviar novamente pela própria carta."
+                )
+        except (discord.Forbidden, discord.HTTPException):
+            log.info("Não foi possível avisar por DM o proprietário da arte #%s", arte_id)
 
     def mensagem_erro_convite(self, resultado: dict) -> str:
         status = resultado.get("status")
@@ -851,6 +1653,66 @@ class ColiseuCartas(commands.Cog):
             return await interaction.response.send_message("Este duelo não existe mais.", ephemeral=True)
         uid = interaction.user.id
         creator_id, opponent_id = int(duel["creator_id"]), int(duel["opponent_id"])
+        if acao == "revanche":
+            if uid not in {creator_id, opponent_id}:
+                return await interaction.response.send_message("Somente os duelistas originais podem pedir uma revanche.", ephemeral=True)
+            if duel["status"] != "finished":
+                return await interaction.response.send_message("A revanche fica disponível após um duelo concluído.", ephemeral=True)
+            if interaction.guild is None:
+                return await interaction.response.send_message("A revanche precisa ser criada dentro do servidor.", ephemeral=True)
+            alvo_id = opponent_id if uid == creator_id else creator_id
+            alvo = interaction.guild.get_member(alvo_id)
+            if alvo is None or alvo.bot or alvo.status not in (discord.Status.online, discord.Status.idle, discord.Status.dnd):
+                return await interaction.response.send_message(
+                    "Seu adversário não está conectado agora. A revanche ficará disponível quando ele voltar.", ephemeral=True
+                )
+            channel = interaction.channel
+            if channel is None or not hasattr(channel, "send"):
+                channel = self.bot.get_channel(int(duel["channel_id"]))
+            if channel is None:
+                return await interaction.response.send_message("Não encontrei o canal para publicar a revanche.", ephemeral=True)
+            await interaction.response.defer(ephemeral=True, thinking=True)
+            resultado = await self.bot.db.coliseu_criar_convite(
+                interaction.guild.id, channel.id, uid, alvo.id, int(duel["aposta"]),
+                nivel_minimo=NIVEL_MINIMO_DUELO,
+                limite_diario=LIMITE_DUELOS_DIA,
+                limite_par=LIMITE_DUELOS_PAR_DIA,
+                max_aposta_dia=LIMITE_APOSTA_DIA,
+                cooldown_segundos=0,  # revanche direta não precisa esperar o cooldown normal
+                diferenca_maxima_poder=DIFERENCA_MAXIMA_PODER_DECK,
+            )
+            if resultado["status"] != "ok":
+                return await interaction.followup.send(self.mensagem_erro_convite(resultado), ephemeral=True)
+            novo_id = resultado["duel_id"]
+            embed = discord.Embed(
+                title="🔁 Pedido de revanche",
+                description=(
+                    f"{interaction.user.mention} pediu uma revanche contra {alvo.mention}.\n\n"
+                    f"**Aposta por jogador:** {int(duel['aposta'])} Denários\n"
+                    f"**Pote total:** {int(duel['aposta']) * 2} Denários\n"
+                    f"**Poder dos decks:** {resultado['deck_power'][uid]} × {resultado['deck_power'][alvo.id]}\n"
+                    "As apostas só serão travadas se o convite for aceito.\n"
+                    f"Cada rodada tem {TEMPO_RODADA_SEGUNDOS} segundos para escolha.\n"
+                    "O deck atual de cada jogador será usado; confira suas cartas antes de aceitar."
+                ),
+                color=config.COR_OURO,
+            )
+            embed.set_footer(text=f"Coliseu · Revanche do duelo #{duel_id} · Convite expira em 2 minutos")
+            try:
+                message = await channel.send(
+                    content=alvo.mention, embed=embed, view=ConviteDueloView(novo_id),
+                    allowed_mentions=discord.AllowedMentions(users=[alvo], roles=False, everyone=False),
+                )
+                await self.bot.db.coliseu_definir_mensagem_convite(novo_id, message.id)
+            except discord.HTTPException:
+                await self.bot.db.coliseu_decidir_convite(novo_id, uid, False)
+                log.exception("Não foi possível publicar a revanche do duelo #%s", duel_id)
+                return await interaction.followup.send("Não consegui publicar o convite. Nenhum Denário foi descontado.", ephemeral=True)
+            return await interaction.followup.send(
+                f"Revanche enviada para {alvo.mention}. O valor da aposta anterior foi mantido: {message.jump_url}",
+                ephemeral=True,
+            )
+
         if acao == "aceitar":
             if uid != opponent_id:
                 return await interaction.response.send_message("Somente o membro convidado pode aceitar este duelo.", ephemeral=True)
@@ -911,10 +1773,30 @@ class ColiseuCartas(commands.Cog):
                 return await interaction.response.send_message("Você já utilizou suas cinco cartas ou não há escolhas disponíveis.", ephemeral=True)
             embed = discord.Embed(
                 title=f"🃏 Escolha secreta · Rodada {duel['current_round']}/5",
-                description="Sua escolha não será revelada até o adversário registrar a dele. Cada carta só pode ser usada uma vez.",
+                description=(f"Sua escolha é secreta e só será revelada quando o adversário escolher. "
+                             f"Você tem {TEMPO_RODADA_SEGUNDOS} segundos. Cada carta só pode ser usada uma vez."),
                 color=config.COR_OURO,
             )
             return await interaction.response.send_message(embed=embed, view=SelecaoCartaView(self, duel_id, uid, cards), ephemeral=True)
+
+    async def _notificar_niveis_por_duelo(self, duel: dict, recompensas: dict):
+        """Sincroniza patentes após XP já creditado; falhas de notificação não desfazem o duelo."""
+        progressao = self.bot.get_cog("ProgressaoXP")
+        guild = self.bot.get_guild(int(duel.get("guild_id", 0)))
+        if progressao is None or guild is None:
+            return
+        for user_id, item in (recompensas or {}).items():
+            xp = int(item.get("xp", 0) or 0)
+            nivel_antigo = int(item.get("old_level", 0) or 0)
+            nivel_novo = int(item.get("new_level", 0) or 0)
+            if xp <= 0 or nivel_novo <= nivel_antigo:
+                continue
+            try:
+                await progressao.notificar_recompensa(
+                    guild, int(user_id), nivel_antigo, nivel_novo, xp, "participação no Coliseu"
+                )
+            except Exception:
+                log.exception("Falha ao notificar nível do membro %s após duelo #%s", user_id, duel.get("id"))
 
     async def resolver_rodada(self, payload: dict) -> str:
         duel = payload["duel"]
@@ -928,17 +1810,46 @@ class ColiseuCartas(commands.Cog):
                 previous_a, previous_b = "venceu", "perdeu"
             elif winner == "b":
                 previous_a, previous_b = "perdeu", "venceu"
-        result = resolver_rodada(card_a, card_b, int(payload["round_no"]), previous_a, previous_b)
+        tipo_anterior_a = tipo_anterior_b = None
+        if historico:
+            deck_a = await self.bot.db.coliseu_deck_da_partida(int(duel["id"]), a)
+            deck_b = await self.bot.db.coliseu_deck_da_partida(int(duel["id"]), b)
+            mapa_a = {str(c["id"]): c for c in deck_a}
+            mapa_b = {str(c["id"]): c for c in deck_b}
+            carta_anterior_a = mapa_a.get(str(historico[-1]["card_a_id"]))
+            carta_anterior_b = mapa_b.get(str(historico[-1]["card_b_id"]))
+            tipo_anterior_a = carta_anterior_a.get("tipo") if carta_anterior_a else None
+            tipo_anterior_b = carta_anterior_b.get("tipo") if carta_anterior_b else None
+        result = resolver_rodada(
+            card_a, card_b, int(payload["round_no"]), previous_a, previous_b,
+            tipo_anterior_a, tipo_anterior_b,
+        )
         narration = narrar_rodada(int(payload["round_no"]), card_a, card_b, result)
         result.update({"card_a": card_a, "card_b": card_b, "narration": narration})
         final = await self.bot.db.coliseu_resolver_rodada(int(duel["id"]), int(payload["round_no"]), result)
         if final["status"] == "round_ok":
             return f"Rodada {payload['round_no']} resolvida. A próxima escolha já está disponível no painel público."
         if final["status"] == "vitoria":
-            return f"Duelo encerrado. Vencedor: <@{final['winner_id']}> · prêmio: {final['payout']} Denários · {final['burned']} Denários foram removidos do jogo."
-        if final["status"] == "empate":
-            return "O duelo terminou empatado. As duas apostas foram devolvidas integralmente."
-        return "A rodada foi processada. Consulte o painel público para ver o estado atualizado."
+            base = f"Duelo encerrado. Vencedor: <@{final['winner_id']}> · prêmio: {final['payout']} Denários · {final['burned']} Denários foram removidos do jogo."
+        elif final["status"] == "empate":
+            base = "O duelo terminou empatado. As duas apostas foram devolvidas integralmente."
+        else:
+            return "A rodada foi processada. Consulte o painel público para ver o estado atualizado."
+        await self._notificar_niveis_por_duelo(duel, final.get("recompensas") or {})
+        linhas_recompensa = []
+        for user_id, item in (final.get("recompensas") or {}).items():
+            partes = []
+            if item.get("xp"):
+                partes.append(f"+{item['xp']} XP")
+            if item.get("almas"):
+                partes.append(f"+{item['almas']} Almas de missões")
+            if partes:
+                linhas_recompensa.append(f"<@{user_id}>: {', '.join(partes)}")
+        if linhas_recompensa:
+            base += "\n\n**Progressão:**\n" + "\n".join(linhas_recompensa)
+        else:
+            base += "\n\nA participação foi registrada. O limite de XP diário pode já ter sido alcançado."
+        return base
 
     async def embed_duelo(self, duel_id: int, guild: discord.Guild | None = None) -> discord.Embed:
         duel = await self.bot.db.coliseu_obter_duelo(duel_id)
@@ -996,12 +1907,44 @@ class ColiseuCartas(commands.Cog):
                 value="Os dois duelistas devem escolher uma carta em segredo. A revelação acontece quando ambas forem registradas.",
                 inline=False,
             )
-            embed.set_footer(text="Prazo de inatividade: 3 minutos. Se a rodada expirar, as duas apostas são devolvidas.")
+            embed.set_footer(text=f"Prazo por rodada: {TEMPO_RODADA_SEGUNDOS}s. Se expirar, as duas apostas são devolvidas.")
         elif duel["status"] == "finished":
             if duel["winner_id"]:
                 embed.add_field(name="Resultado", value=f"🏆 Vencedor: <@{duel['winner_id']}>\nPrêmio: **{duel['payout']} Denários**\nRemovidos do jogo: **{duel['burned']} Denários**", inline=False)
             else:
                 embed.add_field(name="Resultado", value="Empate. As duas apostas foram devolvidas.", inline=False)
+            rivalidade = await self.bot.db.coliseu_rivalidade(a, b, limite=5)
+            embed.add_field(
+                name="Rivalidade histórica",
+                value=(
+                    f"**{nome_a}:** {rivalidade['wins']} vitória(s) · "
+                    f"**{nome_b}:** {rivalidade['losses']} vitória(s) · "
+                    f"**Empates:** {rivalidade['draws']} · **Confrontos:** {rivalidade['duels']}"
+                ),
+                inline=False,
+            )
+            recentes = []
+            for registro in rivalidade["recent"]:
+                if registro["winner_id"] is None:
+                    recentes.append(f"Duelo #{registro['id']}: empate")
+                elif int(registro["winner_id"]) == a:
+                    recentes.append(f"Duelo #{registro['id']}: {nome_a} venceu")
+                else:
+                    recentes.append(f"Duelo #{registro['id']}: {nome_b} venceu")
+            if recentes:
+                embed.add_field(name="Últimos confrontos", value="\n".join(recentes), inline=False)
+            recompensas = await self.bot.db.coliseu_recompensas_duelo(duel_id)
+            linhas = []
+            for item in recompensas:
+                partes = []
+                if int(item["xp_awarded"] or 0):
+                    partes.append(f"+{int(item['xp_awarded'])} XP")
+                if int(item["almas_awarded"] or 0):
+                    partes.append(f"+{int(item['almas_awarded'])} Almas")
+                if partes:
+                    linhas.append(f"<@{item['user_id']}>: {', '.join(partes)}")
+            if linhas:
+                embed.add_field(name="Progresso recebido", value="\n".join(linhas), inline=False)
         elif duel["status"] == "cancelled":
             embed.add_field(name="Resultado", value="A partida expirou por inatividade. As duas apostas foram devolvidas integralmente.", inline=False)
         else:
@@ -1030,7 +1973,12 @@ class ColiseuCartas(commands.Cog):
         try:
             message = await channel.fetch_message(int(duel["message_id"]))
             embed = await self.embed_duelo(duel_id, guild or getattr(channel, "guild", None))
-            view = BatalhaDueloView(duel_id) if duel["status"] == "active" else None
+            if duel["status"] == "active":
+                view = BatalhaDueloView(duel_id)
+            elif duel["status"] == "finished":
+                view = ResultadoDueloView(duel_id)
+            else:
+                view = None
             await message.edit(embed=embed, view=view)
         except discord.HTTPException:
             log.warning("Não consegui atualizar a mensagem pública do duelo #%s", duel_id)
