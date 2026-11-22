@@ -327,6 +327,7 @@ class NaraBot(commands.Bot):
         intents.message_content = True
         intents.members = True
         intents.voice_states = True
+        intents.presences = True  # Necessário para listar membros Online/Ausente/Não perturbe no Coliseu.
         super().__init__(
             command_prefix=commands.when_mentioned,
             intents=intents,
