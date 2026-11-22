@@ -11,6 +11,7 @@ import io
 import json
 import math
 import random
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +45,145 @@ CORES_CATEGORIA = {
 SIMBOLOS = {"Destreza": "✥", "Força": "⚔", "Magia": "✧"}
 LARGURA_PADRAO = 420
 ALTURA_PADRAO = 620
+
+
+RARIDADES_MOLDURA = {
+    "Comum": "comum",
+    "Rara": "rara",
+    "Épica": "epica",
+    "Lendária": "lendaria",
+    "Primordial": "primordial",
+}
+TAMANHO_MOLDURA = (420, 620)
+TAMANHO_MAXIMO_MOLDURA = 8 * 1024 * 1024
+PIXELS_MAXIMOS_MOLDURA = 20_000_000
+_MOLDURAS_CACHE: dict[tuple[str, int, int], tuple[int, int, Image.Image]] = {}
+_MOLDURAS_LOCK = threading.RLock()
+
+
+def caminho_moldura_personalizada(raridade: str) -> Path:
+    """Caminho persistente da moldura enviada pelo proprietário do bot."""
+    slug = RARIDADES_MOLDURA.get(str(raridade))
+    if not slug:
+        raise ValueError(f"Raridade sem moldura configurável: {raridade}")
+    return get_data_dir() / "cartas_molduras" / f"{slug}.png"
+
+
+def listar_molduras_personalizadas() -> dict[str, bool]:
+    """Informa quais raridades já possuem um PNG de moldura personalizado."""
+    return {raridade: caminho_moldura_personalizada(raridade).is_file() for raridade in RARIDADES_MOLDURA}
+
+
+def limpar_cache_molduras(raridade: str | None = None) -> None:
+    """Invalida as versões em memória; usada após trocar/remover um arquivo."""
+    with _MOLDURAS_LOCK:
+        if raridade is None:
+            _MOLDURAS_CACHE.clear()
+            return
+        for chave in list(_MOLDURAS_CACHE):
+            if chave[0] == raridade:
+                _MOLDURAS_CACHE.pop(chave, None)
+
+
+def salvar_moldura_personalizada(raridade: str, dados: bytes) -> Path:
+    """Valida e grava um overlay PNG transparente, sem aceitar uma carta completa."""
+    destino = caminho_moldura_personalizada(raridade)
+    if not dados or len(dados) > TAMANHO_MAXIMO_MOLDURA:
+        raise ValueError("O arquivo precisa ter conteúdo e no máximo 8 MB.")
+    try:
+        with Image.open(io.BytesIO(dados)) as origem:
+            if origem.format != "PNG":
+                raise ValueError("A moldura precisa ser PNG com transparência real (canal alfa).")
+            largura, altura = origem.size
+            if largura * altura > PIXELS_MAXIMOS_MOLDURA:
+                raise ValueError("A imagem excede o limite de 20 milhões de pixels. Exporte em 840 × 1240.")
+            if largura < 420 or altura < 620:
+                raise ValueError("A resolução mínima é 420 × 620 pixels; prefira 840 × 1240.")
+            proporcao_esperada = TAMANHO_MOLDURA[0] / TAMANHO_MOLDURA[1]
+            if abs((largura / altura) - proporcao_esperada) > 0.003:
+                raise ValueError("A proporção precisa ser exatamente a da carta: 420:620 (840 × 1240 recomendado).")
+            if origem.mode not in {"RGBA", "LA"} and "transparency" not in origem.info:
+                raise ValueError("O PNG não contém transparência alfa. O centro precisa ser transparente.")
+            imagem = origem.convert("RGBA")
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError("Não consegui abrir o arquivo. Envie um PNG válido.") from exc
+
+    alfa = imagem.getchannel("A")
+    # A área central precisa permanecer praticamente vazia para não cobrir arte,
+    # título, poder, custo ou habilidade que o bot desenha sob a moldura.
+    x1, x2 = int(largura * 0.12), int(largura * 0.88)
+    y1, y2 = int(altura * 0.10), int(altura * 0.90)
+    hist_centro = alfa.crop((x1, y1, x2, y2)).histogram()
+    total_centro = max(1, (x2 - x1) * (y2 - y1))
+    transparentes = sum(hist_centro[:9])
+    if transparentes / total_centro < 0.985:
+        raise ValueError(
+            "O centro do PNG não está suficientemente transparente. Envie somente a moldura, "
+            "sem fundo, sem ilustração e sem preencher a área interna."
+        )
+
+    # Exige detalhe visível no perímetro para evitar salvar um PNG praticamente vazio.
+    hist_total = alfa.histogram()
+    visiveis = sum(hist_total[65:])
+    if visiveis < max(1200, int(largura * altura * 0.003)):
+        raise ValueError("A moldura parece vazia ou quase invisível. Reforce os detalhes nas bordas.")
+
+    imagem = imagem.resize(TAMANHO_MOLDURA, Image.Resampling.LANCZOS)
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    temporario = destino.with_suffix(".png.tmp")
+    imagem.save(temporario, format="PNG", optimize=True)
+    temporario.replace(destino)
+    limpar_cache_molduras(raridade)
+    return destino
+
+
+def remover_moldura_personalizada(raridade: str) -> bool:
+    """Remove a moldura enviada e volta a usar o acabamento vetorial padrão."""
+    caminho = caminho_moldura_personalizada(raridade)
+    existia = caminho.is_file()
+    if existia:
+        caminho.unlink(missing_ok=True)
+    limpar_cache_molduras(raridade)
+    return existia
+
+
+def _assinatura_moldura(raridade: str) -> str:
+    if raridade not in RARIDADES_MOLDURA:
+        return "padrao"
+    caminho = caminho_moldura_personalizada(raridade)
+    try:
+        info = caminho.stat()
+        return f"{info.st_mtime_ns}:{info.st_size}"
+    except OSError:
+        return "padrao"
+
+
+def _carregar_moldura(raridade: str, largura: int, altura: int) -> Image.Image | None:
+    if raridade not in RARIDADES_MOLDURA:
+        return None
+    caminho = caminho_moldura_personalizada(raridade)
+    try:
+        info = caminho.stat()
+    except OSError:
+        limpar_cache_molduras(raridade)
+        return None
+    chave = (raridade, largura, altura)
+    with _MOLDURAS_LOCK:
+        existente = _MOLDURAS_CACHE.get(chave)
+        if existente and existente[0] == info.st_mtime_ns and existente[1] == info.st_size:
+            return existente[2].copy()
+        try:
+            with Image.open(caminho) as arquivo:
+                moldura = arquivo.convert("RGBA")
+            if moldura.size != (largura, altura):
+                moldura = moldura.resize((largura, altura), Image.Resampling.LANCZOS)
+            _MOLDURAS_CACHE[chave] = (info.st_mtime_ns, info.st_size, moldura.copy())
+            return moldura
+        except (OSError, ValueError):
+            _MOLDURAS_CACHE.pop(chave, None)
+            return None
 
 
 def _font(size: int, bold: bool = False):
@@ -629,10 +769,13 @@ def _draw_card(card: dict[str, Any], width: int = LARGURA_PADRAO, height: int = 
     image = Image.alpha_composite(image.convert("RGBA"), glow)
     draw = ImageDraw.Draw(image, "RGBA")
 
-    # Estrutura externa; o formato da moldura muda de verdade conforme a raridade.
-    _draw_rarity_frame(draw, width, height, rarity, rarity_base, rarity_accent)
-    draw.rounded_rectangle((21, 21, width - 22, height - 22), radius=14,
-                           outline=(238, 231, 211, 38), width=1)
+    # Uma moldura PNG enviada pela administração substitui o acabamento vetorial.
+    # Sem arquivo personalizado, o estilo original continua como fallback.
+    moldura_fixa = _carregar_moldura(rarity, width, height)
+    if moldura_fixa is None:
+        _draw_rarity_frame(draw, width, height, rarity, rarity_base, rarity_accent)
+        draw.rounded_rectangle((21, 21, width - 22, height - 22), radius=14,
+                               outline=(238, 231, 211, 38), width=1)
 
     # Cabeçalho editorial.
     brand_font = _font(11, True)
@@ -751,17 +894,21 @@ def _draw_card(card: dict[str, Any], width: int = LARGURA_PADRAO, height: int = 
     for index, line in enumerate(ability_lines):
         draw.text((40, 563 + index * 12), line, font=_font(11), fill=(225, 226, 222, 245))
 
-    # Efeito de brilho e acabamento nítido no contorno do quadro.
-    if rarity in {"Lendária", "Primordial"}:
-        for i in range(5):
-            px = 35 + i * 84
-            py = 120 + (i % 2) * 8
-            draw.polygon([(px, py - 4), (px + 4, py), (px, py + 4), (px - 4, py)],
-                         fill=(255, 235, 164, 225))
-    elif rarity == "Épica":
-        for i in range(4):
-            px = 50 + i * 105
-            draw.ellipse((px - 2, 117, px + 2, 121), fill=(*rarity_accent, 220))
+    # Os brilhos vetoriais antigos só aparecem no fallback. Com moldura fixa,
+    # o PNG enviado é a única camada ornamental de raridade.
+    if moldura_fixa is None:
+        if rarity in {"Lendária", "Primordial"}:
+            for i in range(5):
+                px = 35 + i * 84
+                py = 120 + (i % 2) * 8
+                draw.polygon([(px, py - 4), (px + 4, py), (px, py + 4), (px - 4, py)],
+                             fill=(255, 235, 164, 225))
+        elif rarity == "Épica":
+            for i in range(4):
+                px = 50 + i * 105
+                draw.ellipse((px - 2, 117, px + 2, 121), fill=(*rarity_accent, 220))
+    else:
+        image = Image.alpha_composite(image.convert("RGBA"), moldura_fixa)
 
     return image.convert("RGB")
 
@@ -775,14 +922,19 @@ def _cache_path(payload: Any, suffix: str) -> Path:
 
 
 def render_carta(card: dict[str, Any]) -> Path:
-    path = _cache_path(card, "png")
+    payload = {"card": card, "frame": _assinatura_moldura(str(card.get("raridade", "Comum")))}
+    path = _cache_path(payload, "png")
     if not path.exists():
         _draw_card(card).save(path, format="PNG", optimize=True)
     return path
 
 
 def render_pacote(cards: list[dict[str, Any]]) -> Path:
-    payload = {"cards": cards, "layout": "pack-3-v2"}
+    payload = {
+        "cards": cards,
+        "layout": "pack-3-v3-fixed-frames",
+        "frames": {raridade: _assinatura_moldura(raridade) for raridade in RARIDADES_MOLDURA},
+    }
     path = _cache_path(payload, "png")
     if path.exists():
         return path
