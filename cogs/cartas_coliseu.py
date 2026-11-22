@@ -550,7 +550,7 @@ class RevelacaoPacoteView(discord.ui.View):
                 return await interaction.response.send_message("As três cartas já foram reveladas.", ephemeral=True)
             self.indice += 1
             self.rebuild()
-            path = render_carta(self.cards[self.indice])
+            path = await asyncio.to_thread(render_carta, self.cards[self.indice])
             arquivo = discord.File(str(path), filename="carta.png")
             await interaction.response.edit_message(
                 embed=self.embed_carta_atual(), attachments=[arquivo], view=self,
@@ -564,7 +564,7 @@ class RevelacaoPacoteView(discord.ui.View):
                 return await interaction.response.send_message("O resumo deste pacote já está aberto.", ephemeral=True)
             self.todas_reveladas = True
             self.rebuild()
-            path = render_pacote(self.cards)
+            path = await asyncio.to_thread(render_pacote, self.cards)
             arquivo = discord.File(str(path), filename="pacote_completo.png")
             await interaction.response.edit_message(
                 embed=self.embed_todas(), attachments=[arquivo], view=self,
@@ -670,7 +670,7 @@ class ConfirmarPacoteButton(discord.ui.Button):
         if resultado["status"] != "ok":
             return await interaction.followup.send("Não consegui abrir o pacote. Nenhum Denário foi descontado.", ephemeral=True)
         view_revelacao = RevelacaoPacoteView(view.cog, view.user_id, resultado)
-        primeira_carta = render_carta(view_revelacao.cards[0])
+        primeira_carta = await asyncio.to_thread(render_carta, view_revelacao.cards[0])
         arquivo = discord.File(str(primeira_carta), filename="carta.png")
         await interaction.followup.send(
             embed=view_revelacao.embed_carta_atual(), file=arquivo,
@@ -1956,10 +1956,10 @@ class ColiseuCartas(commands.Cog):
         arte_bytes = await self._obter_arte_personalizada(user_id, str(carta["id"]))
         possui_arte = arte_bytes is not None
         if arte_bytes:
-            buffer = render_carta_bytes(carta, arte_bytes)
+            buffer = await asyncio.to_thread(render_carta_bytes, carta, arte_bytes)
             arquivo = discord.File(buffer, filename="carta.png")
         else:
-            path = render_carta(carta)
+            path = await asyncio.to_thread(render_carta, carta)
             arquivo = discord.File(str(path), filename="carta.png")
         embed = discord.Embed(title=carta["nome"], color=config.COR_OURO)
         embed.set_image(url="attachment://carta.png")

@@ -17,6 +17,7 @@ Variáveis de ambiente:
 Instalação:  pip install -r requirements.txt
 Execução:    python bot.py
 """
+import asyncio
 import math
 import json
 import os
