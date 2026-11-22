@@ -1073,7 +1073,6 @@ ADMIN_CATEGORIAS = {
             ("perfis", "Patentes e níveis de XP", "👤"),
             ("jogos", "Canais de jogos e promoções", "🎮"),
             ("colizeu_atualizar", "Atualizar rankings", "🔄"),
-            ("card_frames", "Molduras fixas das cartas", "🖼️"),
             ("sl_central", "Publicar central de runs", "📌"),
             ("sl_jogo", "Adicionar jogo Soulslike", "🎮"),
             ("sl_desafio", "Criar desafio Soulslike", "🏅"),
@@ -1190,11 +1189,6 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
         return await _abrir_secao(interaction, bot, "roles", "🎭 Cargos configurados", callback_voltar=voltar)
     if action == "coliseu":
         return await _abrir_coliseu(interaction, bot, callback_voltar=voltar)
-    if action == "card_frames":
-        cog = bot.get_cog("ColiseuCartas")
-        if cog is None:
-            return await interaction.response.send_message("O módulo de cartas do Coliseu não está carregado.", ephemeral=True)
-        return await cog.abrir_painel_molduras(interaction, callback_voltar=voltar)
     if action == "moderacao":
         from cogs.platinas import eh_moderador
         if not await eh_moderador(interaction.user, bot.db) and not await _eh_admin_painel(bot, interaction.user):
@@ -1472,6 +1466,22 @@ class AdminCategoriaView(discord.ui.View):
         self.categoria = categoria
         self.user_id = user_id
         self._admin_message = None
+        # Os botões da categoria precisam ser adicionados durante a construção
+        # da View. Antes, este bloco estava acidentalmente dentro de on_timeout,
+        # então a categoria aparecia sem nenhuma ferramenta clicável.
+        dados = ADMIN_CATEGORIAS.get(categoria)
+        if dados is None:
+            raise ValueError(f"Categoria administrativa desconhecida: {categoria}")
+        acoes = [acao for acao in dados["acoes"] if is_admin or acao[0] not in ACOES_SO_ADMIN]
+        for index, (action, label, emoji) in enumerate(acoes):
+            # Quatro linhas de três ações; a quinta fica reservada ao retorno.
+            self.add_item(
+                AdminAcaoButton(
+                    action, label, emoji, row=index // 3,
+                    categoria=categoria, user_id=user_id,
+                )
+            )
+        self.add_item(AdminVoltarButton(bot))
 
     async def on_timeout(self) -> None:
         for item in self.children:
@@ -1491,13 +1501,6 @@ class AdminCategoriaView(discord.ui.View):
                 await mensagem.edit(content="Esta sessão administrativa terminou. Use `/adm` para abrir uma nova.", view=self)
         except (discord.HTTPException, AttributeError):
             log.debug("Não foi possível atualizar a categoria administrativa expirada.", exc_info=True)
-        dados = ADMIN_CATEGORIAS[categoria]
-        acoes = [a for a in dados["acoes"] if is_admin or a[0] not in ACOES_SO_ADMIN]
-        for index, (action, label, emoji) in enumerate(acoes):
-            # Até 12 ações cabem em quatro linhas de três; a quinta linha fica
-            # reservada ao retorno. Evita row=5, que o Discord rejeita.
-            self.add_item(AdminAcaoButton(action, label, emoji, row=index // 3, categoria=categoria, user_id=user_id))
-        self.add_item(AdminVoltarButton(bot))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         from cogs.platinas import eh_moderador
