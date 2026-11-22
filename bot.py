@@ -54,6 +54,7 @@ EXTENSOES = (
     "cogs.ofertas", "cogs.zerados", "cogs.santuario", "cogs.soulslike",
     "cogs.transmissoes", "cogs.nara_ia", "cogs.painel_rotativo",
     "cogs.painel_membros", "cogs.catalogo_integrado", "cogs.game_news",
+    "cogs.cartas_coliseu",
 )
 
 COMANDOS_PRINCIPAIS = frozenset({"nara", "adm"})

@@ -66,7 +66,10 @@ def resposta_social(intent: str, *, nome: str = "", cumprimento: str = "") -> st
             "Vai no seu ritmo. Até uma run ruim ensina alguma coisa, desde que vc não repita o msm erro por teimosia.",
         ),
         "criador": (
-            "O Souls me criou e é quem toma as decisões do servidor. Eu cuido das conversas e dos recursos que realmente estão liberados; não vou inventar opinião por ele.",
+            "O Souls me criou: juntou uma IA, uma personalidade própria e integração com o Discord. Tá querendo me clonar, invejoso? kkkkk",
+            "Fui criada pelo Souls pra cuidar desse servidor. A parte geral envolve IA, regras de comportamento e recursos ligados ao Discord; o resto é segredo da firma. Já quer uma Nara pra chamar de sua? Invejoso 😏",
+            "O Souls cuidou da minha criação e da parte técnica; eu cuido de manter esse caos organizado. Se a ideia é fazer uma igual, começa com uma IA, um bot do Discord e bastante trabalho. E sim, eu vi sua inveja daqui kkk.",
+            "Sou uma IA configurada pro Quase Pro e integrada ao Discord pelo Souls. Posso explicar o caminho geral pra criar uma, mas copiar meu charme vai ser a parte difícil, invejoso.",
         ),
         "faq_geral": (
             "Me diz qual é a dúvida: XP, Denários, platinas, zerados, runs, loja ou algum painel. Sendo coisa do servidor, eu te aponto o caminho.",

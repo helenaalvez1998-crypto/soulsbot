@@ -305,7 +305,20 @@ def classificar_resposta_local(mensagem: str) -> str | None:
     if _tem(t, "me motiva", "uma frase motivacional", "preciso de motivacao", "me de motivacao",
             "fala algo motivador", "me da uma frase"):
         return "motivacao"
-    if _tem(t, "quem te criou", "quem criou voce", "quem e seu criador", "quem fez voce", "quem programou voce"):
+    if _tem(
+        t,
+        "quem te criou", "quem criou voce", "quem e seu criador", "quem fez voce",
+        "quem programou voce", "quem montou voce", "quem te programou",
+        "como voce foi feita", "como vc foi feita", "como voce foi criado",
+        "como foi feita", "como te fizeram", "como fizeram voce",
+        "como voce foi programada", "como vc foi programada",
+        "como criar uma nara", "como fazer uma nara", "como montar uma nara",
+        "como programar uma nara", "como desenvolver uma nara",
+        "como construir uma nara", "como fizeram a nara",
+        "como fazer uma igual", "como criar uma igual", "como ter uma igual",
+        "como fazer ela", "como criar voce", "como te criar",
+        "como te clonar", "como copiar voce", "como clonar voce",
+    ):
         return "criador"
     if _tem(t, "voce pode ver print", "voce analisa imagem", "voce pode analisar meu print", "analisa meu print",
             "olha essa imagem", "ve esse print", "voce enxerga imagem", "consegue ler screenshot"):
