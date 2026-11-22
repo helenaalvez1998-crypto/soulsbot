@@ -272,6 +272,7 @@ class RemoverArtePersonalizadaButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
             return await interaction.response.send_message("Essa carta pertence à coleção de outro membro.", ephemeral=True)
+        await interaction.response.defer()
         await self.cog.bot.db.coliseu_atelie_remover_arte_ativa(self.user_id, str(self.carta["id"]))
         await self.cog.mostrar_detalhe_carta(
             interaction, self.carta, self.user_id, collection_view=self.collection_view, editar=True,
@@ -1366,6 +1367,8 @@ class ColiseuCartas(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self._retornos_nara: dict[int, object] = {}
+        # Cache limitado de artes ativas para evitar leituras repetidas de anexos no Discord.
+        self._arte_personalizada_cache: dict[int, bytes] = {}
         # Sessões curtas de upload de moldura; os arquivos finais ficam no DATA_DIR persistente.
         self._pending_moldura_uploads: dict[int, dict] = {}
         # Sessões curtas de upload de template completo (cartas com arte enviada pelo membro).
@@ -1967,10 +1970,18 @@ class ColiseuCartas(commands.Cog):
             if canal is None:
                 canal = await self.bot.fetch_channel(int(registro["channel_id"]))
             mensagem = await canal.fetch_message(int(registro["message_id"]))
-            anexo = next((a for a in mensagem.attachments if int(a.id) == int(registro["attachment_id"])), None)
+            attachment_id = int(registro["attachment_id"])
+            arte_cacheada = self._arte_personalizada_cache.get(attachment_id)
+            if arte_cacheada is not None:
+                return arte_cacheada
+            anexo = next((a for a in mensagem.attachments if int(a.id) == attachment_id), None)
             if anexo is None:
                 return None
-            return await anexo.read(use_cached=True)
+            dados = await anexo.read(use_cached=True)
+            if len(self._arte_personalizada_cache) >= 64:
+                self._arte_personalizada_cache.pop(next(iter(self._arte_personalizada_cache)))
+            self._arte_personalizada_cache[attachment_id] = dados
+            return dados
         except (discord.NotFound, discord.Forbidden, discord.HTTPException, AttributeError):
             log.warning("Arte personalizada indisponível para user=%s card=%s", user_id, card_id)
             return None
@@ -1980,8 +1991,7 @@ class ColiseuCartas(commands.Cog):
         *, collection_view: CollectionView | None = None, editar: bool = False,
         mensagem_status: str | None = None,
     ):
-        # Reconhece o clique antes da leitura do anexo e da composição da imagem.
-        # Sem defer, cartas personalizadas podem ultrapassar o limite de 3s do Discord.
+        # Reconhece o clique antes de consultas ao banco/Discord e da composição Pillow.
         if editar and not interaction.response.is_done():
             await interaction.response.defer()
 
@@ -1992,10 +2002,8 @@ class ColiseuCartas(commands.Cog):
         try:
             arte_bytes = await self._obter_arte_personalizada(user_id, str(carta["id"]))
         except Exception:
-            log.exception(
-                "Falha ao buscar arte personalizada para user=%s card=%s",
-                user_id, carta.get("id"),
-            )
+            log.exception("Falha ao buscar arte personalizada user=%s card=%s",
+                          user_id, carta.get("id"))
 
         possui_arte = arte_bytes is not None
         try:
@@ -2006,10 +2014,8 @@ class ColiseuCartas(commands.Cog):
                 path = await asyncio.to_thread(render_carta, carta)
                 arquivo = discord.File(str(path), filename="carta.png")
         except Exception:
-            log.exception(
-                "Falha ao renderizar carta user=%s card=%s; usando arte original",
-                user_id, carta.get("id"),
-            )
+            log.exception("Falha ao renderizar carta user=%s card=%s; usando arte original",
+                          user_id, carta.get("id"))
             possui_arte = False
             path = await asyncio.to_thread(render_carta, carta)
             arquivo = discord.File(str(path), filename="carta.png")
@@ -2036,13 +2042,9 @@ class ColiseuCartas(commands.Cog):
         view = DetalheCartaView(self, user_id, carta, possui_arte, collection_view)
 
         if editar:
-            await interaction.edit_original_response(
-                embed=embed, attachments=[arquivo], view=view,
-            )
+            await interaction.edit_original_response(embed=embed, attachments=[arquivo], view=view)
         else:
-            await interaction.response.send_message(
-                embed=embed, file=arquivo, view=view, ephemeral=True,
-            )
+            await interaction.response.send_message(embed=embed, file=arquivo, view=view, ephemeral=True)
 
     def _pode_revisar_arte(self, member: discord.Member) -> bool:
         perms = member.guild_permissions
