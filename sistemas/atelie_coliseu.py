@@ -31,14 +31,22 @@ and spectacular controlled supernatural effects. This is an original visual
 identity, not a replica of any specific game's artwork, artist, anime, or IP.
 
 PAINTING AND CHARACTER RENDERING
-Use a sophisticated hybrid finish: detailed painterly environment and
-realistic material rendering; anime-inspired character design, facial
-readability, strong shape language, graceful or brutal pose design, and
-selective crisp edge definition around the focal subject. Avoid flat cel
-shading, plastic 3D appearance, chibi proportions, generic mobile-game art,
-over-smoothed faces, and muddy over-texturing. Anatomical proportions should
-be stylized but convincing. Armor, cloth, skin, stone, metal and magic must
-have distinct believable surface qualities.
+Use a deliberate 50/50 visual fusion of premium cinematic realism and mature
+high-end anime illustration. Characters must have expressive anime-inspired
+design language, striking readable eyes and faces, elegant shape design and
+dynamic poses, while anatomy, proportions, skin, hair, armor, cloth, weapons,
+stone, metal, glass and other materials receive realistic physically coherent
+rendering. The environment should feel like a photorealistic dark-fantasy
+film still, while the subject retains the visual impact and controlled
+stylization of top-tier seinen / action-fantasy anime key art. Use finely
+resolved micro-textures, crisp focal detail, nuanced gradients, natural
+surface imperfections and believable material response. Target 4K-level
+perceived detail and professional ultra-high-definition finish: clean edges,
+well-defined forms, intricate but readable details, no pixelation, no blur,
+no compression artifacts. Avoid flat cel shading, plastic CGI, chibi
+proportions, generic mobile-game art, over-smoothed faces, waxy skin,
+excessive outlines, muddy over-texturing and noisy detail. Stylized anatomy
+must remain convincing and physically plausible.
 
 WORLD, SCALE AND STORY
 Build a layered mythic world: colossal ruined citadels, eroded temples,
@@ -73,11 +81,17 @@ interact with smoke, rain, dust, snow, ash, water or debris. Particles must
 support motion and scale, not become visual noise.
 
 VISUAL QUALITY BAR
-High-end game cinematic concept art fused with premium epic-anime illustration;
-complex but controlled composition; strong silhouette; intentional storytelling;
-rich environmental design; precise focal detail; painterly texture; nuanced
-color grading; dramatic scale; polished professional finish. Every card must
-have a distinct visual hook that can be described in one sentence.
+Ultra-premium 4K-quality game cinematic key art fused with mature anime
+illustration and photorealistic dark-fantasy rendering. Film-grade composition,
+exceptional character design, realistic anatomy and materials, intricate
+micro-detail, sharp focal plane, controlled depth of field, nuanced HDR-like
+lighting, rich but disciplined color grading, physically believable shadows,
+volumetric atmosphere and polished professional finish. The image must look
+like a high-budget anime feature film rendered with the material fidelity of
+a realistic AAA game cinematic. Preserve clean readability at small card
+size. Every card must have a distinct visual hook that can be described in
+one sentence. Quality target describes detail and finish; do not add borders
+or UI to simulate resolution.
 
 CARD ART ONLY — STRICT OUTPUT RULES
 Create only the illustration, not a finished card. Do NOT draw any border,
