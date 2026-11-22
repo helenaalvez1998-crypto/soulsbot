@@ -1028,7 +1028,7 @@ def _draw_card_com_template(card: dict[str, Any], illustration_bytes: bytes) -> 
     # Selo de raridade e nome.
     _texto_no_slot(draw, layout["raridade"], rarity.upper(), maximo=30, minimo=16, cor=creme,
                    margem=12, contorno=2)
-    _texto_no_slot(draw, layout["nome"], str(card.get("nome", "Carta")), maximo=48, minimo=20,
+    _texto_no_slot(draw, layout["nome"], str(card.get("nome", "Carta")), maximo=42, minimo=18,
                    cor=creme, max_linhas=2, margem=42, contorno=2)
 
     # Poder no medalhão.
@@ -1037,9 +1037,9 @@ def _draw_card_com_template(card: dict[str, Any], illustration_bytes: bytes) -> 
     poder = str(int(card.get("poder", 0) or 0))
     fonte_poder, _, _ = _ajustar_texto(draw, poder, int(raio * 1.45), int(raio * 1.1),
                                         maximo=int(raio * 1.0), minimo=24, negrito=True)
-    draw.text((cx, cy - raio * 0.12), poder, font=fonte_poder, fill=creme, anchor="mm",
+    draw.text((cx, cy - raio * 0.10), poder, font=fonte_poder, fill=creme, anchor="mm",
               stroke_width=3, stroke_fill=(8, 10, 16, 255))
-    draw.text((cx, cy + raio * 0.58), "PODER", font=_font(max(14, int(raio * 0.24)), True),
+    draw.text((cx, cy + raio * 0.58), "PODER", font=_font(max(12, int(raio * 0.20)), True),
               fill=suave, anchor="mm", stroke_width=1, stroke_fill=(8, 10, 16, 255))
 
     # Tipo (com ícone) e categoria.
@@ -1047,23 +1047,23 @@ def _draw_card_com_template(card: dict[str, Any], illustration_bytes: bytes) -> 
     altura_tipo = ty2 - ty1
     icone = Image.new("RGBA", (40, 40), (0, 0, 0, 0))
     _draw_type_icon(ImageDraw.Draw(icone, "RGBA"), (20, 20), card_type, type_accent)
-    lado = max(32, int(altura_tipo * 0.62))
+    lado = max(26, int(altura_tipo * 0.58))
     icone = icone.resize((lado, lado), Image.Resampling.LANCZOS)
     imagem.alpha_composite(icone, (tx1 + 22, ty1 + (altura_tipo - lado) // 2))
     draw = ImageDraw.Draw(imagem, "RGBA")
     largura_tipo = tx2 - tx1
-    limite_tipo = tx1 + int(largura_tipo * 0.58)
+    limite_tipo = tx1 + int(largura_tipo * 0.62)
     _texto_no_slot(draw, (tx1 + 22 + lado + 6, ty1, limite_tipo, ty2), card_type,
-                   maximo=32, minimo=16, cor=creme, alinhamento="esquerda", margem=8, contorno=1)
-    _texto_no_slot(draw, (tx1 + int(largura_tipo * 0.60), ty1, tx2, ty2), category.upper(),
-                   maximo=20, minimo=11, cor=suave, alinhamento="direita", margem=18, negrito=True)
+                   maximo=27, minimo=15, cor=creme, alinhamento="esquerda", margem=8, contorno=1)
+    _texto_no_slot(draw, (tx1 + int(largura_tipo * 0.64), ty1, tx2, ty2), category.upper(),
+                   maximo=17, minimo=10, cor=suave, alinhamento="direita", margem=18, negrito=True)
 
     # Custo: rótulo à esquerda, valor à direita.
     custo = str(int(card.get("custo", 0) or 0))
     cx1, cy1, cx2, cy2 = layout["custo"]
     _texto_no_slot(draw, (cx1, cy1, cx1 + (cx2 - cx1) * 0.70, cy2), "CUSTO DE DECK",
-                   maximo=24, minimo=13, cor=suave, alinhamento="esquerda", margem=20)
-    _texto_no_slot(draw, (cx2 - 92, cy1, cx2, cy2), custo, maximo=40, minimo=20, cor=creme,
+                   maximo=21, minimo=12, cor=suave, alinhamento="esquerda", margem=20)
+    _texto_no_slot(draw, (cx2 - 92, cy1, cx2, cy2), custo, maximo=34, minimo=18, cor=creme,
                    alinhamento="direita", margem=18, contorno=2)
 
     # Habilidade: o guia reserva uma placa de 92 px. O título e até duas linhas
@@ -1072,13 +1072,13 @@ def _draw_card_com_template(card: dict[str, Any], illustration_bytes: bytes) -> 
     nome_hab = str(habilidade.get("nome", "")).strip()
     texto_hab = str(habilidade.get("texto", "") or card.get("descricao", "")).strip()
     hx1, hy1, hx2, hy2 = layout["habilidade"]
-    margem_x, margem_y = 24, 9
+    margem_x, margem_y = 28, 14
     y_texto = hy1 + margem_y
     largura_util = (hx2 - hx1) - margem_x * 2
     if nome_hab:
         fonte_nome, linhas_nome, altura_nome = _ajustar_texto(
             draw, nome_hab.upper(), largura_util, 27,
-            maximo=23, minimo=15, negrito=True, max_linhas=1, espaco=1.0,
+            maximo=21, minimo=14, negrito=True, max_linhas=1, espaco=1.0,
         )
         titulo = linhas_nome[0] if linhas_nome else nome_hab.upper()[:36]
         draw.text((hx1 + margem_x, y_texto), titulo, font=fonte_nome,
@@ -1088,7 +1088,7 @@ def _draw_card_com_template(card: dict[str, Any], illustration_bytes: bytes) -> 
         altura_disponivel = hy2 - margem_y - y_texto
         fonte, linhas, altura_linha = _ajustar_texto(
             draw, texto_hab, largura_util, altura_disponivel,
-            maximo=19, minimo=13, max_linhas=2, espaco=1.08,
+            maximo=18, minimo=12, max_linhas=3, espaco=1.08,
         )
         for indice, linha in enumerate(linhas[:2]):
             draw.text((hx1 + margem_x, y_texto + indice * altura_linha), linha, font=fonte,

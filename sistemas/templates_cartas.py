@@ -37,15 +37,17 @@ TOLERANCIA_PROPORCAO = 0.005
 TOLERANCIA_JANELA_PX = 3
 FORMATOS_ACEITOS = {"PNG", "JPEG", "WEBP"}
 
-# Coordenadas na grade de referência 840 × 1240.
+# Coordenadas calibradas para as cinco molduras metálicas 840 × 1240.
 LAYOUT_PADRAO: dict[str, Any] = {
-    "raridade": [600, 44, 784, 96],
-    "nome": [56, 100, 784, 236],
+    # Coordenadas calibradas para as cinco novas molduras metálicas.
+    # As placas inferiores são mais altas e começam antes do guia antigo.
+    "raridade": [510, 48, 795, 110],
+    "nome": [45, 126, 800, 215],
     "arte": [56, 256, 784, 846],
-    "poder": {"centro": [144, 986], "raio": 78},
-    "tipo": [254, 918, 780, 978],
-    "custo": [254, 992, 780, 1052],
-    "habilidade": [56, 1084, 784, 1176],
+    "poder": {"centro": [115, 938], "raio": 80},
+    "tipo": [215, 884, 800, 932],
+    "custo": [215, 946, 800, 995],
+    "habilidade": [45, 1018, 800, 1175],
 }
 
 _CACHE: dict[str, tuple[str, int, int, Image.Image, dict[str, Any]]] = {}
@@ -123,20 +125,12 @@ def limpar_cache_templates(raridade: str | None = None) -> None:
 
 # ---------------------------------------------------------------- layout
 def carregar_layout(raridade: str | None = None) -> dict[str, Any]:
-    """Retorna coordenadas adequadas à moldura da raridade."""
-    layout = json.loads(json.dumps(LAYOUT_PADRAO))
-    if raridade in {"Rara", "Épica"}:
-        # As novas molduras azul e violeta têm placas e janela menores/mais altas
-        # que o guia-base. Coordenadas medidas na arte 840 × 1240.
-        layout.update({
-            "raridade": [500, 60, 770, 136],
-            "nome": [60, 150, 780, 265],
-            "poder": {"centro": [137, 846], "raio": 80},
-            "tipo": [235, 776, 780, 842],
-            "custo": [235, 855, 780, 920],
-            "habilidade": [62, 944, 780, 1155],
-        })
-    return layout
+    """Retorna uma cópia do layout calibrado para a coleção atual; overrides JSON antigos são ignorados.
+
+    A geometria é compartilhada pelas cinco molduras da coleção atual. Os slots acompanham
+    as placas reais, não as coordenadas do guia anterior.
+    """
+    return json.loads(json.dumps(LAYOUT_PADRAO))
 
 
 # ---------------------------------------------------------------- janela
@@ -203,6 +197,13 @@ def detectar_janela(imagem: Image.Image) -> list[int]:
         )
     if not (0.85 <= janela_w / janela_h <= 1.9):
         raise TemplateInvalido("A janela da arte precisa ter formato horizontal próximo de 5:4.")
+    esperado = LAYOUT_PADRAO["arte"]
+    diferencas = [abs(atual - padrao) for atual, padrao in zip((x1, y1, x2, y2), esperado)]
+    if any(delta > TOLERANCIA_JANELA_PX for delta in diferencas):
+        raise TemplateInvalido(
+            "A janela transparente não coincide com o guia oficial: use exatamente "
+            "56,256 → 784,846 (728 × 590 px). As placas e textos dependem dessas coordenadas."
+        )
     recorte = alfa.crop((x1, y1, x2, y2)).histogram()
     transparentes = sum(recorte[:limite])
     if transparentes / max(1, janela_w * janela_h) < 0.90:
