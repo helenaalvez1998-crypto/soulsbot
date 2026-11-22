@@ -1235,18 +1235,28 @@ class ColiseuCartas(commands.Cog):
         return deck if cards_em_deck_validos(deck)[0] else []
 
     async def _preview_deck(self, user_id: int, deck: list[dict]):
-        artes = {}
-        # A prévia da central reflete as artes personalizadas já aprovadas, quando disponíveis.
-        for carta in deck[:5]:
-            personalizada = await self._obter_arte_personalizada(user_id, str(carta["id"]))
-            if personalizada:
-                artes[str(carta["id"])] = personalizada
-        return render_deck_preview_bytes(deck, artes)
+        # Consultas/leituras independentes podem avançar juntas; a renderização
+        # Pillow roda fora do event loop para não atrasar os demais botões.
+        cartas = deck[:5]
+        artes_encontradas = await asyncio.gather(*(
+            self._obter_arte_personalizada(user_id, str(carta["id"]))
+            for carta in cartas
+        ))
+        artes = {
+            str(carta["id"]): imagem
+            for carta, imagem in zip(cartas, artes_encontradas)
+            if imagem
+        }
+        return await asyncio.to_thread(render_deck_preview_bytes, deck, artes)
 
     async def abrir_painel(
         self, interaction: discord.Interaction, editar: bool = False, callback_voltar=None,
     ):
         user_id = int(interaction.user.id)
+        if editar:
+            # O callback pode precisar preparar o deck e carregar artes do Discord.
+            # Confirma o clique antes dessas operações de banco/rede.
+            await interaction.response.defer()
         if not editar:
             self._retornos_nara.pop(user_id, None)
         if callback_voltar is not None:
@@ -1254,10 +1264,9 @@ class ColiseuCartas(commands.Cog):
         elif editar:
             callback_voltar = self._retornos_nara.get(user_id)
 
-        user = await self.bot.db.get_user(user_id)
-        level = nivel_por_xp(int(user["xp"] or 0))
         deck = await self.preparar_deck_inicial(user_id)
         state = await self.bot.db.coliseu_estado_usuario(user_id)
+        level = nivel_por_xp(int(state["xp"] or 0))
         faltam = max(0, PITY_CARTAS - state["pity"])
         embed = discord.Embed(
             title="⚔️ Seu Coliseu",
@@ -1290,19 +1299,21 @@ class ColiseuCartas(commands.Cog):
             )
         embed.set_footer(text="Você pode editar o deck a qualquer momento. A coleção e as conquistas não são apagadas ao trocar cartas.")
         view = PainelColiseuView(self, user_id, callback_voltar=callback_voltar)
-        kwargs = {"content": None, "embed": embed, "view": view}
-        if deck_image:
-            kwargs["attachments"] = [deck_image] if editar else None
-            if editar:
-                await interaction.response.edit_message(**kwargs)
-            else:
-                kwargs.pop("attachments", None)
-                await interaction.response.send_message(**kwargs, file=deck_image, ephemeral=True)
+        if editar:
+            await interaction.edit_original_response(
+                content=None,
+                embed=embed,
+                attachments=[deck_image] if deck_image else [],
+                view=view,
+            )
+        elif deck_image:
+            await interaction.response.send_message(
+                content=None, embed=embed, view=view, file=deck_image, ephemeral=True,
+            )
         else:
-            if editar:
-                await interaction.response.edit_message(attachments=[], **kwargs)
-            else:
-                await interaction.response.send_message(**kwargs, ephemeral=True)
+            await interaction.response.send_message(
+                content=None, embed=embed, view=view, ephemeral=True,
+            )
 
     async def abrir_selecao_desafio(self, interaction: discord.Interaction, user_id: int):
         """Mostra apenas membros conectados que já podem entrar em um duelo."""

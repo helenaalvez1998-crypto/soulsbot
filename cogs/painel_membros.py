@@ -1,6 +1,7 @@
 """Central interativa de acesso às funções dos membros da NARA."""
 from __future__ import annotations
 
+import asyncio
 import discord
 import logging
 from discord import app_commands
@@ -204,14 +205,9 @@ def _embed_categoria_membro(categoria: str) -> discord.Embed:
 async def _montar_embed_central_nara(bot: commands.Bot, user_id: int):
     """Monta a central inicial de forma concisa e com a prévia do deck do membro."""
     db = bot.db
-    user = await db.get_user(int(user_id))
-    xp = int(user["xp"] or 0)
+    resumo = await db.resumo_painel_nara(int(user_id))
+    xp = resumo["xp"]
     nivel_atual = nivel_por_xp(xp)
-    platinas = await db.contar_platinas(int(user_id))
-    zerados = await db.contar_zerados(int(user_id))
-    stats_runs = await db.stats_runs(int(user_id))
-    analytics = await db.estatisticas_gamer(int(user_id))
-    pendentes = await db.registros_pendentes_usuario(int(user_id))
 
     embed = discord.Embed(
         title="🌙 NARA — SUA CENTRAL",
@@ -225,18 +221,18 @@ async def _montar_embed_central_nara(bot: commands.Bot, user_id: int):
         value=(
             f"**Nível {nivel_atual} · {patente_por_nivel(nivel_atual)}**\n"
             f"{barra_progresso(xp)}\n"
-            f"🏆 {platinas} platinas · ✅ {zerados} zerados · ⚔️ {stats_runs['runs']} runs"
+            f"🏆 {resumo['platinas']} platinas · ✅ {resumo['zerados']} zerados · ⚔️ {resumo['runs']} runs"
         ),
         inline=False,
     )
-    economia = f"🪙 **{int(user['denarios'] or 0)} Denários**"
-    if analytics.get("media_nota") is not None:
-        economia += f" · ⭐ **{analytics['media_nota']:.1f}/10** em {analytics['qtd_notas']} avaliações"
+    economia = f"🪙 **{resumo['denarios']} Denários**"
+    if resumo["media_nota"] is not None:
+        economia += f" · ⭐ **{resumo['media_nota']:.1f}/10** em {resumo['qtd_notas']} avaliações"
     embed.add_field(name="Sua conta", value=economia, inline=True)
-    if pendentes:
+    if resumo["pendentes"]:
         embed.add_field(
             name="📬 Há atualizações nos seus registros",
-            value=f"Você tem **{pendentes}** registro(s) aguardando moderação. Consulte **Minha biblioteca → Meus registros**.",
+            value=f"Você tem **{resumo['pendentes']}** registro(s) aguardando moderação. Consulte **Minha biblioteca → Meus registros**.",
             inline=True,
         )
 
@@ -253,7 +249,10 @@ async def _montar_embed_central_nara(bot: commands.Bot, user_id: int):
             deck = await coliseu.preparar_deck_inicial(int(user_id))
             if deck:
                 from sistemas.arte_cartas import render_deck_preview_bytes
-                deck_file = discord.File(render_deck_preview_bytes(deck), filename="meu_deck.png")
+                # Pillow é CPU-bound: não deve bloquear o event loop do bot durante
+                # a composição da prévia das cinco cartas.
+                preview = await asyncio.to_thread(render_deck_preview_bytes, deck)
+                deck_file = discord.File(preview, filename="meu_deck.png")
                 custo_deck = sum(int(c.get("custo", 0) or 0) for c in deck)
                 poder_deck = sum(int(c.get("poder", 0) or 0) for c in deck)
                 raridades = {str(c.get("raridade", "Comum")) for c in deck}
@@ -284,13 +283,15 @@ async def _montar_embed_central_nara(bot: commands.Bot, user_id: int):
 def _retorno_categoria_membro(bot: commands.Bot, user_id: int, categoria: str):
     async def voltar(interaction: discord.Interaction):
         if categoria == "__inicio__":
+            # Reconhece o clique antes das consultas do resumo e da renderização do deck.
+            if not interaction.response.is_done():
+                await interaction.response.defer()
             embed, deck_file = await _montar_embed_central_nara(bot, user_id)
             view = PainelMembrosView(bot, user_id)
-            view._nara_message = interaction.message
-            if deck_file:
-                await interaction.response.edit_message(embed=embed, attachments=[deck_file], view=view)
-            else:
-                await interaction.response.edit_message(embed=embed, attachments=[], view=view)
+            mensagem = await interaction.edit_original_response(
+                embed=embed, attachments=[deck_file] if deck_file else [], view=view,
+            )
+            view._nara_message = mensagem
             return
         view = MembrosCategoriaView(bot, user_id, categoria)
         view._nara_message = interaction.message
@@ -692,7 +693,9 @@ async def _executar_acao_membro(
             return await interaction.response.send_message("O painel de platinas está indisponível no momento.", ephemeral=True)
         from cogs.platinas import PainelView
         view = PainelView(cog, interaction.user, callback_voltar=voltar)
-        return await interaction.response.edit_message(content=None, embed=await view.embed(), view=com_voltar(view))
+        await interaction.response.defer()
+        embed = await view.embed()
+        return await interaction.edit_original_response(content=None, embed=embed, view=com_voltar(view))
 
     if action == "biblioteca_runs":
         cog = bot.get_cog("Soulslike")
@@ -707,7 +710,9 @@ async def _executar_acao_membro(
         if cog is None:
             return await interaction.response.send_message("O painel de jogos zerados está indisponível no momento.", ephemeral=True)
         view = cog.painel_view(interaction.user, callback_voltar=voltar)
-        return await interaction.response.edit_message(content=None, embed=await view.embed(), view=com_voltar(view))
+        await interaction.response.defer()
+        embed = await view.embed()
+        return await interaction.edit_original_response(content=None, embed=embed, view=com_voltar(view))
 
     if action == "remover_zerado":
         cog = bot.get_cog("Zerados")
@@ -718,16 +723,19 @@ async def _executar_acao_membro(
     if action == "meus_registros":
         view = MeusRegistrosView(bot, interaction.user.id, callback_voltar=voltar)
         view._nara_message = interaction.message
-        return await interaction.response.edit_message(
-            content=None, embed=await view.criar_embed(), view=view,
+        await interaction.response.defer()
+        embed = await view.criar_embed()
+        return await interaction.edit_original_response(
+            content=None, embed=embed, view=view,
         )
 
     if action == "notificacoes":
         if interaction.guild_id is None:
             return await interaction.response.send_message("Abra as preferências dentro do servidor.", ephemeral=True)
+        await interaction.response.defer()
         view = await NotificacoesView.criar(bot, interaction.guild_id, interaction.user.id, callback_voltar=voltar)
         view._nara_message = interaction.message
-        return await interaction.response.edit_message(
+        return await interaction.edit_original_response(
             content=(
                 "🔔 **Notificações pessoais**\n"
                 "Ative apenas os avisos que deseja receber por mensagem direta. "
@@ -741,14 +749,16 @@ async def _executar_acao_membro(
             return await interaction.response.send_message("A loja está indisponível no momento.", ephemeral=True)
         from cogs.loja import LojaView
         view = LojaView(cog, interaction.user)
+        await interaction.response.defer()
         await view.carregar()
         com_voltar(view)
-        return await interaction.response.edit_message(content=None, embed=view.embed(), view=view)
+        return await interaction.edit_original_response(content=None, embed=view.embed(), view=view)
 
     if action == "nivel":
         cog = bot.get_cog("ProgressaoXP")
         if cog is None:
             return await interaction.response.send_message("O sistema de níveis está indisponível no momento.", ephemeral=True)
+        await interaction.response.defer()
         user = await bot.db.get_user(interaction.user.id)
         xp = int(user["xp"])
         nivel_atual = nivel_por_xp(xp)
@@ -758,15 +768,16 @@ async def _executar_acao_membro(
         embed.add_field(name="Nível", value=str(nivel_atual), inline=True)
         embed.add_field(name="XP total", value=f"{xp:,}", inline=True)
         embed.add_field(name="Progresso", value=barra_progresso(xp), inline=False)
-        return await interaction.response.edit_message(embed=embed, content=None, view=_view_com_navegacao_nara(view_so_com_voltar(voltar), voltar, interaction.user.id, interaction.message))
+        return await interaction.edit_original_response(embed=embed, content=None, view=_view_com_navegacao_nara(view_so_com_voltar(voltar), voltar, interaction.user.id, interaction.message))
 
     if action == "ranking_xp":
         cog = bot.get_cog("ProgressaoXP")
         if cog is None:
             return await interaction.response.send_message("O ranking de XP está indisponível no momento.", ephemeral=True)
+        await interaction.response.defer()
         rows = await bot.db.ranking_xp(10)
         if not rows:
-            return await interaction.response.edit_message(content="Ainda não há XP registrado para montar o ranking.", embed=None, view=_view_com_navegacao_nara(view_so_com_voltar(voltar), voltar, interaction.user.id, interaction.message))
+            return await interaction.edit_original_response(content="Ainda não há XP registrado para montar o ranking.", embed=None, view=_view_com_navegacao_nara(view_so_com_voltar(voltar), voltar, interaction.user.id, interaction.message))
         linhas = []
         for i, row in enumerate(rows, 1):
             nivel_atual = nivel_por_xp(int(row["valor"]))
@@ -774,7 +785,7 @@ async def _executar_acao_membro(
                 f"`{i:>2}.` <@{row['user_id']}> — **Nível {nivel_atual}** · "
                 f"{patente_por_nivel(nivel_atual)} · {row['valor']} XP"
             )
-        return await interaction.response.edit_message(
+        return await interaction.edit_original_response(
             content="## 🏆 Ranking de XP da NARA\n\n" + "\n".join(linhas),
             embed=None,
             view=_view_com_navegacao_nara(view_so_com_voltar(voltar), voltar, interaction.user.id, interaction.message),
@@ -804,9 +815,10 @@ async def _executar_acao_membro(
             return await interaction.response.send_message("Seu perfil está indisponível no momento.", ephemeral=True)
         if not isinstance(interaction.user, discord.Member):
             return await interaction.response.send_message("Não consegui identificar seu perfil neste servidor.", ephemeral=True)
+        await interaction.response.defer()
         embed = await cog.embed_perfil(interaction.user)
         embed.set_footer(text="NARA • Seu perfil pessoal")
-        return await interaction.response.edit_message(embed=embed, content=None, view=_view_com_navegacao_nara(view_so_com_voltar(voltar), voltar, interaction.user.id, interaction.message))
+        return await interaction.edit_original_response(embed=embed, content=None, view=_view_com_navegacao_nara(view_so_com_voltar(voltar), voltar, interaction.user.id, interaction.message))
 
     if action == "santuario":
         cog = bot.get_cog("Santuario")
@@ -837,8 +849,10 @@ async def _executar_acao_membro(
         if cog is None:
             return await interaction.response.send_message("O sistema de contribuições está indisponível no momento.", ephemeral=True)
         if action == "community_archive":
+            await interaction.response.defer()
             return await cog.mostrar_arquivo(interaction, callback_voltar=voltar)
         if action == "community_mine":
+            await interaction.response.defer()
             return await cog.mostrar_minhas(interaction, callback_voltar=voltar)
         from cogs.comunidade import CommunityHomeView
         embed = discord.Embed(
@@ -977,16 +991,15 @@ class PainelMembros(commands.Cog):
     @app_commands.command(name="nara", description="Abra sua central de Ports & Mods, biblioteca, progresso, recompensas e suporte.")
     @app_commands.guild_only()
     async def nara(self, interaction: discord.Interaction):
+        # O usuário recebe o ACK do Discord imediatamente; o painel substitui o
+        # placeholder assim que os dados e a prévia estiverem prontos.
+        await interaction.response.defer(ephemeral=True, thinking=True)
         embed, deck_file = await _montar_embed_central_nara(self.bot, interaction.user.id)
         view = PainelMembrosView(self.bot, interaction.user.id)
-        if deck_file:
-            await interaction.response.send_message(embed=embed, file=deck_file, view=view, ephemeral=True)
-        else:
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-        try:
-            view._nara_message = await interaction.original_response()
-        except discord.HTTPException:
-            log.debug("Não consegui anexar a mensagem à View inicial da Nara.", exc_info=True)
+        mensagem = await interaction.edit_original_response(
+            embed=embed, attachments=[deck_file] if deck_file else [], view=view,
+        )
+        view._nara_message = mensagem
 
     @app_commands.command(name="publicar_luatools", description="Publica e fixa o painel do LuaTools em um canal.")
     @app_commands.guild_only()

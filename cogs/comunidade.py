@@ -1236,6 +1236,8 @@ async def _responder_painel_membro(interaction: discord.Interaction, *, callback
         if view is None:
             view = discord.ui.View(timeout=600)
         adicionar_botao_voltar(view, callback_voltar, label="Voltar à Nara", emoji="🏠")
+        if interaction.response.is_done():
+            return await interaction.edit_original_response(content=content, embed=embed, view=view, attachments=[])
         return await interaction.response.edit_message(content=content, embed=embed, view=view, attachments=[])
     return await interaction.response.send_message(content=content, embed=embed, view=view, ephemeral=True)
 
