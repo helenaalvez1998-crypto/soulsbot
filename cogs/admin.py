@@ -1073,6 +1073,7 @@ ADMIN_CATEGORIAS = {
             ("perfis", "Patentes e níveis de XP", "👤"),
             ("jogos", "Canais de jogos e promoções", "🎮"),
             ("colizeu_atualizar", "Atualizar rankings", "🔄"),
+            ("card_frames", "Molduras fixas das cartas", "🖼️"),
             ("sl_central", "Publicar central de runs", "📌"),
             ("sl_jogo", "Adicionar jogo Soulslike", "🎮"),
             ("sl_desafio", "Criar desafio Soulslike", "🏅"),
@@ -1189,6 +1190,11 @@ async def _executar_acao_admin(interaction: discord.Interaction, bot, action: st
         return await _abrir_secao(interaction, bot, "roles", "🎭 Cargos configurados", callback_voltar=voltar)
     if action == "coliseu":
         return await _abrir_coliseu(interaction, bot, callback_voltar=voltar)
+    if action == "card_frames":
+        cog = bot.get_cog("ColiseuCartas")
+        if cog is None:
+            return await interaction.response.send_message("O módulo de cartas do Coliseu não está carregado.", ephemeral=True)
+        return await cog.abrir_painel_molduras(interaction, callback_voltar=voltar)
     if action == "moderacao":
         from cogs.platinas import eh_moderador
         if not await eh_moderador(interaction.user, bot.db) and not await _eh_admin_painel(bot, interaction.user):
