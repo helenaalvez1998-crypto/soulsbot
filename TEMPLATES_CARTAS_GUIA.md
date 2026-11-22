@@ -1,66 +1,69 @@
-# Templates completos das cartas — guia
+# Templates completos das cartas — guia oficial do SoulsBot Coliseum
 
-## O que muda
+## Como funciona
 
-Cartas **com arte enviada pelo membro** passam a usar um **template completo por raridade**
-(Comum, Rara, Épica, Lendária, Primordial): fundo, moldura e placas vazias já desenhados.
-O bot cola a arte do membro *por trás* do template (ela aparece pela janela da arte) e escreve
-nome, raridade, poder, tipo, categoria, custo e habilidade nos slots.
+As cartas **com arte personalizada aprovada** usam um template completo por raridade. O template contém fundo, placas vazias e acabamento; somente a janela da ilustração é transparente. O bot encaixa a arte atrás do template e escreve nome, raridade, poder, tipo/categoria, custo e habilidade nas placas.
 
-Cartas **sem arte enviada** continuam sendo desenhadas por código, exatamente como antes. Se uma raridade
-ainda não tem template, as cartas dela com arte usam o layout antigo (janela + moldura).
-O painel antigo de **Molduras fixas** continua valendo para as cartas sem arte enviada.
+As cartas **sem arte personalizada** continuam usando o renderizador procedural original. Os templates não alteram regras, atributos, coleção, duelo ou economia. Cada raridade tem seu próprio material e ornamentos, mas todas compartilham exatamente as mesmas coordenadas de placas e janela.
 
-## Instalação
+## Templates padrão incluídos
 
-Copie os arquivos mantendo as pastas e reinicie o bot:
+Os cinco templates corrigidos estão distribuídos em `assets/cartas_templates/`:
 
-- `sistemas/templates_cartas.py` (novo)
-- `sistemas/arte_cartas.py`
-- `cogs/cartas_coliseu.py`
-- `cogs/admin.py`
-- `tests/test_templates_cartas.py` (novo, opcional)
+- `comum.png`
+- `rara.png`
+- `epica.png`
+- `lendaria.png`
+- `primordial.png`
 
-## Enviar um template
+Eles são carregados automaticamente, inclusive quando `DATA_DIR` aponta para um volume persistente separado. Um upload feito no painel administrativo substitui o padrão sem modificar os assets do projeto. A opção **Restaurar template padrão** remove a substituição e reativa o arquivo incluído.
 
-1. Gere os 5 templates com os prompts de `dados/TEMPLATES_CARTAS_PROMPTS.md`, usando `dados/guia_template_carta_limpo.png` como referência.
-2. `/adm` → **Jogos, Coliseu e runs** → **Templates das cartas (com arte)**.
-3. Clique no botão da raridade; a Nara abre uma DM. Responda anexando **um** arquivo.
-4. O bot valida, salva e devolve duas prévias: a carta de exemplo e outra com os slots contornados.
+## Geometria obrigatória
 
-Requisitos: carta **completa e opaca**, retrato ~420:620 (recomendado 840 × 1240; até 6% de diferença é esticado), até 8 MB,
-**sem texto**. A janela da arte (grande, no meio, ~5:4) deve estar transparente **ou** em magenta chapado `#FF00FF`
-(o bot troca por transparência). PNG recomendado; JPG/WEBP só com o magenta bem chapado.
+Canvas: **840 × 1240 px**, PNG RGBA. A única região transparente deve ser exatamente o retângulo da arte:
 
-A janela é **detectada automaticamente** no arquivo enviado, então a arte sempre encaixa, mesmo que a IA erre alguns pixels.
-Os arquivos ficam em `DATA_DIR/cartas_templates/` (na FadeHost, dentro do volume persistente).
+- Janela da arte: `(56, 256) → (784, 846)` — **728 × 590 px**.
+- Os pixels da janela devem ter alpha 0.
+- Todo o restante do template deve ser opaco (alpha 255).
+- Não pode haver texto rasterizado no template; os textos são escritos pelo Pillow.
 
-## Layout dos textos (grade 840 × 1240)
+### Slots na grade 840 × 1240
 
 | Campo | Posição |
 |---|---|
-| raridade | 600,44 → 784,96 |
-| nome | 56,100 → 784,236 |
-| arte | detectada no PNG (padrão 56,256 → 784,846) |
-| poder | centro 144,986, raio 78 |
-| tipo / categoria | 254,918 → 780,978 |
-| custo | 254,992 → 780,1052 |
-| habilidade | 56,1084 → 784,1176 |
+| Raridade | `600,44 → 784,96` |
+| Nome | `56,100 → 784,236` |
+| Arte | `56,256 → 784,846` |
+| Poder | centro `144,986`, raio `78` |
+| Tipo / categoria | `254,918 → 780,978` |
+| Custo | `254,992 → 780,1052` |
+| Habilidade | `56,1084 → 784,1176` |
 
-Se a IA deslocar uma placa, ajuste só aquela raridade criando `DATA_DIR/cartas_templates/<raridade>.json`
-(`comum`, `rara`, `epica`, `lendaria`, `primordial`) com apenas os campos que mudam; um `layout.json` na mesma pasta vale para todas:
+A geometria é compartilhada pelas cinco raridades. Não crie JSON de coordenadas por raridade para compensar placas desalinhadas: corrija o PNG para respeitar este guia. Arquivos JSON antigos de layout são ignorados pelo renderizador; as coordenadas deste guia são a única fonte de verdade.
 
-```json
-{
-  "habilidade": [60, 1090, 780, 1180],
-  "poder": {"centro": [150, 990], "raio": 70}
-}
-```
+## Substituir um template pelo Discord
 
-Campos inválidos são ignorados. Use a segunda prévia (slots contornados) para ler as coordenadas.
+1. Abra `/adm`.
+2. Entre em **Jogos, Coliseu e runs**.
+3. Abra **Templates completos das cartas**.
+4. Selecione a raridade e envie um PNG como anexo na DM da Nara.
+5. O bot valida dimensão, proporção, transparência e posição exata da janela, salva a substituição no volume persistente e gera uma prévia.
+
+Somente o proprietário global do bot pode alterar templates globais. Os uploads ficam em `DATA_DIR/cartas_templates/`.
+
+## Regras de validação
+
+- Canvas recomendado e padrão: exatamente 840 × 1240 px; 420 × 620 px é o mínimo aceito antes da normalização. A proporção tem tolerância de apenas 0,5% para não deformar as placas.
+- PNG RGBA recomendado; JPEG/WEBP podem ser enviados somente quando a janela usa magenta chapado `#FF00FF`.
+- A janela deve coincidir com `(56,256) → (784,846)`, com tolerância máxima de 3 px após normalização. O renderizador usa o retângulo detectado, mas rejeita qualquer desvio maior.
+- Pelo menos 99,5% dos pixels da janela devem ter alpha 0.
+- Pelo menos 99,5% dos pixels fora da janela devem ter alpha 255; os templates oficiais têm opacidade total fora da janela.
+- Se um upload antigo no volume persistente estiver inválido, o bot ignora esse arquivo e usa o template padrão incluído no projeto.
+- Arquivo de até 8 MB e 20 milhões de pixels.
 
 ## Observações
 
-- As cartas já enviadas no Discord não são editadas; valem as próximas renderizações.
-- Somente o proprietário global do bot (`BOT_OWNER_ID`, `SOULS_USER_ID` ou dono da aplicação) altera templates.
-- Fonte: o projeto só inclui `DejaVuSans.ttf` (regular). Para um título em negrito de verdade, adicione `DejaVuSans-Bold.ttf` em `fonts/`.
+- O arquivo de arte é ajustado para 728 × 590 px; o sistema não deve mudar a posição dos slots para acomodar templates fora do guia.
+- O cache de cartas usa a versão visual 5 para impedir que imagens antigas persistam após a atualização dos templates.
+- Cartas já enviadas no Discord não são editadas retroativamente.
+- A prévia de calibração do painel mostra os slots oficiais sobre a carta renderizada.
