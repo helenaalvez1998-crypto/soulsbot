@@ -58,21 +58,27 @@ class RevisaoView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
 
-    async def _processar(self, interaction: discord.Interaction, aprovar: bool, motivo: str = ""):
-        if not await eh_moderador(interaction.user, self.bot.db):
-            return await interaction.response.send_message("Apenas moderadores.", ephemeral=True)
-        if not interaction.message or not interaction.message.embeds:
+    async def _processar(
+        self, interaction: discord.Interaction, aprovar: bool, motivo: str = "",
+        source_message: discord.Message | None = None,
+    ):
+        mensagem_revisao = source_message or interaction.message
+        if not mensagem_revisao or not mensagem_revisao.embeds:
             return await interaction.response.send_message("Mensagem de revisão inválida.", ephemeral=True)
 
-        footer = interaction.message.embeds[0].footer.text or ""
+        footer = mensagem_revisao.embeds[0].footer.text or ""
         match = __import__("re").search(r"\bID:(\d+)\b", footer)
         if not match:
             return await interaction.response.send_message("Não foi possível localizar o ID desta platina.", ephemeral=True)
         platina_id = int(match.group(1))
         db = self.bot.db
+        # Reconhece o clique antes das consultas e transações de aprovação.
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        if not await eh_moderador(interaction.user, db):
+            return await interaction.followup.send("Apenas moderadores.", ephemeral=True)
         p = await db.get_platina(platina_id)
         if p is None or p["status"] != "pending":
-            return await interaction.response.send_message("Este registro já foi processado.", ephemeral=True)
+            return await interaction.followup.send("Este registro já foi processado.", ephemeral=True)
 
         novo_status = "approved" if aprovar else "rejected"
         if aprovar:
@@ -97,13 +103,13 @@ class RevisaoView(discord.ui.View):
                 int(xp_zerado), int(den_zerado), int(limite_zerados),
             )
             if decision is None:
-                return await interaction.response.send_message("Outro moderador já processou esta platina.", ephemeral=True)
+                return await interaction.followup.send("Outro moderador já processou esta platina.", ephemeral=True)
             antigo, novo = decision["old_level"], decision["new_level"]
             user_id = decision["user_id"]
         else:
             changed = await db.decidir_platina(platina_id, "rejected", interaction.user.id, motivo)
             if not changed:
-                return await interaction.response.send_message("Outro moderador já processou esta platina.", ephemeral=True)
+                return await interaction.followup.send("Outro moderador já processou esta platina.", ephemeral=True)
             antigo = novo = None
             user_id = int(p["user_id"])
 
@@ -113,23 +119,27 @@ class RevisaoView(discord.ui.View):
             # A decisão e a recompensa já foram confirmadas pela transação principal.
             # Uma falha secundária no log não pode deixar os botões parecendo pendentes.
             log.exception("Decisão da platina #%s salva, mas falhou o registro de auditoria", platina_id)
-        if aprovar:
-            try:
-                from cogs.moderacao_utils import sincronizar_cartao
-                await sincronizar_cartao(self.bot, interaction.guild_id, "platinas", platina_id, novo_status, interaction.user.id)
-            except Exception:
-                log.exception("Falha ao sincronizar cartão original da platina #%s", platina_id)
-        embed = interaction.message.embeds[0]
+        try:
+            from cogs.moderacao_utils import sincronizar_cartao
+            await sincronizar_cartao(
+                self.bot, interaction.guild_id, "platinas", platina_id,
+                novo_status, interaction.user.id, motivo if not aprovar else None,
+            )
+        except Exception:
+            log.exception("Falha ao sincronizar cartão original da platina #%s", platina_id)
+        embed = discord.Embed.from_dict(mensagem_revisao.embeds[0].to_dict())
         embed.color = discord.Color.green() if aprovar else discord.Color.red()
         texto_resultado = f"{'✅ Aprovada' if aprovar else '❌ Rejeitada'} por {interaction.user.mention}"
         if not aprovar and motivo:
             texto_resultado += f"\n**Motivo:** {discord.utils.escape_markdown(motivo[:300])}"
         embed.add_field(name="Resultado", value=texto_resultado, inline=False)
+        cartao_atualizado = True
         try:
-            await interaction.response.edit_message(embed=embed, view=None)
+            await mensagem_revisao.edit(embed=embed, view=None)
         except discord.HTTPException:
+            cartao_atualizado = False
             log.exception("Decisão da platina #%s foi salva, mas a mensagem não pôde ser atualizada", platina_id)
-            return await interaction.followup.send(
+            await interaction.followup.send(
                 "A decisão foi salva no banco, mas não consegui atualizar a mensagem. Não clique novamente; a platina já foi processada.",
                 ephemeral=True,
             )
@@ -253,24 +263,28 @@ class RevisaoView(discord.ui.View):
                 "Você pode corrigir os dados e enviar novamente pelo Coliseu."
             )
 
+        if cartao_atualizado:
+            await interaction.followup.send(
+                f"Platina #{platina_id} {'aprovada' if aprovar else 'rejeitada'}.",
+                ephemeral=True,
+            )
+
     @discord.ui.button(label="Aprovar", style=discord.ButtonStyle.success, custom_id="plat:approve")
     async def aprovar(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._processar(interaction, True)
 
     @discord.ui.button(label="Rejeitar", style=discord.ButtonStyle.danger, custom_id="plat:reject")
     async def rejeitar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not await eh_moderador(interaction.user, self.bot.db):
-            return await interaction.response.send_message("Apenas moderadores.", ephemeral=True)
+        # A autorização é validada novamente no envio do modal; abrir o modal não altera dados.
         import re
         footer = interaction.message.embeds[0].footer.text or "" if interaction.message and interaction.message.embeds else ""
         match = re.search(r"\bID:(\d+)\b", footer)
         if not match:
             return await interaction.response.send_message("Não foi possível identificar a platina.", ephemeral=True)
         from cogs.moderacao_utils import MotivoDecisaoModal
+        mensagem_revisao = interaction.message
         async def decidir(inter, motivo):
-            await self._processar(inter, False, motivo)
-            from cogs.moderacao_utils import sincronizar_cartao
-            await sincronizar_cartao(self.bot, inter.guild_id, "platinas", int(match.group(1)), "rejected", inter.user.id, motivo)
+            await self._processar(inter, False, motivo, source_message=mensagem_revisao)
         await interaction.response.send_modal(MotivoDecisaoModal(self.bot, "platina", int(match.group(1)), decidir))
 
 

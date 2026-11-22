@@ -24,9 +24,16 @@ async def sincronizar_cartao(bot, guild_id: int, tipo: str, registro_id: int, st
         embed = discord.Embed.from_dict(mensagem.embeds[0].to_dict()) if mensagem.embeds else discord.Embed(title=f"Solicitação #{registro_id}")
         aprovado = status == "approved"
         embed.color = discord.Color.green() if aprovado else discord.Color.red()
+        campos = [
+            (field.name, field.value, field.inline)
+            for field in embed.fields if field.name != "Resultado"
+        ]
+        embed.clear_fields()
+        for nome, valor, inline in campos:
+            embed.add_field(name=nome, value=valor, inline=inline)
         embed.add_field(
             name="Resultado",
-            value=(f"{'✅ Aprovada' if aprovado else '❌ Rejeitada'} por <@{reviewer_id}>" + (f"\n**Motivo:** {motivo}" if motivo else "")),
+            value=(f"{'✅ Aprovada' if aprovado else '❌ Rejeitada'} por <@{reviewer_id}>" + (f"\\n**Motivo:** {motivo}" if motivo else "")),
             inline=False,
         )
         footer = embed.footer.text or ""

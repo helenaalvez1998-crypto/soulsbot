@@ -580,6 +580,27 @@ class NotificacaoToggleButton(discord.ui.Button):
         await interaction.response.edit_message(view=view)
 
 
+
+
+class NotificacoesInboxView(discord.ui.View):
+    def __init__(self, bot, guild_id: int, user_id: int):
+        super().__init__(timeout=180)
+        self.bot, self.guild_id, self.user_id = bot, int(guild_id), int(user_id)
+
+    @discord.ui.button(label="Marcar avisos como lidos", emoji="✓", style=discord.ButtonStyle.success)
+    async def marcar_lidas(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message(
+                "Esta caixa de entrada pertence a outro membro.", ephemeral=True
+            )
+        quantidade = await self.bot.db.marcar_notificacoes_lidas(self.guild_id, self.user_id)
+        self.stop()
+        await interaction.response.edit_message(
+            content=f"✓ {quantidade} aviso(s) marcado(s) como lido(s).",
+            embed=None, view=None,
+        )
+
+
 class NotificacoesView(discord.ui.View):
     def __init__(self, bot, guild_id: int, user_id: int, prefs: dict, callback_voltar=None):
         super().__init__(timeout=600)
@@ -592,6 +613,37 @@ class NotificacoesView(discord.ui.View):
         else:
             self.add_item(MembrosVoltarButton(bot, user_id))
         adicionar_fechar_nara(self, user_id)
+
+    @discord.ui.button(
+        label="Ver avisos não entregues", emoji="📥",
+        style=discord.ButtonStyle.primary, row=2,
+    )
+    async def ver_inbox(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message(
+                "Esta caixa de entrada pertence a outro membro.", ephemeral=True
+            )
+        rows = await self.bot.db.listar_notificacoes_pendentes(self.guild_id, self.user_id, 10)
+        if not rows:
+            return await interaction.response.send_message(
+                "Você não tem avisos pendentes. Quando uma DM não puder ser entregue, o aviso ficará disponível aqui.",
+                ephemeral=True,
+            )
+        linhas = []
+        for row in rows:
+            data = str(row["created_at"] or "").split(".")[0]
+            linhas.append(f"**{data}** · {row['message']}")
+        embed = discord.Embed(
+            title="📥 Avisos não entregues",
+            description="\\n\\n".join(linhas)[:4000],
+            color=discord.Color.blurple(),
+        )
+        embed.set_footer(text=f"Exibindo até 10 avisos não lidos · {len(rows)} encontrados")
+        await interaction.response.send_message(
+            embed=embed,
+            view=NotificacoesInboxView(self.bot, self.guild_id, self.user_id),
+            ephemeral=True,
+        )
 
     @classmethod
     async def criar(cls, bot, guild_id: int, user_id: int, callback_voltar=None):

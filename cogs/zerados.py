@@ -364,23 +364,30 @@ class ZeradoRevisaoView(discord.ui.View):
         super().__init__(timeout=None)
         self.cog = cog
 
-    async def _processar(self, interaction: discord.Interaction, aprovar: bool, motivo: str = ""):
-        if not await eh_moderador(interaction.user, self.cog.bot.db):
-            return await interaction.response.send_message("Apenas moderadores podem revisar este registro.", ephemeral=True)
-        if not interaction.message or not interaction.message.embeds:
+    async def _processar(
+        self, interaction: discord.Interaction, aprovar: bool, motivo: str = "",
+        source_message: discord.Message | None = None,
+    ):
+        mensagem_revisao = source_message or interaction.message
+        if not mensagem_revisao or not mensagem_revisao.embeds:
             return await interaction.response.send_message("Cartão de revisão inválido.", ephemeral=True)
-        footer = interaction.message.embeds[0].footer.text or ""
+        footer = mensagem_revisao.embeds[0].footer.text or ""
         import re
         match = re.search(r"\bZeradoID:(\d+)\b", footer)
         if not match:
             return await interaction.response.send_message("Não consegui localizar o ID deste zerado.", ephemeral=True)
+
         zerado_id = int(match.group(1))
         db = self.cog.bot.db
+        # Reconhece o clique antes de qualquer consulta/transação potencialmente lenta.
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        if not await eh_moderador(interaction.user, db):
+            return await interaction.followup.send("Apenas moderadores podem revisar este registro.", ephemeral=True)
         pendente = await db.get_zerado(zerado_id)
         if pendente is None or pendente["status"] != "pending":
-            return await interaction.response.send_message("Este registro já foi processado ou removido.", ephemeral=True)
+            return await interaction.followup.send("Este registro já foi processado ou removido.", ephemeral=True)
         if int(pendente["user_id"]) == interaction.user.id:
-            return await interaction.response.send_message("Você não pode aprovar ou rejeitar o próprio registro.", ephemeral=True)
+            return await interaction.followup.send("Você não pode aprovar ou rejeitar o próprio registro.", ephemeral=True)
 
         if aprovar:
             xp = await GuildConfig.get(db, interaction.guild_id, "xp_zerado")
@@ -396,33 +403,36 @@ class ZeradoRevisaoView(discord.ui.View):
                 zerado_id, interaction.user.id, int(xp), int(denarios), int(limite)
             )
             if resultado is None:
-                return await interaction.response.send_message("Outro moderador já processou este registro.", ephemeral=True)
+                return await interaction.followup.send("Outro moderador já processou este registro.", ephemeral=True)
+
             from cogs.moderacao_utils import sincronizar_cartao
-            await sincronizar_cartao(self.cog.bot, interaction.guild_id, "zerados", zerado_id, "approved", interaction.user.id)
-            status_texto = "✅ Aprovado"
-            cor = discord.Color.green()
+            await sincronizar_cartao(
+                self.cog.bot, interaction.guild_id, "zerados", zerado_id, "approved", interaction.user.id
+            )
             recompensa = f"+{resultado['xp']} XP · +{resultado['denarios']} Denários"
             if resultado["daily_limit_reached"]:
                 recompensa = "Sem recompensa: limite diário atingido"
-            embed = interaction.message.embeds[0]
-            embed.color = cor
+            embed = discord.Embed.from_dict(mensagem_revisao.embeds[0].to_dict())
+            embed.color = discord.Color.green()
             embed.set_footer(text=f"ZeradoID:{zerado_id} · APROVADO")
             embed.add_field(
                 name="Resultado",
-                value=f"{status_texto} por {interaction.user.mention}\n**Recompensa:** {recompensa}",
+                value=f"✅ Aprovado por {interaction.user.mention}\n**Recompensa:** {recompensa}",
                 inline=False,
             )
+            cartao_atualizado = True
             try:
-                await interaction.response.edit_message(
+                await mensagem_revisao.edit(
                     content=f"✅ Solicitação `#{zerado_id}` aprovada por {interaction.user.mention}.",
                     embed=embed, view=None,
                 )
             except discord.HTTPException:
-                log.exception("Zerado #%s aprovado, mas o cartão não foi atualizado", zerado_id)
-                if not interaction.response.is_done():
-                    await interaction.response.send_message("A aprovação foi salva, mas não consegui atualizar o cartão.", ephemeral=True)
-                else:
-                    await interaction.followup.send("A aprovação foi salva, mas não consegui atualizar o cartão.", ephemeral=True)
+                cartao_atualizado = False
+                log.exception("Zerado #%s aprovado, mas o cartão de revisão não foi atualizado", zerado_id)
+                await interaction.followup.send(
+                    "A aprovação foi salva e as recompensas foram aplicadas, mas não consegui atualizar o cartão. Não clique novamente.",
+                    ephemeral=True,
+                )
 
             membro = interaction.guild.get_member(int(resultado["user_id"])) if interaction.guild else None
             subiu = resultado["new_level"] > resultado["old_level"]
@@ -452,33 +462,41 @@ class ZeradoRevisaoView(discord.ui.View):
                 self.cog.bot, interaction.guild_id, int(resultado["user_id"]), "approvals",
                 f"✅ Seu zerado de **{pendente['game']}** foi aprovado e registrado no Coliseu."
             )
+            if cartao_atualizado:
+                await interaction.followup.send(f"Zerado #{zerado_id} aprovado.", ephemeral=True)
             return
 
         alterado = await db.rejeitar_zerado(zerado_id, interaction.user.id, motivo)
         if not alterado:
-            return await interaction.response.send_message("Outro moderador já processou este registro.", ephemeral=True)
-        embed = interaction.message.embeds[0]
+            return await interaction.followup.send("Outro moderador já processou este registro.", ephemeral=True)
+        embed = discord.Embed.from_dict(mensagem_revisao.embeds[0].to_dict())
         embed.color = discord.Color.red()
         embed.set_footer(text=f"ZeradoID:{zerado_id} · REJEITADO")
         resultado_texto = f"❌ Rejeitado por {interaction.user.mention}"
         if motivo:
             resultado_texto += f"\n**Motivo:** {discord.utils.escape_markdown(motivo[:300])}"
         embed.add_field(name="Resultado", value=resultado_texto, inline=False)
+        cartao_atualizado = True
         try:
-            await interaction.response.edit_message(
+            await mensagem_revisao.edit(
                 content=f"❌ Solicitação `#{zerado_id}` rejeitada por {interaction.user.mention}.",
                 embed=embed, view=None,
             )
         except discord.HTTPException:
-            log.exception("Zerado #%s rejeitado, mas o cartão não foi atualizado", zerado_id)
-            if not interaction.response.is_done():
-                await interaction.response.send_message("A rejeição foi salva, mas não consegui atualizar o cartão.", ephemeral=True)
-            else:
-                await interaction.followup.send("A rejeição foi salva, mas não consegui atualizar o cartão.", ephemeral=True)
+            cartao_atualizado = False
+            log.exception("Zerado #%s rejeitado, mas o cartão de revisão não foi atualizado", zerado_id)
+            await interaction.followup.send(
+                "A rejeição foi salva, mas não consegui atualizar o cartão. Não clique novamente.",
+                ephemeral=True,
+            )
         try:
             await db.log(interaction.user.id, "zerado_rejeitado", f"id={zerado_id} user={pendente['user_id']}")
         except Exception:
             log.exception("Zerado #%s rejeitado, mas falhou o log de auditoria", zerado_id)
+        from cogs.moderacao_utils import sincronizar_cartao
+        await sincronizar_cartao(
+            self.cog.bot, interaction.guild_id, "zerados", zerado_id, "rejected", interaction.user.id, motivo
+        )
         from notificacoes import notificar_usuario
         texto_motivo = f"\nMotivo: {motivo}" if motivo else ""
         await notificar_usuario(
@@ -486,6 +504,8 @@ class ZeradoRevisaoView(discord.ui.View):
             f"❌ Seu registro de zerado **{pendente['game']}** foi rejeitado.{texto_motivo}\n"
             "Você pode corrigir os dados e enviar novamente pelo painel de Zerados."
         )
+        if cartao_atualizado:
+            await interaction.followup.send(f"Zerado #{zerado_id} rejeitado.", ephemeral=True)
 
     @discord.ui.button(label="Aprovar", style=discord.ButtonStyle.success, emoji="✅", custom_id="zer:approve")
     async def aprovar(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -493,18 +513,16 @@ class ZeradoRevisaoView(discord.ui.View):
 
     @discord.ui.button(label="Rejeitar", style=discord.ButtonStyle.danger, emoji="❌", custom_id="zer:reject")
     async def rejeitar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not await eh_moderador(interaction.user, self.cog.bot.db):
-            return await interaction.response.send_message("Apenas moderadores.", ephemeral=True)
+        # A autorização é validada novamente no envio do modal; abrir o modal não altera dados.
         import re
         footer = interaction.message.embeds[0].footer.text or "" if interaction.message and interaction.message.embeds else ""
         match = re.search(r"\bZeradoID:(\d+)\b", footer)
         if not match:
             return await interaction.response.send_message("Não foi possível identificar o registro.", ephemeral=True)
         from cogs.moderacao_utils import MotivoDecisaoModal
+        mensagem_revisao = interaction.message
         async def decidir(inter, motivo):
-            await self._processar(inter, False, motivo)
-            from cogs.moderacao_utils import sincronizar_cartao
-            await sincronizar_cartao(self.cog.bot, inter.guild_id, "zerados", int(match.group(1)), "rejected", inter.user.id, motivo)
+            await self._processar(inter, False, motivo, source_message=mensagem_revisao)
         await interaction.response.send_modal(MotivoDecisaoModal(self.cog.bot, "zerado", int(match.group(1)), decidir))
 
 
