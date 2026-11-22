@@ -1008,8 +1008,9 @@ def _draw_card_com_template(card: dict[str, Any], illustration_bytes: bytes) -> 
     # Selo de raridade e nome.
     _texto_no_slot(draw, layout["raridade"], rarity.upper(), maximo=30, minimo=16, cor=creme,
                    margem=12, contorno=2)
-    _texto_no_slot(draw, layout["nome"], str(card.get("nome", "Carta")), maximo=58, minimo=26,
-                   cor=creme, max_linhas=2, margem=28, contorno=3)
+    # Títulos extensos preservam hierarquia sem dominar a carta.
+    _texto_no_slot(draw, layout["nome"], str(card.get("nome", "Carta")), maximo=48, minimo=21,
+                   cor=creme, max_linhas=2, margem=38, contorno=2)
 
     # Poder no medalhão.
     cx, cy = layout["poder"]["centro"]
