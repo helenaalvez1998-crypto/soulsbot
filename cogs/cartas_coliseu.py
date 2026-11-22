@@ -139,15 +139,10 @@ class FecharColiseuButton(discord.ui.Button):
 
 
 class PainelColiseuView(discord.ui.View):
-    def __init__(self, cog: "ColiseuCartas", user_id: int, callback_voltar=None, saldo: int = 0):
+    def __init__(self, cog: "ColiseuCartas", user_id: int, callback_voltar=None):
         super().__init__(timeout=600)
         self.user_id = int(user_id)
         self.callback_voltar = callback_voltar
-        # Indicador fixo de carteira, visível enquanto o membro navega no Coliseu.
-        self.add_item(discord.ui.Button(
-            label=f"{max(0, int(saldo)):,} Denários".replace(",", "."),
-            emoji="🪙", style=discord.ButtonStyle.secondary, disabled=True, row=4,
-        ))
         self.add_item(BotaoMenuCartas(cog, user_id, "colecao", "Minha coleção", "🃏", discord.ButtonStyle.primary, 0))
         self.add_item(BotaoMenuCartas(cog, user_id, "pacote", "Pacote Fogueira", "🔥", discord.ButtonStyle.success, 0))
         self.add_item(BotaoMenuCartas(cog, user_id, "deck", "Montar deck", "🛡️", discord.ButtonStyle.primary, 1))
@@ -234,12 +229,12 @@ class PersonalizarCartaButton(discord.ui.Button):
             title="🎨 Ateliê do Coliseu · Prompt pronto",
             description=(
                 "Copie o texto e cole no gerador de imagens de sua preferência. "
-                "O jogo de origem define o tema; a direção artística do Coliseu permanece fixa.\n\n"
+                "O jogo, a categoria, a raridade e a habilidade definem a cena. A identidade visual combina dark fantasy monumental com anime épico; a moldura oficial é aplicada separadamente.\n\n"
                 f"```text\n{prompt}\n```"
             ),
             color=config.COR_OURO,
         )
-        embed.set_footer(text="A composição da carta não muda entre raridades. Nome, moldura e atributos continuam oficiais.")
+        embed.set_footer(text="Arte híbrida dark fantasy + anime épico. A moldura, o nome e os atributos oficiais são aplicados pelo SoulsBot.")
         await interaction.response.edit_message(
             embed=embed, attachments=[],
             view=EnviarArteAtelieView(self.cog, self.user_id, self.carta, self.collection_view),
@@ -393,11 +388,10 @@ class CollectionPageButton(discord.ui.Button):
 class CollectionView(discord.ui.View):
     page_size = 20
 
-    def __init__(self, cog: "ColiseuCartas", user_id: int, cards: list[tuple[dict, dict]], saldo: int = 0):
+    def __init__(self, cog: "ColiseuCartas", user_id: int, cards: list[tuple[dict, dict]]):
         super().__init__(timeout=600)
         self.cog = cog
         self.user_id = int(user_id)
-        self.saldo = max(0, int(saldo))
         self.cards = cards
         self.cards_by_id = {carta["id"]: (row, carta) for row, carta in cards}
         self.page = 0
@@ -425,9 +419,7 @@ class CollectionView(discord.ui.View):
                     f"Poder {carta['poder']} · Custo {carta['custo']}"
                 )
             embed.description = "\n".join(lines)
-            embed.set_footer(text=f"Página {self.page + 1}/{self.pages} · 🪙 {self.saldo:,} Denários".replace(",", "."))
-        if not self.cards:
-            embed.set_footer(text=f"🪙 Carteira: {self.saldo:,} Denários".replace(",", "."))
+            embed.set_footer(text=f"Página {self.page + 1}/{self.pages} · Selecione uma carta para ver sua arte e habilidade")
         return embed
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -1543,9 +1535,7 @@ class ColiseuCartas(commands.Cog):
                 inline=False,
             )
         embed.set_footer(text="Você pode editar o deck a qualquer momento. A coleção e as conquistas não são apagadas ao trocar cartas.")
-        view = PainelColiseuView(
-            self, user_id, callback_voltar=callback_voltar, saldo=int(state["denarios"] or 0)
-        )
+        view = PainelColiseuView(self, user_id, callback_voltar=callback_voltar)
         if editar:
             await interaction.edit_original_response(
                 content=None,
@@ -1658,16 +1648,13 @@ class ColiseuCartas(commands.Cog):
         user_id = interaction.user.id
         db = self.bot.db
         if acao == "colecao":
-            # Recupera recompensas aprovadas em versões anteriores antes de listar.
-            await db.coliseu_sincronizar_conquistas(user_id)
             rows = await db.coliseu_listar_colecao(user_id)
-            saldo_user = await db.get_user(user_id)
             cards = []
             for row in rows:
                 carta = self._carta_da_linha(row)
                 if carta:
                     cards.append((dict(row), carta))
-            view = CollectionView(self, user_id, cards, saldo=int(saldo_user["denarios"] or 0))
+            view = CollectionView(self, user_id, cards)
             return await interaction.response.edit_message(embed=view.embed(), view=view)
         if acao == "pacote":
             embed = discord.Embed(
@@ -1681,12 +1668,6 @@ class ColiseuCartas(commands.Cog):
                     "O desconto só acontece ao confirmar a abertura."
                 ),
                 color=config.COR_OURO,
-            )
-            saldo_user = await db.get_user(user_id)
-            embed.add_field(
-                name="🪙 Sua carteira",
-                value=f"**{int(saldo_user['denarios'] or 0):,} Denários**".replace(",", "."),
-                inline=False,
             )
             view = ConfirmarPacoteView(self, user_id)
             return await interaction.response.edit_message(embed=embed, view=view)
