@@ -405,6 +405,29 @@ class ZeradoRevisaoView(discord.ui.View):
             if resultado is None:
                 return await interaction.followup.send("Outro moderador já processou este registro.", ephemeral=True)
 
+            # Confirma a presença da carta após o commit e repara conquistas antigas.
+            carta_confirmada = False
+            try:
+                await db.coliseu_sincronizar_conquistas(int(resultado["user_id"]))
+                carta_presente = await db._one(
+                    "SELECT 1 FROM cartas_colecao WHERE user_id=? AND card_id=?",
+                    (int(resultado["user_id"]), str(resultado["card_id"])),
+                )
+                carta_confirmada = carta_presente is not None
+                if not carta_confirmada:
+                    raise RuntimeError(
+                        f"Carta não encontrada após sincronização: zerado={zerado_id} card={resultado['card_id']}"
+                    )
+            except Exception:
+                log.exception(
+                    "Zerado #%s aprovado, mas houve falha ao confirmar a carta %s para user=%s",
+                    zerado_id, resultado.get("card_id"), resultado.get("user_id"),
+                )
+                await interaction.followup.send(
+                    "O zerado foi aprovado, mas não consegui confirmar a carta na coleção. "
+                    "A equipe foi avisada pelo log; não envie o registro novamente.", ephemeral=True,
+                )
+
             from cogs.moderacao_utils import sincronizar_cartao
             await sincronizar_cartao(
                 self.cog.bot, interaction.guild_id, "zerados", zerado_id, "approved", interaction.user.id
@@ -415,9 +438,20 @@ class ZeradoRevisaoView(discord.ui.View):
             embed = discord.Embed.from_dict(mensagem_revisao.embeds[0].to_dict())
             embed.color = discord.Color.green()
             embed.set_footer(text=f"ZeradoID:{zerado_id} · APROVADO")
+            status_carta = (
+                (
+                    f"🃏 **Carta entregue:** {resultado['card_name']} · {resultado['card_rarity']}"
+                    if resultado.get("card_added") else
+                    f"🃏 **Carta já existente:** {resultado['card_name']} · {resultado['card_rarity']}"
+                ) if carta_confirmada else
+                f"⚠️ **Carta pendente de verificação:** {resultado['card_name']}"
+            )
             embed.add_field(
                 name="Resultado",
-                value=f"✅ Aprovado por {interaction.user.mention}\n**Recompensa:** {recompensa}",
+                value=(
+                    f"✅ Aprovado por {interaction.user.mention}\n"
+                    f"**Recompensa:** {recompensa}\n{status_carta}"
+                ),
                 inline=False,
             )
             cartao_atualizado = True
@@ -442,7 +476,11 @@ class ZeradoRevisaoView(discord.ui.View):
                 interaction, resultado, int(resultado["new_level"]) if subiu else None
             )
             try:
-                await db.log(interaction.user.id, "zerado_aprovado", f"id={zerado_id} user={resultado['user_id']}")
+                await db.log(
+                    interaction.user.id, "zerado_aprovado",
+                    f"id={zerado_id} user={resultado['user_id']} card={resultado.get('card_id')} "
+                    f"card_added={bool(resultado.get('card_added'))} card_confirmed={carta_confirmada}",
+                )
             except Exception:
                 log.exception("Zerado #%s aprovado, mas falhou o log de auditoria", zerado_id)
             painel = self.cog.bot.get_cog("Colizeu")
@@ -458,12 +496,28 @@ class ZeradoRevisaoView(discord.ui.View):
                 except Exception:
                     log.exception("Falha ao atualizar santuário após aprovação do zerado #%s", zerado_id)
             from notificacoes import notificar_usuario
+            aviso_carta = (
+                (
+                    f"🃏 Você recebeu **{resultado['card_name']}** ({resultado['card_rarity']}) na sua coleção!"
+                    if resultado.get("card_added") else
+                    f"🃏 A carta **{resultado['card_name']}** ({resultado['card_rarity']}) já estava na sua coleção."
+                ) if carta_confirmada else
+                "⚠️ A aprovação foi salva; a equipe está verificando a entrega da carta."
+            )
             await notificar_usuario(
                 self.cog.bot, interaction.guild_id, int(resultado["user_id"]), "approvals",
-                f"✅ Seu zerado de **{pendente['game']}** foi aprovado e registrado no Coliseu."
+                f"✅ Seu zerado de **{pendente['game']}** foi aprovado e registrado no Coliseu.\n"
+                f"{aviso_carta}\nAbra `/nara` → Coliseu → Minha coleção para conferir."
             )
             if cartao_atualizado:
-                await interaction.followup.send(f"Zerado #{zerado_id} aprovado.", ephemeral=True)
+                detalhe_entrega = (
+                    ("carta entregue" if resultado.get("card_added") else "carta já estava na coleção")
+                    if carta_confirmada else "entrega da carta requer verificação"
+                )
+                await interaction.followup.send(
+                    f"Zerado #{zerado_id} aprovado; {detalhe_entrega}: **{resultado['card_name']}**.",
+                    ephemeral=True,
+                )
             return
 
         alterado = await db.rejeitar_zerado(zerado_id, interaction.user.id, motivo)

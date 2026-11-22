@@ -225,10 +225,17 @@ async def _montar_embed_central_nara(bot: commands.Bot, user_id: int):
         ),
         inline=False,
     )
-    economia = f"🪙 **{resumo['denarios']} Denários**"
+    embed.add_field(
+        name="🪙 Sua carteira",
+        value=f"**{max(0, int(resumo['denarios'])):,} Denários**".replace(",", "."),
+        inline=True,
+    )
     if resumo["media_nota"] is not None:
-        economia += f" · ⭐ **{resumo['media_nota']:.1f}/10** em {resumo['qtd_notas']} avaliações"
-    embed.add_field(name="Sua conta", value=economia, inline=True)
+        embed.add_field(
+            name="⭐ Suas avaliações",
+            value=f"**{resumo['media_nota']:.1f}/10** · {resumo['qtd_notas']} avaliações",
+            inline=True,
+        )
     if resumo["pendentes"]:
         embed.add_field(
             name="📬 Há atualizações nos seus registros",
