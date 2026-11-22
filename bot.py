@@ -263,6 +263,75 @@ async def _nara_view_on_error(
 discord.ui.View.on_error = _nara_view_on_error
 
 
+# ---------------------------------------------------------------------------
+# Rede de segurança contra "Interação expirada" (Unknown interaction 10062)
+# ---------------------------------------------------------------------------
+# O Discord exige uma primeira resposta em até 3s. Vários painéis consultam o banco
+# e montam imagens ANTES de responder; basta o host estar lento para estourar o prazo.
+# Se um clique em botão/select ainda não foi respondido após AUTO_DEFER_APOS segundos,
+# o bot o "adia" (defer) sozinho. A resposta real do callback continua funcionando:
+# edit_message/send_message/defer são redirecionados para edit_original_response/
+# followup quando a interação já foi adiada por esta rede de segurança.
+AUTO_DEFER_APOS = 2.0
+
+_orig_send_message = discord.InteractionResponse.send_message
+_orig_edit_message = discord.InteractionResponse.edit_message
+_orig_defer = discord.InteractionResponse.defer
+
+
+# discord.Interaction usa __slots__, então guardamos os IDs adiados aqui.
+_INTERACOES_ADIADAS: set[int] = set()
+
+
+def _adiada_automaticamente(response: discord.InteractionResponse) -> bool:
+    return response._parent.id in _INTERACOES_ADIADAS and response.is_done()
+
+
+async def _send_message_seguro(self: discord.InteractionResponse, *args: Any, **kwargs: Any):
+    if _adiada_automaticamente(self):
+        delete_after = kwargs.pop("delete_after", None)
+        msg = await self._parent.followup.send(*args, wait=True, **kwargs)
+        if delete_after:
+            await msg.delete(delay=delete_after)
+        return msg
+    return await _orig_send_message(self, *args, **kwargs)
+
+
+async def _edit_message_seguro(self: discord.InteractionResponse, *args: Any, **kwargs: Any):
+    if _adiada_automaticamente(self):
+        delete_after = kwargs.pop("delete_after", None)
+        kwargs.pop("suppress_embeds", None)
+        msg = await self._parent.edit_original_response(*args, **kwargs)
+        if delete_after:
+            await msg.delete(delay=delete_after)
+        return msg
+    return await _orig_edit_message(self, *args, **kwargs)
+
+
+async def _defer_seguro(self: discord.InteractionResponse, *args: Any, **kwargs: Any):
+    if _adiada_automaticamente(self):
+        return None  # já adiada pela rede de segurança
+    return await _orig_defer(self, *args, **kwargs)
+
+
+discord.InteractionResponse.send_message = _send_message_seguro  # type: ignore[method-assign]
+discord.InteractionResponse.edit_message = _edit_message_seguro  # type: ignore[method-assign]
+discord.InteractionResponse.defer = _defer_seguro  # type: ignore[method-assign]
+
+
+async def _auto_defer(interaction: discord.Interaction) -> None:
+    await asyncio.sleep(AUTO_DEFER_APOS)
+    if interaction.response.is_done():
+        return
+    _INTERACOES_ADIADAS.add(interaction.id)
+    asyncio.get_running_loop().call_later(1000, _INTERACOES_ADIADAS.discard, interaction.id)
+    try:
+        await _orig_defer(interaction.response)
+        log.info("Clique adiado automaticamente (callback passou de %.1fs sem responder).", AUTO_DEFER_APOS)
+    except (discord.HTTPException, discord.InteractionResponded):
+        _INTERACOES_ADIADAS.discard(interaction.id)
+
+
 class NaraCommandTree(app_commands.CommandTree):
     """Tratamento central de erros de slash commands com resposta privada."""
 
@@ -338,6 +407,8 @@ class NaraBot(commands.Bot):
         self.failed_extensions: list[str] = []
         self.sync_ok = False
         self._slash_sync_done = False
+        self._tarefas_auto_defer: set[asyncio.Task] = set()
+        self._tarefa_lag: asyncio.Task | None = None
 
     def _handle_asyncio_exception(self, loop: asyncio.AbstractEventLoop, context: dict[str, Any]) -> None:
         exception = context.get("exception")
@@ -350,6 +421,7 @@ class NaraBot(commands.Bot):
     async def setup_hook(self) -> None:
         loop = asyncio.get_running_loop()
         loop.set_exception_handler(self._handle_asyncio_exception)
+        self._tarefa_lag = loop.create_task(self._monitorar_lag_loop())
 
         await self.db.connect()
         log.info("SQLite conectado: %s", config.DB_PATH)
@@ -380,6 +452,24 @@ class NaraBot(commands.Bot):
             log.warning("GUILD_ID vazio: /nara e /adm serão sincronizados globalmente; a propagação do Discord pode levar algum tempo.")
         if not any((os.getenv("GEMINI_API_KEY"), os.getenv("GEMINI_BACKUP_API_KEY"), os.getenv("GEMINI_THIRD_API_KEY"))):
             log.warning("Nenhuma chave Gemini configurada: a Nara continuará com funções locais, mas sem geração de IA.")
+
+    async def on_interaction(self, interaction: discord.Interaction) -> None:
+        # Só botões/selects: em slash commands o defer() decide se a resposta é efêmera,
+        # então ali cada comando precisa responder por conta própria.
+        if interaction.type is discord.InteractionType.component:
+            task = asyncio.create_task(_auto_defer(interaction))
+            self._tarefas_auto_defer.add(task)
+            task.add_done_callback(self._tarefas_auto_defer.discard)
+
+    async def _monitorar_lag_loop(self) -> None:
+        """Avisa no log quando o event loop fica travado (código síncrono pesado)."""
+        intervalo = 0.5
+        while True:
+            antes = asyncio.get_running_loop().time()
+            await asyncio.sleep(intervalo)
+            atraso = asyncio.get_running_loop().time() - antes - intervalo
+            if atraso > 1.0:
+                log.warning("Event loop travado por ~%.1fs (algo síncrono/pesado rodou no loop).", atraso)
 
     async def on_ready(self) -> None:
         if not self._slash_sync_done:
