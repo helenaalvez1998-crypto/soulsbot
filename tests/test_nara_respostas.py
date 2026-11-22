@@ -42,3 +42,24 @@ def test_novas_respostas_estão_integradas_ao_roteador_local_do_cog():
     assert "import nara_respostas" in source
     assert 'resposta_social("saudacao"' in source
     assert "if intent in nara_respostas.INTENCOES_SOCIAIS" in source
+
+def test_perguntas_sobre_criacao_recebem_resposta_debochada_sem_vazar_segredos(monkeypatch):
+    import nara_local
+
+    monkeypatch.setattr(nara_respostas.random, "choice", lambda opcoes: opcoes[0])
+    for pergunta in (
+        "como você foi feita",
+        "como criar uma Nara",
+        "quem te programou",
+        "como fazer uma nara igual a você",
+        "como fazer ela",
+        "como fazer uma igual",
+    ):
+        assert nara_local.classificar_resposta_local(pergunta) == "criador"
+
+    resposta = nara_respostas.resposta_social("criador")
+    assert "Souls" in resposta
+    assert "invejoso" in resposta.casefold()
+    assert "chave de api" not in resposta.casefold()
+    assert "token" not in resposta.casefold()
+
