@@ -1419,11 +1419,31 @@ class Database:
                 raise RuntimeError("O registro de zerado mudou durante a aprovação.")
             from sistemas.cartas import carta_jogo
             carta = carta_jogo(str(row["game"]), "zerado")
+            # A recompensa da carta faz parte da mesma transação da aprovação.
+            # O UPSERT repara metadados ausentes sem duplicar ou aumentar quantidade.
+            carta_existente_antes = await tx._one(
+                "SELECT 1 FROM cartas_colecao WHERE user_id=? AND card_id=?",
+                (int(row["user_id"]), carta.id),
+            )
             await tx.conn.execute(
-                """INSERT OR IGNORE INTO cartas_colecao(user_id,card_id,quantidade,source,game_name)
-                   VALUES (?,?,1,'zerado',?)""",
+                """INSERT INTO cartas_colecao(user_id,card_id,quantidade,source,game_name)
+                   VALUES (?,?,1,'zerado',?)
+                   ON CONFLICT(user_id,card_id) DO UPDATE SET
+                       game_name=CASE WHEN cartas_colecao.game_name='' THEN excluded.game_name
+                                      ELSE cartas_colecao.game_name END,
+                       source=CASE WHEN cartas_colecao.source='' THEN 'zerado'
+                                   ELSE cartas_colecao.source END""",
                 (int(row["user_id"]), carta.id, str(row["game"])[:120]),
             )
+            carta_salva = await tx._one(
+                "SELECT card_id,game_name FROM cartas_colecao WHERE user_id=? AND card_id=?",
+                (int(row["user_id"]), carta.id),
+            )
+            if carta_salva is None:
+                raise RuntimeError(
+                    f"Falha ao garantir carta de zerado user={row['user_id']} zerado={zerado_id} card={carta.id}"
+                )
+            carta_adicionada = carta_existente_antes is None
             return {
                 "id": zerado_id, "user_id": int(row["user_id"]), "game": row["game"],
                 "platform": row["platform"], "finished_at": row["finished_at"],
@@ -1431,6 +1451,9 @@ class Database:
                 "xp": xp, "denarios": denarios, "old_xp": old_xp, "new_xp": new_xp,
                 "old_level": old_level, "new_level": new_level,
                 "daily_limit_reached": limite_atingido,
+                "card_id": carta.id, "card_name": carta.nome,
+                "card_rarity": carta.raridade, "card_added": carta_adicionada,
+                "card_already_owned": not carta_adicionada,
             }
 
     async def rejeitar_zerado(self, zerado_id: int, reviewer_id: int, motivo: str = "") -> bool:
@@ -2672,12 +2695,21 @@ class Database:
                 marcos = ("zerado", "platina") if str(row["marco"]) == "platina" else ("zerado",)
                 for marco in marcos:
                     carta = carta_jogo(str(row["game"]), marco)
-                    cur = await tx.conn.execute(
-                        """INSERT OR IGNORE INTO cartas_colecao(user_id,card_id,quantidade,source,game_name)
-                           VALUES (?,?,1,?,?)""",
+                    existente = await tx._one(
+                        "SELECT 1 FROM cartas_colecao WHERE user_id=? AND card_id=?",
+                        (int(user_id), carta.id),
+                    )
+                    await tx.conn.execute(
+                        """INSERT INTO cartas_colecao(user_id,card_id,quantidade,source,game_name)
+                           VALUES (?,?,1,?,?)
+                           ON CONFLICT(user_id,card_id) DO UPDATE SET
+                               source=excluded.source, game_name=excluded.game_name""",
                         (int(user_id), carta.id, marco, str(row["game"])[:120]),
                     )
-                    adicionadas += max(0, cur.rowcount)
+                    # Contabiliza apenas novas cartas; o UPSERT também repara metadados
+                    # de entradas antigas que existiam, mas não podiam ser reconstruídas.
+                    if existente is None:
+                        adicionadas += 1
             return adicionadas
 
     async def coliseu_reivindicar_patentes(self, user_id: int, card_ids: list[str]) -> int:
