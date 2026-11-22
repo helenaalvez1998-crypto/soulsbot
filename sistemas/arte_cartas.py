@@ -26,6 +26,7 @@ CORES_RARIDADE = {
     "Rara": ((17, 56, 76), (72, 190, 218)),
     "Épica": ((54, 34, 83), (188, 119, 239)),
     "Lendária": ((83, 52, 18), (246, 194, 83)),
+    "Primordial": ((35, 28, 12), (255, 238, 145)),
 }
 CORES_TIPO = {
     "Destreza": (75, 211, 177),
@@ -570,7 +571,7 @@ def _draw_rarity_frame(draw: ImageDraw.ImageDraw, width: int, height: int, rarit
         for cx, cy in ((30, 30), (width - 30, 30), (30, height - 30), (width - 30, height - 30)):
             draw.polygon([(cx, cy - 9), (cx + 9, cy), (cx, cy + 9), (cx - 9, cy)],
                          fill=(*rarity_accent, 230), outline=(255, 244, 255, 220))
-    else:  # Lendária: moldura tripla, arabescos laterais e selo superior.
+    else:  # Lendária e Primordial: moldura tripla; Primordial recebe acabamento dourado claro.
         draw.rounded_rectangle((4, 4, width - 5, height - 5), radius=24,
                                fill=(8, 8, 12, 255), outline=(*rarity_accent, 255), width=7)
         draw.rounded_rectangle((13, 13, width - 14, height - 14), radius=19,
@@ -751,7 +752,7 @@ def _draw_card(card: dict[str, Any], width: int = LARGURA_PADRAO, height: int = 
         draw.text((40, 563 + index * 12), line, font=_font(11), fill=(225, 226, 222, 245))
 
     # Efeito de brilho e acabamento nítido no contorno do quadro.
-    if rarity == "Lendária":
+    if rarity in {"Lendária", "Primordial"}:
         for i in range(5):
             px = 35 + i * 84
             py = 120 + (i % 2) * 8

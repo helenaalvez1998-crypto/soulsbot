@@ -20,17 +20,18 @@ TIPOS = ("Destreza", "Força", "Magia")
 EMOJIS_TIPO = {"Destreza": "🌀", "Força": "⚔️", "Magia": "🔮"}
 CICLO_TIPOS = {"Destreza": "Força", "Força": "Magia", "Magia": "Destreza"}
 
-RARIDADES = ("Comum", "Rara", "Épica", "Lendária")
-PESOS_RARIDADE = {"Comum": 70, "Rara": 22, "Épica": 7, "Lendária": 1}
-CUSTO_RARIDADE = {"Comum": 1, "Rara": 2, "Épica": 3, "Lendária": 4}
+RARIDADES = ("Comum", "Rara", "Épica", "Lendária", "Primordial")
+PESOS_RARIDADE = {"Comum": 70, "Rara": 22, "Épica": 7, "Lendária": 1, "Primordial": 0}
+CUSTO_RARIDADE = {"Comum": 1, "Rara": 2, "Épica": 3, "Lendária": 4, "Primordial": 4}
 FAIXA_PODER = {
     "Comum": (3, 5),
     "Rara": (4, 6),
     "Épica": (5, 7),
     "Lendária": (6, 8),
+    "Primordial": (8, 8),
 }
-ALMAS_DUPLICATA = {"Comum": 5, "Rara": 15, "Épica": 40, "Lendária": 100}
-CUSTO_FORJA = {"Comum": 40, "Rara": 120, "Épica": 320, "Lendária": 800}
+ALMAS_DUPLICATA = {"Comum": 5, "Rara": 15, "Épica": 40, "Lendária": 100, "Primordial": 0}
+CUSTO_FORJA = {"Comum": 40, "Rara": 120, "Épica": 320, "Lendária": 800, "Primordial": 0}
 PRECO_PACOTE_FOGUEIRA = 120
 CARTAS_POR_PACOTE = 3
 PITY_CARTAS = 10
@@ -101,7 +102,14 @@ _CARTAS_BASE = [
     Carta("covenant_irmandade_ferro", "Irmandade de Ferro", "Covenant", "Força", 4, "Comum", 1, "retaliacao"),
 ]
 
-CARTAS_POR_ID: dict[str, Carta] = {c.id: c for c in _CARTAS_BASE}
+CARTAS_PRIMORDIAIS = [
+    Carta("primordial_origem", "Origem Inominável", "Relíquia", "Magia", 8, "Primordial", 4, "primeira_luz", "Uma das cinco cartas únicas do Coliseu."),
+    Carta("primordial_trono", "Trono do Primeiro Rei", "Relíquia", "Força", 8, "Primordial", 4, "retaliacao", "Uma das cinco cartas únicas do Coliseu."),
+    Carta("primordial_tempestade", "Coração da Tempestade", "Relíquia", "Destreza", 8, "Primordial", 4, "impeto", "Uma das cinco cartas únicas do Coliseu."),
+    Carta("primordial_abismo", "Abismo que Sonha", "Relíquia", "Magia", 8, "Primordial", 4, "ultimo_folego", "Uma das cinco cartas únicas do Coliseu."),
+    Carta("primordial_eternidade", "Eternidade Partida", "Relíquia", "Força", 8, "Primordial", 4, "contragolpe", "Uma das cinco cartas únicas do Coliseu."),
+]
+CARTAS_POR_ID: dict[str, Carta] = {c.id: c for c in [*_CARTAS_BASE, *CARTAS_PRIMORDIAIS]}
 
 
 def slug_jogo(nome: str) -> str:
@@ -185,7 +193,7 @@ CARTAS_POR_ID.update({c.id: c for c in CARTAS_PATENTE})
 # Pacotes não entregam cartas de patente ou de jogos: essas são recompensas de marcos.
 CARTAS_PACOTE = [c for c in _CARTAS_BASE]
 CARTAS_PACOTE_POR_RARIDADE = {
-    raridade: [c for c in CARTAS_PACOTE if c.raridade == raridade]
+    raridade: [c for c in [*CARTAS_PACOTE, *CARTAS_PRIMORDIAIS] if c.raridade == raridade]
     for raridade in RARIDADES
 }
 
