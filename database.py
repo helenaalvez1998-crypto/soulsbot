@@ -3369,12 +3369,11 @@ class Database:
                                     limite_diario: int = 5, limite_par: int = 2,
                                     max_aposta_dia: int = 1500, cooldown_segundos: int = 60,
                                     diferenca_maxima_poder: int = 4):
-        from levels import nivel_por_xp
         import json
         aposta = int(aposta)
         # Defesa em profundidade: não confiar somente na validação do modal do Discord.
-        if aposta < 10 or aposta > 500:
-            return {"status": "aposta_invalida", "minimo": 10, "maximo": 500}
+        if aposta < 0 or aposta > 500:
+            return {"status": "aposta_invalida", "minimo": 0, "maximo": 500}
         if creator_id == opponent_id:
             return {"status": "self"}
         async with self.transaction() as tx:
@@ -3384,9 +3383,7 @@ class Database:
             deck_power = {}
             for uid in (int(creator_id), int(opponent_id)):
                 users[uid] = await tx._one("SELECT xp,denarios FROM users WHERE user_id=?", (uid,))
-                if nivel_por_xp(int(users[uid]["xp"] or 0)) < int(nivel_minimo):
-                    return {"status": "nivel", "user_id": uid, "nivel_minimo": int(nivel_minimo)}
-                if int(users[uid]["denarios"] or 0) < aposta:
+                if aposta > 0 and int(users[uid]["denarios"] or 0) < aposta:
                     return {"status": "saldo", "user_id": uid}
                 deck_rows = await tx._all(
                     "SELECT snapshot_json FROM cartas_deck_itens WHERE user_id=? ORDER BY slot", (uid,)
@@ -3398,10 +3395,6 @@ class Database:
                 except (TypeError, ValueError, AttributeError):
                     return {"status": "deck_invalido", "user_id": uid}
             diferenca_poder = abs(deck_power[int(creator_id)] - deck_power[int(opponent_id)])
-            if diferenca_poder > int(diferenca_maxima_poder):
-                return {"status": "desbalanceado", "poder_a": deck_power[int(creator_id)],
-                        "poder_b": deck_power[int(opponent_id)], "diferenca": diferenca_poder,
-                        "limite": int(diferenca_maxima_poder)}
             ativo = await tx._one(
                 """SELECT id FROM cartas_duelos WHERE status IN ('invited','active')
                    AND (creator_id IN (?,?) OR opponent_id IN (?,?) OR creator_id=? OR opponent_id=?) LIMIT 1""",
@@ -3488,15 +3481,13 @@ class Database:
                     deck_power[uid] = sum(int(json.loads(r["snapshot_json"]).get("poder", 0)) for r in deck_rows)
                 except (TypeError, ValueError, AttributeError):
                     return {"status": "deck_invalido", "user_id": uid}
-                user = await tx._one("SELECT denarios FROM users WHERE user_id=?", (uid,))
-                if int(user["denarios"] or 0) < aposta:
-                    return {"status": "saldo", "user_id": uid}
-            # Revalida a diferença de força; algum deck pode ter mudado após o convite.
+            if aposta > 0:
+                for uid in (creator_id, opponent_id):
+                    user_row = await tx._one("SELECT denarios FROM users WHERE user_id=?", (uid,))
+                    if int(user_row["denarios"] or 0) < aposta:
+                        return {"status": "saldo", "user_id": uid}
+            # Diferença de poder é apenas informativa nesta fase.
             diferenca_poder = abs(deck_power[creator_id] - deck_power[opponent_id])
-            if diferenca_poder > int(diferenca_maxima_poder):
-                return {"status": "desbalanceado", "poder_a": deck_power[creator_id],
-                        "poder_b": deck_power[opponent_id], "diferenca": diferenca_poder,
-                        "limite": int(diferenca_maxima_poder)}
             # Revalida limite de duelos antes de travar as duas apostas.
             hoje = await tx._one(
                 """SELECT COUNT(*) AS n FROM cartas_duelos WHERE accepted_at>=datetime('now','-1 day')
@@ -3523,17 +3514,18 @@ class Database:
                 if int(gasto["n"] or 0) + aposta > 1500:
                     return {"status": "limite_aposta_dia", "user_id": uid}
             for uid in sorted((creator_id, opponent_id)):
-                cur = await tx.conn.execute(
-                    "UPDATE users SET denarios=denarios-? WHERE user_id=? AND denarios>=?",
-                    (aposta, uid, aposta),
-                )
-                if cur.rowcount != 1:
-                    raise RuntimeError("Saldo mudou durante a aceitação do duelo.")
-                await tx.conn.execute(
-                    """INSERT INTO cartas_transacoes(tx_key,user_id,kind,denarios_delta,duel_id)
-                       VALUES (?,?, 'aposta_travada', ?, ?)""",
-                    (f"duel:{duel_id}:stake:{uid}", uid, -aposta, int(duel_id)),
-                )
+                if aposta > 0:
+                    cur = await tx.conn.execute(
+                        "UPDATE users SET denarios=denarios-? WHERE user_id=? AND denarios>=?",
+                        (aposta, uid, aposta),
+                    )
+                    if cur.rowcount != 1:
+                        raise RuntimeError("Saldo mudou durante a aceitação do duelo.")
+                    await tx.conn.execute(
+                        """INSERT INTO cartas_transacoes(tx_key,user_id,kind,denarios_delta,duel_id)
+                           VALUES (?,?, 'aposta_travada', ?, ?)""",
+                        (f"duel:{duel_id}:stake:{uid}", uid, -aposta, int(duel_id)),
+                    )
                 for deck_row in decks[uid]:
                     await tx.conn.execute(
                         """INSERT INTO cartas_duelo_deck(duel_id,user_id,slot,card_id,snapshot_json)
