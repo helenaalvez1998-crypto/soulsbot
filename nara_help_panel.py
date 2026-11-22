@@ -148,7 +148,8 @@ COMANDOS_SECOES = (
 
 
 class AjudaCategoriaSelect(discord.ui.Select):
-    def __init__(self, bot):
+    def __init__(self, bot, callback_voltar=None):
+        self.callback_voltar = callback_voltar
         import faq_base
         base = faq_base.carregar_base()
         disponiveis = {
@@ -178,12 +179,13 @@ class AjudaCategoriaSelect(discord.ui.Select):
                 description=f"{descricao}.\n\n**2 · Escolha uma pergunta:** selecione o que você quer saber. Se ainda ficar alguma dúvida, me chama — prometo tentar não julgar. 😏",
                 color=discord.Color.dark_teal(),
             ),
-            view=AjudaPerguntasView(self.bot, categoria),
+            view=AjudaPerguntasView(self.bot, categoria, callback_voltar=self.callback_voltar),
         )
 
 
 class AjudaPerguntaSelect(discord.ui.Select):
-    def __init__(self, bot, categoria: str):
+    def __init__(self, bot, categoria: str, callback_voltar=None):
+        self.callback_voltar = callback_voltar
         import faq_base
         base = faq_base.carregar_base()
         itens = [
@@ -244,14 +246,17 @@ class AjudaPerguntaSelect(discord.ui.Select):
             if modulo is not None and interaction.guild_id is not None:
                 video_url = await modulo.obter_video(interaction.guild_id)
         await interaction.response.edit_message(
-            embed=embed, view=AjudaPerguntasView(self.bot, self.categoria, video_url=video_url)
+            embed=embed, view=AjudaPerguntasView(
+                self.bot, self.categoria, video_url=video_url, callback_voltar=self.callback_voltar
+            )
         )
 
 
 class AjudaVoltarButton(discord.ui.Button):
-    def __init__(self, bot):
+    def __init__(self, bot, callback_voltar=None):
         super().__init__(label="Categorias", emoji="↩️", style=discord.ButtonStyle.secondary, row=1)
         self.bot = bot
+        self.callback_voltar = callback_voltar
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.edit_message(
@@ -260,19 +265,22 @@ class AjudaVoltarButton(discord.ui.Button):
                 description="Escolha o assunto e depois a pergunta. Eu mostro o caminho — sem transformar um botão numa trilogia.",
                 color=discord.Color.dark_teal(),
             ),
-            view=CentralAjudaView(self.bot),
+            view=CentralAjudaView(self.bot, callback_voltar=self.callback_voltar),
         )
 
 
 class AbrirComandosButton(discord.ui.Button):
-    def __init__(self, bot):
+    def __init__(self, bot, callback_voltar=None):
         super().__init__(label="Ver índice de comandos", emoji="📚", style=discord.ButtonStyle.secondary, row=1)
         self.bot = bot
+        self.callback_voltar = callback_voltar
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_message(
-            embed=embed_inicio_comandos(), view=ComandosEntradaView(self.bot), ephemeral=True
-        )
+        view = ComandosEntradaView(self.bot, callback_voltar=self.callback_voltar)
+        if self.callback_voltar is not None:
+            await interaction.response.edit_message(embed=embed_inicio_comandos(), view=view)
+        else:
+            await interaction.response.send_message(embed=embed_inicio_comandos(), view=view, ephemeral=True)
 
 
 class PainelAjudaPublicoView(discord.ui.View):
@@ -313,11 +321,15 @@ class PainelAjudaAbrirButton(discord.ui.Button):
 
 
 class CentralAjudaView(discord.ui.View):
-    def __init__(self, bot):
+    def __init__(self, bot, callback_voltar=None):
         super().__init__(timeout=300)
         self.bot = bot
-        self.add_item(AjudaCategoriaSelect(bot))
-        self.add_item(AbrirComandosButton(bot))
+        self.callback_voltar = callback_voltar
+        self.add_item(AjudaCategoriaSelect(bot, callback_voltar=callback_voltar))
+        self.add_item(AbrirComandosButton(bot, callback_voltar=callback_voltar))
+        if callback_voltar is not None:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar à Nara", emoji="🏠")
         from cogs.comunidade import adicionar_botao_contribuicao_contextual
         adicionar_botao_contribuicao_contextual(
             self, "faq", "ajuda", "Sugerir pergunta ou resposta", "💡", row=2,
@@ -326,11 +338,15 @@ class CentralAjudaView(discord.ui.View):
 
 
 class AjudaPerguntasView(discord.ui.View):
-    def __init__(self, bot, categoria: str, video_url: str | None = None):
+    def __init__(self, bot, categoria: str, video_url: str | None = None, callback_voltar=None):
         super().__init__(timeout=300)
         self.bot = bot
-        self.add_item(AjudaPerguntaSelect(bot, categoria))
-        self.add_item(AjudaVoltarButton(bot))
+        self.callback_voltar = callback_voltar
+        self.add_item(AjudaPerguntaSelect(bot, categoria, callback_voltar=callback_voltar))
+        self.add_item(AjudaVoltarButton(bot, callback_voltar=callback_voltar))
+        if callback_voltar is not None:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar à Nara", emoji="🏠")
         if video_url:
             self.add_item(discord.ui.Button(
                 label="Assistir ao vídeo tutorial", style=discord.ButtonStyle.link,
@@ -362,7 +378,8 @@ class AjudaAtalhoView(discord.ui.View):
 
 
 class ComandosCategoriaSelect(discord.ui.Select):
-    def __init__(self, bot=None):
+    def __init__(self, bot=None, callback_voltar=None):
+        self.callback_voltar = callback_voltar
         options = [
             discord.SelectOption(
                 label=secao["label"], value=secao["key"],
@@ -381,31 +398,38 @@ class ComandosCategoriaSelect(discord.ui.Select):
         for nome, valor in secao["fields"]:
             embed.add_field(name=nome, value=valor[:1024], inline=False)
         embed.set_footer(text="Índice do NARA · escolha outra área no menu ou use /nara para acessar a central")
-        await interaction.response.edit_message(embed=embed, view=ComandosView(self.bot))
+        await interaction.response.edit_message(embed=embed, view=ComandosView(self.bot, callback_voltar=self.callback_voltar))
 
 
 class ComandosFAQButton(discord.ui.Button):
-    def __init__(self, bot=None):
+    def __init__(self, bot=None, callback_voltar=None):
         super().__init__(label="Abrir FAQ da Nara", emoji="❓", style=discord.ButtonStyle.secondary, row=1)
         self.bot = bot
+        self.callback_voltar = callback_voltar
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_message(
-            embed=discord.Embed(
+        embed = discord.Embed(
                 title="Central de Ajuda da Nara",
                 description="Escolha um assunto e depois a pergunta. Se não encontrar o que procura, me chama; eu procuro o caminho sem inventar resposta.",
                 color=discord.Color.dark_teal(),
-            ),
-            view=CentralAjudaView(self.bot), ephemeral=True,
-        )
+            )
+        view = CentralAjudaView(self.bot, callback_voltar=self.callback_voltar)
+        if self.callback_voltar is not None:
+            await interaction.response.edit_message(embed=embed, view=view)
+        else:
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 
 class ComandosView(discord.ui.View):
-    def __init__(self, bot=None):
+    def __init__(self, bot=None, callback_voltar=None):
         super().__init__(timeout=300)
         self.bot = bot
-        self.add_item(ComandosCategoriaSelect(bot))
-        self.add_item(ComandosFAQButton(bot))
+        self.callback_voltar = callback_voltar
+        self.add_item(ComandosCategoriaSelect(bot, callback_voltar=callback_voltar))
+        self.add_item(ComandosFAQButton(bot, callback_voltar=callback_voltar))
+        if callback_voltar is not None:
+            from painel_navegacao import adicionar_botao_voltar
+            adicionar_botao_voltar(self, callback_voltar, label="Voltar à Nara", emoji="🏠")
 
 
 def embed_inicio_comandos() -> discord.Embed:
@@ -427,7 +451,7 @@ def embed_inicio_comandos() -> discord.Embed:
 
 
 class ComandosEntradaView(ComandosView):
-    def __init__(self, bot=None):
-        super().__init__(bot=bot)
+    def __init__(self, bot=None, callback_voltar=None):
+        super().__init__(bot=bot, callback_voltar=callback_voltar)
 
 

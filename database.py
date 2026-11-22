@@ -474,6 +474,12 @@ CREATE TABLE IF NOT EXISTS cartas_colecao (
     FOREIGN KEY(user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_cartas_colecao_user ON cartas_colecao(user_id, obtained_at);
+CREATE TABLE IF NOT EXISTS cartas_primordiais_resgatadas (
+    card_id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    obtained_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(user_id) ON DELETE RESTRICT
+);
 CREATE TABLE IF NOT EXISTS cartas_kit_inicial (
     user_id INTEGER PRIMARY KEY,
     delivered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -2947,12 +2953,55 @@ class Database:
             aberturas = []
             almas_ganhas = 0
             for _ in range(int(quantidade)):
+                # Cada uma das cinco Primordiais só pode existir uma vez em todo o servidor.
+                primordiais_disponiveis = [
+                    c for c in (catalogo_por_raridade.get("Primordial") or [])
+                    if not await tx._one("SELECT 1 FROM cartas_primordiais_resgatadas WHERE card_id=?", (str(c["id"]),))
+                ]
+                rolagem_primordial = secrets.randbelow(1000)
+                primordial = bool(primordiais_disponiveis) and rolagem_primordial == 0
                 pity_ativado = streak >= 10
+                if primordial:
+                    carta = dict(secrets.choice(primordiais_disponiveis))
+                    try:
+                        await tx.conn.execute(
+                            "INSERT INTO cartas_primordiais_resgatadas(card_id,user_id) VALUES (?,?)",
+                            (str(carta["id"]), int(user_id)),
+                        )
+                    except Exception:
+                        # Uma colisão concorrente nunca concede cópia nem cobra o pacote.
+                        raise
+                    await tx.conn.execute(
+                        "INSERT INTO cartas_colecao(user_id,card_id,quantidade,source) VALUES (?,?,1,'primordial')",
+                        (int(user_id), str(carta["id"])),
+                    )
+                    aberturas.append({"carta": carta, "duplicata": False, "almas": 0,
+                                      "pity_ativado": False, "primordial": True})
+                    continue
                 if pity_ativado:
                     raridade = secrets.choice(["Rara"] * 22 + ["Épica"] * 7 + ["Lendária"])
                 else:
-                    rolagem = secrets.randbelow(100)
-                    raridade = "Comum" if rolagem < 70 else "Rara" if rolagem < 92 else "Épica" if rolagem < 99 else "Lendária"
+                    # A chance de 0,1% reservada às Primordiais migra para Lendária
+                    # quando as cinco únicas já foram resgatadas.
+                    rolagem = rolagem_primordial
+                    if primordiais_disponiveis:
+                        if rolagem < 700:
+                            raridade = "Comum"
+                        elif rolagem < 920:
+                            raridade = "Rara"
+                        elif rolagem < 990:
+                            raridade = "Épica"
+                        else:
+                            raridade = "Lendária"
+                    else:
+                        if rolagem < 699:
+                            raridade = "Comum"
+                        elif rolagem < 919:
+                            raridade = "Rara"
+                        elif rolagem < 989:
+                            raridade = "Épica"
+                        else:
+                            raridade = "Lendária"
                 candidatos = catalogo_por_raridade.get(raridade) or catalogo_por_raridade.get("Comum") or []
                 if not candidatos:
                     return {"status": "catalogo_invalido"}
@@ -2978,7 +3027,7 @@ class Database:
                 else:
                     streak = 0
                 aberturas.append({"carta": carta, "duplicata": duplicata, "almas": almas,
-                                  "pity_ativado": pity_ativado})
+                                  "pity_ativado": pity_ativado, "primordial": False})
             cur = await tx.conn.execute(
                 "UPDATE users SET denarios=denarios-? WHERE user_id=? AND denarios>=?",
                 (int(preco), int(user_id), int(preco)),
