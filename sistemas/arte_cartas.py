@@ -19,6 +19,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from runtime_paths import get_data_dir
 from .cartas import EMOJIS_TIPO, HABILIDADES, VERSAO_ARTES
+from . import templates_cartas
 
 # Cor principal da moldura por raridade: as categorias e os tipos continuam
 # visualmente distintos dentro de cada faixa de raridade.
@@ -735,6 +736,12 @@ def _draw_rarity_frame(draw: ImageDraw.ImageDraw, width: int, height: int, rarit
 
 def _draw_card(card: dict[str, Any], width: int = LARGURA_PADRAO, height: int = ALTURA_PADRAO,
                illustration_bytes: bytes | None = None) -> Image.Image:
+    # Carta com arte enviada pelo membro: usa o template completo da raridade, se houver.
+    # Sem arte enviada (ou sem template configurado) segue o desenho por código abaixo.
+    if illustration_bytes:
+        com_template = _draw_card_com_template(card, illustration_bytes)
+        if com_template is not None:
+            return com_template
     rarity = str(card.get("raridade", "Comum"))
     category = str(card.get("categoria", "Carta"))
     card_type = str(card.get("tipo", "Magia"))
@@ -911,6 +918,210 @@ def _draw_card(card: dict[str, Any], width: int = LARGURA_PADRAO, height: int = 
         image = Image.alpha_composite(image.convert("RGBA"), moldura_fixa)
 
     return image.convert("RGB")
+
+
+# ---------------------------------------------------------------------------
+# Cartas com template completo (somente quando o membro enviou uma arte)
+# ---------------------------------------------------------------------------
+def _ajustar_texto(draw: ImageDraw.ImageDraw, texto: str, largura: int, altura: int, *,
+                   maximo: int, minimo: int, negrito: bool = False, max_linhas: int = 1,
+                   espaco: float = 1.18):
+    """Maior fonte em que o texto cabe na caixa; devolve (fonte, linhas, altura_da_linha)."""
+    texto = str(texto or "").strip()
+    for tamanho in range(maximo, minimo - 1, -1):
+        fonte = _font(tamanho, negrito)
+        linhas = _wrap(draw, texto, fonte, largura)
+        altura_linha = int(tamanho * espaco)
+        if len(linhas) <= max_linhas and len(linhas) * altura_linha <= altura \
+                and all(draw.textbbox((0, 0), linha, font=fonte)[2] <= largura for linha in linhas):
+            return fonte, linhas, altura_linha
+    fonte = _font(minimo, negrito)
+    altura_linha = int(minimo * espaco)
+    linhas = _wrap(draw, texto, fonte, largura)[:max(1, min(max_linhas, altura // max(1, altura_linha)))]
+    if linhas and len(linhas) == max_linhas and len(_wrap(draw, texto, fonte, largura)) > len(linhas):
+        while linhas[-1] and draw.textbbox((0, 0), linhas[-1] + "…", font=fonte)[2] > largura:
+            linhas[-1] = linhas[-1][:-1]
+        linhas[-1] = linhas[-1].rstrip() + "…"
+    return fonte, linhas, altura_linha
+
+
+def _texto_no_slot(draw: ImageDraw.ImageDraw, retangulo, texto: str, *, maximo: int, minimo: int,
+                   cor, negrito: bool = True, max_linhas: int = 1, margem: int = 20,
+                   alinhamento: str = "centro", contorno: int = 0, cor_contorno=(8, 10, 16, 255)):
+    x1, y1, x2, y2 = retangulo
+    fonte, linhas, altura_linha = _ajustar_texto(
+        draw, texto, (x2 - x1) - margem * 2, (y2 - y1) - 8,
+        maximo=maximo, minimo=minimo, negrito=negrito, max_linhas=max_linhas,
+    )
+    topo = y1 + ((y2 - y1) - altura_linha * len(linhas)) / 2
+    for indice, linha in enumerate(linhas):
+        largura_linha = draw.textbbox((0, 0), linha, font=fonte)[2]
+        if alinhamento == "esquerda":
+            x = x1 + margem
+        elif alinhamento == "direita":
+            x = x2 - margem - largura_linha
+        else:
+            x = (x1 + x2) / 2 - largura_linha / 2
+        caixa = draw.textbbox((0, 0), linha, font=fonte)
+        y = topo + indice * altura_linha + (altura_linha - (caixa[3] - caixa[1])) / 2 - caixa[1]
+        draw.text((x, y), linha, font=fonte, fill=cor, stroke_width=contorno, stroke_fill=cor_contorno)
+
+
+def _draw_card_com_template(card: dict[str, Any], illustration_bytes: bytes) -> Image.Image | None:
+    """Monta: arte do membro (atrás) → template da raridade (frente) → textos nos slots.
+
+    Devolve `None` quando a raridade não tem template ou a arte não pode ser lida; o chamador
+    então usa o desenho tradicional por código.
+    """
+    rarity = str(card.get("raridade", "Comum"))
+    carregado = templates_cartas.carregar_template(rarity)
+    if carregado is None:
+        return None
+    template, layout = carregado
+    largura, altura = template.size
+    try:
+        with Image.open(io.BytesIO(illustration_bytes)) as origem:
+            origem_rgb = origem.convert("RGB")
+    except (OSError, ValueError):
+        return None
+
+    ax1, ay1, ax2, ay2 = layout["arte"]
+    # A arte avança alguns pixels por baixo da moldura: nenhuma fresta aparece na borda.
+    sangria = max(4, largura // 140)
+    bx1, by1 = max(0, ax1 - sangria), max(0, ay1 - sangria)
+    bx2, by2 = min(largura, ax2 + sangria), min(altura, ay2 + sangria)
+    arte = ImageOps.fit(origem_rgb, (bx2 - bx1, by2 - by1), method=Image.Resampling.LANCZOS,
+                        centering=(0.5, 0.48)).convert("RGBA")
+    base = Image.new("RGBA", (largura, altura), (8, 10, 15, 255))
+    base.paste(arte, (bx1, by1))
+    imagem = Image.alpha_composite(base, template)
+    draw = ImageDraw.Draw(imagem, "RGBA")
+
+    category = str(card.get("categoria", "Carta"))
+    card_type = str(card.get("tipo", "Magia"))
+    rarity_base, rarity_accent = CORES_RARIDADE.get(rarity, CORES_RARIDADE["Comum"])
+    type_accent = CORES_TIPO.get(card_type, (190, 190, 190))
+    accent = _mix(rarity_accent, type_accent, 0.34)
+    creme = (245, 241, 229, 255)
+    suave = (205, 208, 212, 235)
+
+    # Selo de raridade e nome.
+    _texto_no_slot(draw, layout["raridade"], rarity.upper(), maximo=30, minimo=16, cor=creme,
+                   margem=12, contorno=2)
+    _texto_no_slot(draw, layout["nome"], str(card.get("nome", "Carta")), maximo=58, minimo=26,
+                   cor=creme, max_linhas=2, margem=28, contorno=3)
+
+    # Poder no medalhão.
+    cx, cy = layout["poder"]["centro"]
+    raio = layout["poder"]["raio"]
+    poder = str(int(card.get("poder", 0) or 0))
+    fonte_poder, _, _ = _ajustar_texto(draw, poder, int(raio * 1.45), int(raio * 1.1),
+                                        maximo=int(raio * 1.0), minimo=24, negrito=True)
+    draw.text((cx, cy - raio * 0.12), poder, font=fonte_poder, fill=creme, anchor="mm",
+              stroke_width=3, stroke_fill=(8, 10, 16, 255))
+    draw.text((cx, cy + raio * 0.58), "PODER", font=_font(max(14, int(raio * 0.24)), True),
+              fill=suave, anchor="mm", stroke_width=1, stroke_fill=(8, 10, 16, 255))
+
+    # Tipo (com ícone) e categoria.
+    tx1, ty1, tx2, ty2 = layout["tipo"]
+    altura_tipo = ty2 - ty1
+    icone = Image.new("RGBA", (40, 40), (0, 0, 0, 0))
+    _draw_type_icon(ImageDraw.Draw(icone, "RGBA"), (20, 20), card_type, type_accent)
+    lado = max(32, int(altura_tipo * 0.62))
+    icone = icone.resize((lado, lado), Image.Resampling.LANCZOS)
+    imagem.alpha_composite(icone, (tx1 + 22, ty1 + (altura_tipo - lado) // 2))
+    draw = ImageDraw.Draw(imagem, "RGBA")
+    _texto_no_slot(draw, (tx1 + 22 + lado + 6, ty1, tx2, ty2), card_type, maximo=34, minimo=18,
+                   cor=creme, alinhamento="esquerda", margem=14, contorno=1)
+    _texto_no_slot(draw, (tx1 + (tx2 - tx1) // 2, ty1, tx2, ty2), category.upper(), maximo=22, minimo=12,
+                   cor=suave, alinhamento="direita", margem=22, negrito=True)
+
+    # Custo: rótulo à esquerda, valor à direita.
+    custo = str(int(card.get("custo", 0) or 0))
+    cx1, cy1, cx2, cy2 = layout["custo"]
+    _texto_no_slot(draw, (cx1, cy1, cx1 + (cx2 - cx1) * 3 // 4, cy2), "CUSTO DE DECK", maximo=26, minimo=14,
+                   cor=suave, alinhamento="esquerda", margem=22)
+    _texto_no_slot(draw, (cx2 - 130, cy1, cx2, cy2), custo, maximo=44, minimo=22, cor=creme,
+                   alinhamento="direita", margem=22, contorno=2)
+
+    # Habilidade: nome em destaque e descrição ajustada ao espaço disponível.
+    habilidade = HABILIDADES.get(str(card.get("habilidade", "")), {})
+    nome_hab = str(habilidade.get("nome", "")).strip()
+    texto_hab = str(habilidade.get("texto", "") or card.get("descricao", "")).strip()
+    hx1, hy1, hx2, hy2 = layout["habilidade"]
+    margem_x, margem_y = 24, 10
+    y_texto = hy1 + margem_y
+    if nome_hab:
+        fonte_nome = _font(26, True)
+        draw.text((hx1 + margem_x, y_texto), nome_hab.upper()[:40], font=fonte_nome,
+                  fill=(*accent, 255), stroke_width=1, stroke_fill=(8, 10, 16, 255))
+        y_texto += 34
+    if texto_hab:
+        fonte, linhas, altura_linha = _ajustar_texto(
+            draw, texto_hab, (hx2 - hx1) - margem_x * 2, max(20, hy2 - margem_y - y_texto),
+            maximo=26, minimo=15, max_linhas=4, espaco=1.2,
+        )
+        for indice, linha in enumerate(linhas):
+            draw.text((hx1 + margem_x, y_texto + indice * altura_linha), linha, font=fonte,
+                      fill=(230, 231, 227, 255), stroke_width=1, stroke_fill=(8, 10, 16, 255))
+    return imagem.convert("RGB")
+
+
+def desenhar_calibracao(imagem: Image.Image, raridade: str) -> Image.Image:
+    """Contorna os slots do layout sobre uma carta já montada (apoio para ajustar o JSON)."""
+    layout = templates_cartas.carregar_layout(raridade)
+    carregado = templates_cartas.carregar_template(raridade)
+    if carregado:
+        layout = carregado[1]
+    saida = imagem.convert("RGBA")
+    draw = ImageDraw.Draw(saida, "RGBA")
+    cores = {"raridade": (240, 180, 60), "nome": (80, 160, 255), "arte": (60, 220, 120),
+             "tipo": (190, 120, 255), "custo": (255, 130, 90), "habilidade": (255, 90, 150)}
+    for campo, cor in cores.items():
+        x1, y1, x2, y2 = layout[campo]
+        draw.rectangle((x1, y1, x2, y2), outline=(*cor, 255), width=3)
+        draw.text((x1 + 6, y1 + 4), f"{campo} {x1},{y1}→{x2},{y2}", font=_font(15, True), fill=(*cor, 255),
+                  stroke_width=2, stroke_fill=(0, 0, 0, 255))
+    cx, cy = layout["poder"]["centro"]
+    raio = layout["poder"]["raio"]
+    draw.ellipse((cx - raio, cy - raio, cx + raio, cy + raio), outline=(255, 210, 60, 255), width=3)
+    return saida.convert("RGB")
+
+
+def _arte_de_exemplo(card: dict[str, Any]) -> bytes:
+    """Ilustração gerada pelo próprio bot, usada só nas prévias do painel administrativo."""
+    base = _draw_card(dict(card))
+    x1, y1, x2, y2 = 32, 132, LARGURA_PADRAO - 32, 419
+    recorte = base.crop((x1, y1, x2, y2)).resize((1092, 861), Image.Resampling.LANCZOS)
+    saida = io.BytesIO()
+    recorte.save(saida, format="PNG")
+    return saida.getvalue()
+
+
+def render_previa_template(raridade: str, *, calibracao: bool = False) -> io.BytesIO | None:
+    """Carta de exemplo usando o template salvo da raridade (ou `None` se não houver)."""
+    if templates_cartas.carregar_template(raridade) is None:
+        return None
+    exemplo = {
+        "id": f"preview_template_{templates_cartas.RARIDADES_TEMPLATE.get(raridade, 'x')}",
+        "nome": f"Prévia — {raridade}",
+        "categoria": "Chefe",
+        "raridade": raridade,
+        "tipo": "Magia",
+        "poder": 88,
+        "custo": 3,
+        "habilidade": next(iter(HABILIDADES), ""),
+        "descricao": "Prévia do template completo enviado.",
+    }
+    imagem = _draw_card_com_template(exemplo, _arte_de_exemplo(exemplo))
+    if imagem is None:
+        return None
+    if calibracao:
+        imagem = desenhar_calibracao(imagem, raridade)
+    saida = io.BytesIO()
+    imagem.save(saida, format="PNG", optimize=True)
+    saida.seek(0)
+    return saida
 
 
 def _cache_path(payload: Any, suffix: str) -> Path:
