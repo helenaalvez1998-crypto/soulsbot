@@ -272,7 +272,6 @@ class RemoverArtePersonalizadaButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
             return await interaction.response.send_message("Essa carta pertence à coleção de outro membro.", ephemeral=True)
-        await interaction.response.defer()
         await self.cog.bot.db.coliseu_atelie_remover_arte_ativa(self.user_id, str(self.carta["id"]))
         await self.cog.mostrar_detalhe_carta(
             interaction, self.carta, self.user_id, collection_view=self.collection_view, editar=True,
@@ -1367,8 +1366,6 @@ class ColiseuCartas(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self._retornos_nara: dict[int, object] = {}
-        # Cache limitado de artes ativas para evitar leituras repetidas de anexos no Discord.
-        self._arte_personalizada_cache: dict[int, bytes] = {}
         # Sessões curtas de upload de moldura; os arquivos finais ficam no DATA_DIR persistente.
         self._pending_moldura_uploads: dict[int, dict] = {}
         # Sessões curtas de upload de template completo (cartas com arte enviada pelo membro).
@@ -1795,6 +1792,11 @@ class ColiseuCartas(commands.Cog):
                 view=discord.ui.View(timeout=60).add_item(VoltarColiseuButton(self, user_id)),
             )
 
+        # Reconhece o clique antes de qualquer consulta ao banco ou ao cache de presença.
+        # Isso evita que o painel expire enquanto os requisitos do desafiante são verificados.
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+
         db = self.bot.db
         user = await db.get_user(int(user_id))
         nivel = nivel_por_xp(int(user["xp"] or 0))
@@ -1819,16 +1821,19 @@ class ColiseuCartas(commands.Cog):
                 view=discord.ui.View(timeout=60).add_item(VoltarColiseuButton(self, user_id)),
             )
 
-        # A consulta ao cache de presença pode levar alguns segundos; confirma a interação
-        # antes de solicitar o chunk para não deixar o Discord expirar o clique.
-        await interaction.response.defer()
-
         # O cache de membros e os status de presença dependem dos intents de membros/presenças.
         if not guild.chunked:
             try:
                 await guild.chunk(cache=True)
             except (discord.Forbidden, discord.HTTPException):
                 log.warning("Não foi possível completar o cache de membros do servidor %s", guild.id)
+
+        # Sem Presence Intent, o Discord entrega membros como offline e esta lista fica vazia.
+        if not getattr(self.bot.intents, "presences", False):
+            log.error(
+                "Presence Intent desativado: não é possível listar jogadores online no Coliseu (guild=%s).",
+                guild.id,
+            )
 
         conectados = [
             member for member in guild.members
@@ -1970,18 +1975,10 @@ class ColiseuCartas(commands.Cog):
             if canal is None:
                 canal = await self.bot.fetch_channel(int(registro["channel_id"]))
             mensagem = await canal.fetch_message(int(registro["message_id"]))
-            attachment_id = int(registro["attachment_id"])
-            arte_cacheada = self._arte_personalizada_cache.get(attachment_id)
-            if arte_cacheada is not None:
-                return arte_cacheada
-            anexo = next((a for a in mensagem.attachments if int(a.id) == attachment_id), None)
+            anexo = next((a for a in mensagem.attachments if int(a.id) == int(registro["attachment_id"])), None)
             if anexo is None:
                 return None
-            dados = await anexo.read(use_cached=True)
-            if len(self._arte_personalizada_cache) >= 64:
-                self._arte_personalizada_cache.pop(next(iter(self._arte_personalizada_cache)))
-            self._arte_personalizada_cache[attachment_id] = dados
-            return dados
+            return await anexo.read(use_cached=True)
         except (discord.NotFound, discord.Forbidden, discord.HTTPException, AttributeError):
             log.warning("Arte personalizada indisponível para user=%s card=%s", user_id, card_id)
             return None
@@ -1991,35 +1988,18 @@ class ColiseuCartas(commands.Cog):
         *, collection_view: CollectionView | None = None, editar: bool = False,
         mensagem_status: str | None = None,
     ):
-        # Reconhece o clique antes de consultas ao banco/Discord e da composição Pillow.
-        if editar and not interaction.response.is_done():
-            await interaction.response.defer()
-
+        # O detalhe substitui a lista na mesma mensagem efêmera. Assim o membro
+        # sempre tem um caminho de volta e não acumula respostas privadas separadas.
         if collection_view is None:
             collection_view = CollectionView(self, user_id, [])
-
-        arte_bytes = None
-        try:
-            arte_bytes = await self._obter_arte_personalizada(user_id, str(carta["id"]))
-        except Exception:
-            log.exception("Falha ao buscar arte personalizada user=%s card=%s",
-                          user_id, carta.get("id"))
-
+        arte_bytes = await self._obter_arte_personalizada(user_id, str(carta["id"]))
         possui_arte = arte_bytes is not None
-        try:
-            if arte_bytes:
-                buffer = await asyncio.to_thread(render_carta_bytes, carta, arte_bytes)
-                arquivo = discord.File(buffer, filename="carta.png")
-            else:
-                path = await asyncio.to_thread(render_carta, carta)
-                arquivo = discord.File(str(path), filename="carta.png")
-        except Exception:
-            log.exception("Falha ao renderizar carta user=%s card=%s; usando arte original",
-                          user_id, carta.get("id"))
-            possui_arte = False
-            path = await asyncio.to_thread(render_carta, carta)
+        if arte_bytes:
+            buffer = render_carta_bytes(carta, arte_bytes)
+            arquivo = discord.File(buffer, filename="carta.png")
+        else:
+            path = render_carta(carta)
             arquivo = discord.File(str(path), filename="carta.png")
-
         embed = discord.Embed(title=carta["nome"], color=config.COR_OURO)
         embed.set_image(url="attachment://carta.png")
         embed.add_field(name="Categoria", value=carta["categoria"], inline=True)
@@ -2034,15 +2014,13 @@ class ColiseuCartas(commands.Cog):
             embed.add_field(name="Origem", value=str(carta["descricao"])[:500], inline=False)
         if mensagem_status:
             embed.add_field(name="Atualização", value=mensagem_status, inline=False)
-        embed.set_footer(text=(
-            "Arte personalizada ativa. Os atributos oficiais permanecem iguais."
-            if possui_arte else
-            "Personalização opcional. Gere um prompt ou volte à coleção."
-        ))
+        embed.set_footer(text=("Arte personalizada ativa. Os atributos oficiais permanecem iguais." if possui_arte
+                               else "Personalização opcional. Gere um prompt ou volte à coleção."))
         view = DetalheCartaView(self, user_id, carta, possui_arte, collection_view)
-
-        if editar:
+        if editar and interaction.response.is_done():
             await interaction.edit_original_response(embed=embed, attachments=[arquivo], view=view)
+        elif editar:
+            await interaction.response.edit_message(embed=embed, attachments=[arquivo], view=view)
         else:
             await interaction.response.send_message(embed=embed, file=arquivo, view=view, ephemeral=True)
 
