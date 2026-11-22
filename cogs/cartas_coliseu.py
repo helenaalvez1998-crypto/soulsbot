@@ -27,8 +27,10 @@ from sistemas.arte_cartas import (
     render_carta_bytes,
     render_deck_preview_bytes,
     render_pacote,
+    render_previa_template,
     salvar_moldura_personalizada,
 )
+from sistemas import templates_cartas
 from sistemas.atelie_coliseu import ArteInvalida, TAMANHO_MAXIMO_UPLOAD, gerar_prompt_carta, normalizar_imagem_carta
 from sistemas.cartas import (
     ALMAS_DUPLICATA,
@@ -1267,12 +1269,88 @@ class MoldurasCartasAdminView(discord.ui.View):
         return True
 
 
+class TemplateUploadButton(discord.ui.Button):
+    def __init__(self, cog: "ColiseuCartas", raridade: str, row: int):
+        super().__init__(
+            label=f"Enviar {raridade}", emoji="🃏",
+            style=discord.ButtonStyle.primary, row=row,
+        )
+        self.cog = cog
+        self.raridade = raridade
+
+    async def callback(self, interaction: discord.Interaction):
+        await self.cog.solicitar_upload_template(interaction, self.raridade)
+
+
+class TemplateRemoverSelect(discord.ui.Select):
+    def __init__(self, view: "TemplatesCartasAdminView"):
+        self.painel = view
+        super().__init__(
+            placeholder="Remover um template (volta ao layout antigo)...",
+            min_values=1, max_values=1, row=2,
+            options=[
+                discord.SelectOption(label=raridade, value=raridade, description=f"Remover o template de {raridade}")
+                for raridade in templates_cartas.RARIDADES_TEMPLATE
+            ],
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        raridade = self.values[0]
+        removido = templates_cartas.remover_template(raridade)
+        embed = await self.painel.cog.embed_painel_templates()
+        await interaction.response.edit_message(embed=embed, view=self.painel)
+        mensagem = (
+            f"O template de **{raridade}** foi removido. Cartas dessa raridade com arte enviada voltam ao layout antigo."
+            if removido else f"**{raridade}** já estava sem template."
+        )
+        await interaction.followup.send(mensagem, ephemeral=True)
+
+
+class TemplatesAtualizarButton(discord.ui.Button):
+    def __init__(self, painel: "TemplatesCartasAdminView"):
+        super().__init__(label="Atualizar status", emoji="🔄", style=discord.ButtonStyle.secondary, row=3)
+        self.painel = painel
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.edit_message(
+            embed=await self.painel.cog.embed_painel_templates(), view=self.painel
+        )
+
+
+class TemplatesCartasAdminView(discord.ui.View):
+    """Painel efêmero para enviar os templates completos (um por raridade) das cartas."""
+
+    def __init__(self, cog: "ColiseuCartas", user_id: int, callback_voltar=None):
+        super().__init__(timeout=600)
+        self.cog = cog
+        self.user_id = int(user_id)
+        self.callback_voltar = callback_voltar
+        for indice, raridade in enumerate(templates_cartas.RARIDADES_TEMPLATE):
+            self.add_item(TemplateUploadButton(cog, raridade, row=indice // 3))
+        self.add_item(TemplateRemoverSelect(self))
+        self.add_item(TemplatesAtualizarButton(self))
+        self.add_item(MoldurasVoltarButton(callback_voltar))
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if int(interaction.user.id) != self.user_id:
+            await interaction.response.send_message("Este painel pertence a outra sessão administrativa.", ephemeral=True)
+            return False
+        if not await self.cog.eh_proprietario_bot(interaction.user):
+            await interaction.response.send_message(
+                "Somente o proprietário global do bot pode alterar templates que afetam todas as cartas.", ephemeral=True
+            )
+            return False
+        return True
+
+
 class ColiseuCartas(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self._retornos_nara: dict[int, object] = {}
         # Sessões curtas de upload de moldura; os arquivos finais ficam no DATA_DIR persistente.
         self._pending_moldura_uploads: dict[int, dict] = {}
+        # Sessões curtas de upload de template completo (cartas com arte enviada pelo membro).
+        self._pending_template_uploads: dict[int, dict] = {}
 
     async def cog_load(self):
         self.bot.add_dynamic_items(BotaoDueloColiseu, AtelieReviewButton)
@@ -1316,7 +1394,8 @@ class ColiseuCartas(commands.Cog):
         embed = discord.Embed(
             title="🖼️ Molduras fixas das cartas",
             description=(
-                "Envie um PNG transparente para substituir a borda vetorial daquela raridade. "
+                "Envie um PNG transparente para substituir a borda vetorial daquela raridade nas cartas **sem arte enviada** "
+                "(as com arte usam os templates completos). "
                 "A arte, o nome, o poder, o custo e a habilidade continuam sendo montados pelo bot.\n\n"
                 + "\n".join(linhas)
                 + "\n\n**Arquivo aceito:** PNG com canal alfa, proporção 420:620, mínimo 420 × 620 "
@@ -1427,6 +1506,130 @@ class ColiseuCartas(commands.Cog):
             )
         except Exception:
             log.exception("Moldura %s foi salva, mas não consegui gerar a prévia.", raridade)
+            await message.reply(resposta)
+
+    async def embed_painel_templates(self) -> discord.Embed:
+        status = templates_cartas.listar_templates()
+        linhas = []
+        for raridade, configurado in status.items():
+            estado = "🟢 Template ativo" if configurado else "⚪ Sem template (layout antigo)"
+            linhas.append(f"**{raridade}:** {estado}")
+        embed = discord.Embed(
+            title="🃏 Templates completos das cartas",
+            description=(
+                "Usados **somente nas cartas com arte enviada pelo membro**. A arte entra por trás do template, "
+                "pela janela da arte, e o bot escreve nome, poder, tipo, custo e habilidade nas placas.\n"
+                "Cartas sem arte enviada continuam sendo desenhadas pelo bot.\n\n"
+                + "\n".join(linhas)
+                + "\n\n**Arquivo aceito:** carta completa e opaca, retrato ~420:620 (recomendado **840 × 1240 px**), "
+                "até 8 MB, **sem nenhum texto**. A janela da arte deve estar transparente ou preenchida com "
+                "magenta chapado `#FF00FF`."
+            ),
+            color=config.COR_OURO,
+        )
+        embed.set_footer(text="Configuração global · somente o proprietário do bot · vale para as próximas renderizações")
+        return embed
+
+    async def abrir_painel_templates(self, interaction: discord.Interaction, callback_voltar=None):
+        if not await self.eh_proprietario_bot(interaction.user):
+            return await interaction.response.send_message(
+                "A configuração de templates é global e só pode ser alterada pelo proprietário do bot.",
+                ephemeral=True,
+            )
+        view = TemplatesCartasAdminView(self, interaction.user.id, callback_voltar)
+        return await interaction.response.edit_message(
+            content=None, embed=await self.embed_painel_templates(), view=view
+        )
+
+    async def solicitar_upload_template(self, interaction: discord.Interaction, raridade: str):
+        if not await self.eh_proprietario_bot(interaction.user):
+            return await interaction.response.send_message(
+                "Somente o proprietário global do bot pode substituir os templates oficiais.", ephemeral=True
+            )
+        try:
+            dm = await interaction.user.create_dm()
+            self._pending_template_uploads[int(interaction.user.id)] = {
+                "raridade": raridade,
+                "channel_id": int(dm.id),
+                "expires_at": time.monotonic() + 600,
+            }
+            await dm.send(
+                f"🃏 **Upload do template completo — {raridade}**\n\n"
+                "Anexe **um único arquivo** (PNG recomendado; JPG/WEBP só com magenta chapado) nesta conversa.\n"
+                "• Tamanho recomendado: **840 × 1240 px**, retrato (proporção ~420:620).\n"
+                "• Carta **completa e opaca**: fundo, moldura e placas vazias, **sem nenhum texto**.\n"
+                "• A **janela da arte** (área grande no meio, ~5:4) deve estar **transparente** ou preenchida "
+                "com **magenta chapado #FF00FF**.\n"
+                "• Limite: **8 MB**. A sessão expira em 10 minutos.\n\n"
+                "Depois de validar, salvo o template e envio duas prévias: a carta de exemplo e outra com os "
+                "slots contornados, para conferir se os textos caíram nas placas."
+            )
+        except discord.Forbidden:
+            self._pending_template_uploads.pop(int(interaction.user.id), None)
+            return await interaction.response.send_message(
+                "Não consegui enviar a solicitação por DM. Ative mensagens diretas do servidor e tente novamente.",
+                ephemeral=True,
+            )
+        except discord.HTTPException:
+            self._pending_template_uploads.pop(int(interaction.user.id), None)
+            return await interaction.response.send_message(
+                "O Discord não permitiu abrir a conversa privada. Tente novamente.", ephemeral=True
+            )
+        await interaction.response.send_message(
+            f"Enviei uma solicitação privada para enviar o template **{raridade}**. Anexe o arquivo na DM da Nara.",
+            ephemeral=True,
+        )
+
+    async def _receber_upload_template(self, message: discord.Message, sessao: dict) -> None:
+        raridade = str(sessao["raridade"])
+        if not await self.eh_proprietario_bot(message.author):
+            self._pending_template_uploads.pop(int(message.author.id), None)
+            await message.reply("Este upload não está autorizado para esta conta.")
+            return
+        if time.monotonic() > float(sessao.get("expires_at", 0)):
+            self._pending_template_uploads.pop(int(message.author.id), None)
+            await message.reply("A sessão de envio do template expirou. Abra `/adm` → Jogos → Templates das cartas e tente novamente.")
+            return
+        if len(message.attachments) != 1:
+            await message.reply("Envie exatamente um arquivo como anexo. A sessão continua aberta.")
+            return
+        anexo = message.attachments[0]
+        if int(getattr(anexo, "size", 0) or 0) > templates_cartas.TAMANHO_MAXIMO_BYTES:
+            await message.reply("O arquivo ultrapassa 8 MB. Envie uma versão menor; a sessão continua aberta.")
+            return
+        try:
+            bruto = await anexo.read(use_cached=True)
+            caminho, janela = await asyncio.to_thread(templates_cartas.salvar_template, raridade, bruto)
+        except ValueError as exc:  # inclui TemplateInvalido
+            await message.reply(f"❌ **Não aceitei o template:** {exc}\nA sessão continua aberta; envie outro arquivo dentro do prazo.")
+            return
+        except (discord.HTTPException, OSError) as exc:
+            await message.reply("Não consegui baixar ou salvar o arquivo. Tente enviar novamente.")
+            log.warning("Falha no upload de template %s: %s", raridade, exc)
+            return
+
+        self._pending_template_uploads.pop(int(message.author.id), None)
+        x1, y1, x2, y2 = janela
+        resposta = (
+            f"✅ **Template {raridade} salvo e ativado.**\n"
+            f"Janela da arte detectada: `{x1},{y1} → {x2},{y2}` ({x2 - x1} × {y2 - y1}). "
+            "Vale para as próximas cartas com arte enviada."
+        )
+        try:
+            previa = await asyncio.to_thread(render_previa_template, raridade)
+            calibracao = await asyncio.to_thread(render_previa_template, raridade, calibracao=True)
+            arquivos = []
+            slug = templates_cartas.RARIDADES_TEMPLATE[raridade]
+            if previa:
+                arquivos.append(discord.File(previa, filename=f"previa_template_{slug}.png"))
+            if calibracao:
+                arquivos.append(discord.File(calibracao, filename=f"calibracao_template_{slug}.png"))
+            await message.reply(
+                resposta + "\nA primeira imagem é a carta de exemplo; a segunda contorna os slots de texto.",
+                files=arquivos,
+            )
+        except Exception:
+            log.exception("Template %s foi salvo, mas não consegui gerar as prévias.", raridade)
             await message.reply(resposta)
 
     async def preparar_deck_inicial(self, user_id: int) -> list[dict]:
@@ -1871,6 +2074,10 @@ class ColiseuCartas(commands.Cog):
     async def on_message(self, message: discord.Message):
         """Recebe uploads privados do Ateliê e da configuração global de molduras."""
         if message.guild is not None or message.author.bot:
+            return
+        template_pendente = self._pending_template_uploads.get(int(message.author.id))
+        if template_pendente and int(message.channel.id) == int(template_pendente.get("channel_id", 0)):
+            await self._receber_upload_template(message, template_pendente)
             return
         moldura_pendente = self._pending_moldura_uploads.get(int(message.author.id))
         if moldura_pendente and int(message.channel.id) == int(moldura_pendente.get("channel_id", 0)):
