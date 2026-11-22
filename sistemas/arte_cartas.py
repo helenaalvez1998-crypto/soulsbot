@@ -1,102 +1,774 @@
-"""Renderizador local de cartas: arte geométrica original, sem assets de terceiros."""
+"""Arte local e determinística para as cartas do Coliseu.
+
+As ilustrações são compostas com formas originais do Pillow. A categoria define a
+composição, o tipo define a paleta secundária e a raridade altera moldura e ornamentos.
+Nenhuma imagem, personagem ou marca de jogo de terceiros é incorporada.
+"""
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import math
+import random
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from runtime_paths import get_data_dir
-from .cartas import EMOJIS_TIPO, VERSAO_ARTES
+from .cartas import EMOJIS_TIPO, HABILIDADES, VERSAO_ARTES
 
+# Cor principal da moldura por raridade: as categorias e os tipos continuam
+# visualmente distintos dentro de cada faixa de raridade.
 CORES_RARIDADE = {
-    "Comum": ((32, 37, 45), (116, 130, 146)),
-    "Rara": ((20, 46, 69), (70, 157, 205)),
-    "Épica": ((48, 27, 72), (166, 100, 220)),
-    "Lendária": ((70, 43, 15), (231, 183, 67)),
+    "Comum": ((35, 47, 59), (143, 163, 177)),
+    "Rara": ((17, 56, 76), (72, 190, 218)),
+    "Épica": ((54, 34, 83), (188, 119, 239)),
+    "Lendária": ((83, 52, 18), (246, 194, 83)),
+}
+CORES_TIPO = {
+    "Destreza": (75, 211, 177),
+    "Força": (237, 117, 75),
+    "Magia": (157, 132, 255),
+}
+CORES_CATEGORIA = {
+    "Chefe": ((18, 27, 39), (100, 47, 49)),
+    "Arma": ((19, 31, 40), (79, 75, 55)),
+    "Magia": ((22, 22, 48), (70, 48, 105)),
+    "Covenant": ((16, 39, 37), (43, 83, 76)),
+    "Jogo": ((17, 31, 48), (37, 72, 91)),
+    "Patente": ((45, 31, 17), (104, 76, 31)),
 }
 SIMBOLOS = {"Destreza": "✥", "Força": "⚔", "Magia": "✧"}
+LARGURA_PADRAO = 420
+ALTURA_PADRAO = 620
 
 
 def _font(size: int, bold: bool = False):
     root = Path(__file__).resolve().parents[1]
     candidates = [
-        root / "fonts" / "DejaVuSans-Bold.ttf" if bold else root / "fonts" / "DejaVuSans.ttf",
+        root / "fonts" / ("DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"),
         root / "fonts" / "DejaVuSans.ttf",
     ]
     for path in candidates:
         if path.exists():
-            return ImageFont.truetype(str(path), size=size)
+            try:
+                return ImageFont.truetype(str(path), size=size)
+            except OSError:
+                continue
     return ImageFont.load_default()
 
 
+def _mix(a: tuple[int, int, int], b: tuple[int, int, int], factor: float):
+    factor = max(0.0, min(1.0, factor))
+    return tuple(round(a[i] * (1 - factor) + b[i] * factor) for i in range(3))
+
+
+def _text_center(draw: ImageDraw.ImageDraw, xy, text: str, font, fill):
+    x, y = xy
+    box = draw.textbbox((0, 0), str(text), font=font)
+    draw.text((x - (box[2] - box[0]) / 2, y - (box[3] - box[1]) / 2 - box[1]),
+              str(text), font=font, fill=fill)
+
+
 def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> list[str]:
-    words = str(text).split()
+    words = str(text or "").split()
     lines: list[str] = []
-    atual = ""
+    current = ""
     for word in words:
-        tentativa = f"{atual} {word}".strip()
-        if draw.textbbox((0, 0), tentativa, font=font)[2] <= max_width:
-            atual = tentativa
+        candidate = f"{current} {word}".strip()
+        if draw.textbbox((0, 0), candidate, font=font)[2] <= max_width:
+            current = candidate
         else:
-            if atual:
-                lines.append(atual)
-            atual = word
-    if atual:
-        lines.append(atual)
+            if current:
+                lines.append(current)
+            # Evita linha vazia se uma palavra isolada for maior que a área.
+            current = word
+    if current:
+        lines.append(current)
     return lines or [""]
 
 
-def _draw_card(card: dict[str, Any], width: int = 360, height: int = 500) -> Image.Image:
-    rarity = str(card.get("raridade", "Comum"))
-    base, accent = CORES_RARIDADE.get(rarity, CORES_RARIDADE["Comum"])
-    image = Image.new("RGB", (width, height), (10, 12, 16))
-    px = image.load()
-    for y in range(height):
-        frac = y / max(height - 1, 1)
-        color = tuple(int(base[i] * (1 - frac) + (8, 10, 15)[i] * frac) for i in range(3))
-        for x in range(width):
-            px[x, y] = color
-    draw = ImageDraw.Draw(image, "RGBA")
-    # Moldura e ornamentos em camadas.
-    draw.rounded_rectangle((7, 7, width - 8, height - 8), radius=22, outline=(*accent, 230), width=6)
-    draw.rounded_rectangle((18, 18, width - 19, height - 19), radius=17, outline=(255, 255, 255, 55), width=2)
-    for inset in range(0, 4):
-        margin = 45 + inset * 15
-        draw.arc((margin, 90 + margin // 3, width - margin, 380 - margin // 3), 190, 350, fill=(*accent, 55), width=2)
-    cx, cy = width // 2, 235
-    for radius, alpha, stroke in ((112, 28, 5), (86, 34, 3), (60, 55, 2)):
-        draw.ellipse((cx - radius, cy - radius, cx + radius, cy + radius), outline=(*accent, alpha), width=stroke)
-    symbol = SIMBOLOS.get(str(card.get("tipo")), "✦")
-    symbol_font = _font(118, True)
-    bbox = draw.textbbox((0, 0), symbol, font=symbol_font)
-    draw.text((cx - (bbox[2] - bbox[0]) / 2, cy - (bbox[3] - bbox[1]) / 2 - 4), symbol,
-              font=symbol_font, fill=(*accent, 230), stroke_width=1, stroke_fill=(255, 255, 255, 80))
+def _seed(card: dict[str, Any]) -> int:
+    raw = json.dumps(card, ensure_ascii=False, sort_keys=True, default=str)
+    return int.from_bytes(hashlib.sha256(raw.encode("utf-8")).digest()[:8], "big")
 
-    title_font = _font(25, True)
-    small = _font(16)
-    body = _font(17)
-    title = str(card.get("nome", "Carta"))
-    lines = _wrap(draw, title, title_font, width - 46)[:2]
-    y = 345
-    for line in lines:
-        box = draw.textbbox((0, 0), line, font=title_font)
-        draw.text(((width - (box[2] - box[0])) / 2, y), line, font=title_font, fill=(245, 240, 225, 255))
-        y += 31
-    draw.text((25, 420), f"{rarity.upper()}  ·  {card.get('categoria', 'Carta').upper()}", font=small, fill=(*accent, 255))
-    draw.text((25, 447), f"{EMOJIS_TIPO.get(card.get('tipo'), '✦')} {card.get('tipo')}  ·  Poder {card.get('poder')}  ·  Custo {card.get('custo')}",
-              font=body, fill=(238, 238, 238, 255))
-    draw.line((24, 412, width - 24, 412), fill=(*accent, 130), width=2)
+
+def _gradient(width: int, height: int, top, bottom) -> Image.Image:
+    image = Image.new("RGB", (width, height), top)
+    draw = ImageDraw.Draw(image)
+    for y in range(height):
+        color = _mix(top, bottom, y / max(1, height - 1))
+        draw.line((0, y, width, y), fill=color)
     return image
+
+
+def _draw_ruins(draw: ImageDraw.ImageDraw, box, accent, rng: random.Random):
+    x1, y1, x2, y2 = box
+    width, height = x2 - x1, y2 - y1
+    horizon = y1 + int(height * 0.72)
+    draw.rectangle((x1, horizon, x2, y2), fill=(9, 13, 20, 180))
+    # Silhuetas de ruínas variam de carta para carta.
+    for i in range(7):
+        px = x1 + int((i + 0.25) * width / 7)
+        ph = rng.randint(int(height * 0.25), int(height * 0.62))
+        pw = rng.randint(13, 30)
+        color = _mix((9, 14, 21), accent, 0.13)
+        draw.rectangle((px, horizon - ph, px + pw, horizon + 4), fill=(*color, 230))
+        draw.polygon([(px - 5, horizon - ph), (px + pw // 2, horizon - ph - 10),
+                      (px + pw + 5, horizon - ph)], fill=(*color, 230))
+    draw.polygon([(x1, y2), (x1 + width * .18, horizon), (x1 + width * .42, y2)], fill=(13, 18, 25, 230))
+    draw.polygon([(x2, y2), (x2 - width * .22, horizon), (x2 - width * .48, y2)], fill=(11, 16, 24, 230))
+
+
+def _draw_boss(draw: ImageDraw.ImageDraw, box, accent, rng: random.Random, card: dict[str, Any]):
+    x1, y1, x2, y2 = box
+    cx = (x1 + x2) // 2
+    cy = y1 + int((y2 - y1) * .53)
+    h = y2 - y1
+    _draw_ruins(draw, box, accent, rng)
+    boss_name = f"{card.get('id', '')} {card.get('nome', '')}".casefold()
+    if "cervo" in boss_name or "cacador" in boss_name or "caçador" in boss_name:
+        variant = 1
+    elif "dama" in boss_name or "aparicao" in boss_name or "aparição" in boss_name:
+        variant = 2
+    elif "oraculo" in boss_name or "oráculo" in boss_name or "rei_afogado" in boss_name:
+        variant = 3
+    else:
+        variant = rng.randrange(4)
+    draw.ellipse((cx - 112, y1 + 5, cx + 112, y1 + 220), outline=(*accent, 80), width=3)
+    draw.ellipse((cx - 88, y1 + 27, cx + 88, y1 + 194), outline=(*accent, 42), width=2)
+
+    if variant == 0:  # cavaleiro/carrasco com armadura e elmo.
+        cape = [(cx - 35, cy - 22), (cx - 108, cy + 50), (cx - 94, y2 - 8),
+                (cx, y2 - 48), (cx + 96, y2 - 8), (cx + 108, cy + 50), (cx + 35, cy - 22)]
+        draw.polygon(cape, fill=(10, 15, 23, 250), outline=(*accent, 210))
+        draw.polygon([(cx - 30, cy - 28), (cx - 105, cy - 10), (cx - 78, cy + 48),
+                      (cx - 22, cy + 39), (cx, cy + 8), (cx + 22, cy + 39),
+                      (cx + 78, cy + 48), (cx + 105, cy - 10), (cx + 30, cy - 28)],
+                     fill=(24, 30, 40, 255), outline=(*accent, 240))
+        draw.polygon([(cx - 36, cy - 13), (cx + 36, cy - 13), (cx + 28, cy + 100),
+                      (cx, cy + 126), (cx - 28, cy + 100)], fill=(18, 24, 34, 255), outline=(*accent, 160))
+        draw.polygon([(cx - 49, cy - 61), (cx - 82, cy - 120), (cx - 34, cy - 95),
+                      (cx, cy - 139), (cx + 31, cy - 95), (cx + 82, cy - 120),
+                      (cx + 49, cy - 61)], fill=(29, 35, 46, 255), outline=(*accent, 250))
+        draw.polygon([(cx - 43, cy - 58), (cx, cy - 88), (cx + 43, cy - 58),
+                      (cx + 35, cy + 4), (cx, cy + 34), (cx - 35, cy + 4)],
+                     fill=(42, 47, 58, 255), outline=(210, 207, 197, 170))
+        draw.line((cx - 25, cy - 22, cx - 7, cy - 26), fill=(*accent, 255), width=5)
+        draw.line((cx + 7, cy - 26, cx + 25, cy - 22), fill=(*accent, 255), width=5)
+    elif variant == 1:  # fera/alfa, com focinho, presas e chifres.
+        body = [(cx - 116, cy + 21), (cx - 76, cy - 37), (cx - 9, cy - 53),
+                (cx + 78, cy - 28), (cx + 116, cy + 36), (cx + 75, cy + 93),
+                (cx - 70, cy + 93)]
+        draw.polygon(body, fill=(18, 24, 32, 255), outline=(*accent, 230), width=4)
+        draw.polygon([(cx - 65, cy - 33), (cx - 42, cy - 104), (cx - 14, cy - 53),
+                      (cx + 35, cy - 104), (cx + 67, cy - 27), (cx + 32, cy + 21),
+                      (cx - 26, cy + 20)], fill=(31, 38, 48, 255), outline=(*accent, 255))
+        draw.polygon([(cx - 52, cy - 60), (cx - 105, cy - 130), (cx - 74, cy - 28)],
+                     fill=(31, 37, 46, 255), outline=(*accent, 240))
+        draw.polygon([(cx + 48, cy - 60), (cx + 108, cy - 131), (cx + 72, cy - 24)],
+                     fill=(31, 37, 46, 255), outline=(*accent, 240))
+        draw.polygon([(cx - 25, cy - 6), (cx + 25, cy - 6), (cx, cy + 48)],
+                     fill=(7, 10, 16, 255), outline=(224, 218, 205, 155))
+        draw.ellipse((cx - 43, cy - 38, cx - 23, cy - 18), fill=(*accent, 255))
+        draw.ellipse((cx + 23, cy - 38, cx + 43, cy - 18), fill=(*accent, 255))
+        for side in (-1, 1):
+            draw.line((cx + side * 58, cy + 45, cx + side * 93, y2 - 12), fill=(26, 29, 36, 255), width=17)
+    elif variant == 2:  # espectro encapuzado, com manto alongado.
+        draw.polygon([(cx, y1 + 25), (cx + 75, y1 + 84), (cx + 64, cy + 54),
+                      (cx + 98, y2 - 5), (cx, y2 - 51), (cx - 98, y2 - 5),
+                      (cx - 64, cy + 54), (cx - 75, y1 + 84)],
+                     fill=(13, 20, 31, 245), outline=(*accent, 225), width=4)
+        draw.ellipse((cx - 48, y1 + 55, cx + 48, y1 + 153), fill=(7, 12, 21, 255), outline=(*accent, 235), width=4)
+        draw.polygon([(cx - 55, y1 + 82), (cx - 33, y1 + 24), (cx, y1 + 7),
+                      (cx + 33, y1 + 24), (cx + 55, y1 + 82)], fill=(27, 33, 47, 255), outline=(*accent, 255))
+        draw.ellipse((cx - 25, y1 + 100, cx - 8, y1 + 114), fill=(*accent, 255))
+        draw.ellipse((cx + 8, y1 + 100, cx + 25, y1 + 114), fill=(*accent, 255))
+        for side in (-1, 1):
+            draw.arc((cx + side * 55 - 25, y1 + 35, cx + side * 55 + 25, y1 + 95),
+                     190 if side < 0 else 0, 340 if side < 0 else 150, fill=(*accent, 180), width=4)
+    else:  # colosso esquelético, com costelas expostas.
+        draw.ellipse((cx - 57, y1 + 33, cx + 57, y1 + 150), fill=(37, 40, 45, 255), outline=(*accent, 245), width=4)
+        draw.polygon([(cx - 44, y1 + 90), (cx - 22, y1 + 65), (cx, y1 + 83),
+                      (cx + 22, y1 + 65), (cx + 44, y1 + 90), (cx + 32, y1 + 156),
+                      (cx, y1 + 178), (cx - 32, y1 + 156)], fill=(27, 31, 39, 255), outline=(*accent, 210))
+        draw.line((cx - 30, y1 + 111, cx + 30, y1 + 111), fill=(218, 205, 179, 220), width=5)
+        draw.line((cx - 26, y1 + 132, cx + 26, y1 + 132), fill=(218, 205, 179, 200), width=5)
+        draw.line((cx - 18, y1 + 151, cx + 18, y1 + 151), fill=(218, 205, 179, 180), width=5)
+        draw.polygon([(cx - 37, y1 + 72), (cx - 78, y1 + 9), (cx - 66, y1 + 94)],
+                     fill=(47, 49, 54, 255), outline=(*accent, 225))
+        draw.polygon([(cx + 37, y1 + 72), (cx + 78, y1 + 9), (cx + 66, y1 + 94)],
+                     fill=(47, 49, 54, 255), outline=(*accent, 225))
+        draw.polygon([(cx - 14, y1 + 119), (cx + 14, y1 + 119), (cx, y1 + 146)], fill=(7, 9, 14, 255))
+        draw.line((cx - 70, cy + 5, cx - 117, y2 - 22), fill=(45, 43, 42, 255), width=16)
+        draw.line((cx + 70, cy + 5, cx + 117, y2 - 22), fill=(45, 43, 42, 255), width=16)
+
+
+def _draw_weapon(draw: ImageDraw.ImageDraw, box, accent, rng: random.Random, card: dict[str, Any]):
+    x1, y1, x2, y2 = box
+    w, h = x2 - x1, y2 - y1
+    # Raios de fundo e runas discretas.
+    cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+    for i in range(12):
+        angle = math.radians(i * 30 + rng.randint(-6, 6))
+        ex = cx + math.cos(angle) * w * .56
+        ey = cy + math.sin(angle) * h * .62
+        draw.line((cx, cy, ex, ey), fill=(*accent, rng.randint(22, 58)), width=rng.randint(1, 3))
+    weapon_name = f"{card.get('id', '')} {card.get('nome', '')}".casefold()
+    if "martelo" in weapon_name:
+        variant = 2
+    elif any(token in weapon_name for token in ("cajado", "agulha")):
+        variant = 3
+    elif "arco" in weapon_name:
+        variant = 4
+    elif "sino" in weapon_name:
+        variant = 5
+    elif "duas_luas" in weapon_name or "duas luas" in weapon_name:
+        variant = 6
+    elif "lanca" in weapon_name or "lança" in weapon_name:
+        variant = 1
+    else:
+        variant = rng.randrange(2)
+    angle_shift = rng.randint(-22, 22)
+    if variant in (0, 1):  # lâmina longa / lança
+        a = (cx - 35 + angle_shift, y2 - 26)
+        b = (cx + 48 + angle_shift, y1 + 24)
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        length = math.hypot(dx, dy) or 1
+        nx, ny = -dy / length, dx / length
+        width = 18 if variant == 0 else 12
+        blade = [(a[0] + nx * width, a[1] + ny * width),
+                 (b[0] + nx * 5, b[1] + ny * 5),
+                 (b[0] + dx * .13, b[1] + dy * .13),
+                 (b[0] - nx * 5, b[1] - ny * 5),
+                 (a[0] - nx * width, a[1] - ny * width)]
+        draw.polygon(blade, fill=(171, 196, 202, 255), outline=(*accent, 255))
+        draw.line((a[0], a[1], b[0], b[1]), fill=(255, 255, 234, 230), width=3)
+        draw.line((a[0] - nx * 34, a[1] - ny * 34, a[0] + nx * 34, a[1] + ny * 34), fill=(190, 150, 99, 255), width=9)
+        draw.line((a[0] - dx * .07, a[1] - dy * .07, a[0] + dx * .11, a[1] + dy * .11), fill=(112, 70, 43, 255), width=9)
+        draw.ellipse((a[0] - 12, a[1] - 12, a[0] + 12, a[1] + 12), fill=(*accent, 255), outline=(240, 222, 178, 255), width=3)
+    elif variant == 2:  # martelo
+        draw.line((cx - 55, y2 - 23, cx + 40, y1 + 55), fill=(103, 72, 52, 255), width=20)
+        draw.line((cx - 55, y2 - 23, cx + 40, y1 + 55), fill=(190, 145, 93, 255), width=5)
+        draw.polygon([(cx + 4, y1 + 39), (cx + 35, y1 + 6), (cx + 105, y1 + 48),
+                      (cx + 92, y1 + 103), (cx + 24, y1 + 91)],
+                     fill=(68, 80, 92, 255), outline=(*accent, 255))
+        draw.line((cx + 21, y1 + 46, cx + 90, y1 + 83), fill=(220, 224, 205, 210), width=4)
+    elif variant == 3:  # cajado ou agulha astral
+        draw.line((cx - 54, y2 - 19, cx + 45, y1 + 23), fill=(109, 77, 55, 255), width=14)
+        draw.line((cx - 54, y2 - 19, cx + 45, y1 + 23), fill=(210, 159, 99, 255), width=3)
+        orb = (cx + 47, y1 + 28)
+        draw.ellipse((orb[0] - 39, orb[1] - 39, orb[0] + 39, orb[1] + 39), fill=(*accent, 55), outline=(*accent, 255), width=4)
+        draw.ellipse((orb[0] - 20, orb[1] - 20, orb[0] + 20, orb[1] + 20), fill=(226, 232, 237, 245), outline=(255, 255, 255, 255), width=3)
+    elif variant == 4:  # arco recurvo e flecha
+        draw.arc((cx - 110, y1 + 25, cx + 100, y2 - 7), 255, 105, fill=(181, 125, 75, 255), width=16)
+        draw.line((cx + 48, y1 + 28, cx + 48, y2 - 22), fill=(231, 223, 200, 230), width=2)
+        draw.line((cx - 90, cy, cx + 91, cy - 62), fill=(188, 207, 214, 255), width=7)
+        draw.polygon([(cx + 91, cy - 62), (cx + 64, cy - 72), (cx + 76, cy - 46)], fill=(226, 233, 226, 255))
+    elif variant == 5:  # sino de guerra, corrente e badalo
+        draw.line((cx - 50, y1 + 36, cx + 50, y1 + 36), fill=(196, 158, 90, 255), width=10)
+        draw.polygon([(cx - 42, y1 + 48), (cx + 42, y1 + 48), (cx + 61, y1 + 181),
+                      (cx + 36, y1 + 210), (cx - 36, y1 + 210), (cx - 61, y1 + 181)],
+                     fill=(80, 91, 94, 255), outline=(*accent, 255), width=4)
+        draw.arc((cx - 53, y1 + 87, cx + 53, y1 + 177), 5, 175, fill=(235, 213, 158, 230), width=5)
+        draw.line((cx, y1 + 210, cx, y1 + 251), fill=(177, 133, 78, 255), width=7)
+        draw.ellipse((cx - 12, y1 + 239, cx + 12, y1 + 263), fill=(208, 171, 105, 255), outline=(*accent, 220), width=2)
+    else:  # duas lâminas cruzadas
+        draw.line((cx - 92, y2 - 30, cx + 70, y1 + 43), fill=(183, 207, 215, 255), width=15)
+        draw.line((cx + 92, y2 - 30, cx - 70, y1 + 43), fill=(142, 174, 190, 255), width=15)
+        draw.line((cx - 12, y1 + 126, cx + 12, y1 + 166), fill=(206, 167, 104, 255), width=8)
+        draw.line((cx + 12, y1 + 126, cx - 12, y1 + 166), fill=(206, 167, 104, 255), width=8)
+
+
+def _draw_magic(draw: ImageDraw.ImageDraw, box, accent, rng: random.Random, card: dict[str, Any]):
+    x1, y1, x2, y2 = box
+    cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+    magic_name = f"{card.get('id', '')} {card.get('nome', '')}".casefold()
+    if any(token in magic_name for token in ("brasa", "fagulha", "chama")):
+        variant = 4  # chama viva
+    elif "trovao" in magic_name or "trovão" in magic_name:
+        variant = 5  # raio
+    elif "nevoa" in magic_name or "névoa" in magic_name:
+        variant = 6  # espiral de névoa
+    elif "sol_negro" in magic_name or "sol negro" in magic_name:
+        variant = 7  # eclipse
+    else:
+        variant = rng.randrange(4)
+    for radius, alpha, width in ((112, 65, 2), (88, 100, 3), (60, 135, 2)):
+        draw.ellipse((cx - radius, cy - radius, cx + radius, cy + radius), outline=(*accent, alpha), width=width)
+    for i in range(8):
+        angle = math.radians(i * 45 + rng.randint(-8, 8))
+        rx, ry = math.cos(angle), math.sin(angle)
+        r1, r2 = 72, 122
+        p1 = (cx + rx * r1, cy + ry * r1)
+        p2 = (cx + rx * r2, cy + ry * r2)
+        draw.line((p1, p2), fill=(*accent, 135), width=2)
+        size = rng.randint(5, 9)
+        draw.polygon([(p2[0], p2[1] - size), (p2[0] + size, p2[1]),
+                      (p2[0], p2[1] + size), (p2[0] - size, p2[1])], fill=(*accent, 220))
+    if variant == 4:
+        flame = [(cx, cy - 91), (cx + 29, cy - 39), (cx + 19, cy - 12),
+                 (cx + 57, cy - 21), (cx + 42, cy + 43), (cx, cy + 83),
+                 (cx - 48, cy + 40), (cx - 36, cy - 10), (cx - 13, cy + 17)]
+        draw.polygon(flame, fill=(*accent, 135), outline=(255, 236, 206, 245), width=4)
+        draw.polygon([(cx, cy - 40), (cx + 21, cy + 5), (cx, cy + 53), (cx - 18, cy + 8)],
+                     fill=(255, 228, 164, 230))
+    elif variant == 5:
+        lightning = [(cx + 13, cy - 94), (cx - 39, cy - 8), (cx - 3, cy - 8),
+                     (cx - 22, cy + 92), (cx + 52, cy - 20), (cx + 13, cy - 20)]
+        draw.polygon(lightning, fill=(*accent, 175), outline=(245, 241, 255, 255), width=3)
+    elif variant == 6:
+        for i in range(5):
+            inset = i * 13
+            draw.arc((cx - 83 + inset, cy - 63 + inset, cx + 83 - inset, cy + 63 - inset),
+                     35 + i * 18, 305 + i * 18, fill=(*accent, 220 - i * 22), width=8 - i)
+        draw.ellipse((cx - 15, cy - 15, cx + 15, cy + 15), fill=(238, 239, 255, 235))
+    elif variant == 7:
+        draw.ellipse((cx - 75, cy - 75, cx + 75, cy + 75), fill=(11, 9, 24, 255), outline=(*accent, 255), width=6)
+        draw.ellipse((cx - 54, cy - 54, cx + 54, cy + 54), fill=(*accent, 115), outline=(255, 225, 178, 230), width=3)
+        draw.ellipse((cx - 31, cy - 67, cx + 66, cy + 31), fill=(11, 9, 24, 255))
+    elif variant == 0:
+        draw.ellipse((cx - 44, cy - 44, cx + 44, cy + 44), fill=(*accent, 70), outline=(241, 231, 255, 240), width=3)
+        draw.ellipse((cx - 24, cy - 24, cx + 24, cy + 24), fill=(231, 235, 255, 245), outline=(*accent, 255), width=4)
+    elif variant == 1:
+        draw.polygon([(cx, cy - 74), (cx + 62, cy), (cx, cy + 74), (cx - 62, cy)],
+                     fill=(*accent, 60), outline=(241, 231, 255, 245), width=4)
+        draw.polygon([(cx, cy - 36), (cx + 31, cy), (cx, cy + 36), (cx - 31, cy)],
+                     fill=(229, 224, 255, 235), outline=(*accent, 255), width=3)
+    elif variant == 2:
+        draw.arc((cx - 68, cy - 68, cx + 68, cy + 68), 25, 300, fill=(248, 232, 255, 245), width=8)
+        draw.arc((cx - 48, cy - 48, cx + 88, cy + 88), 190, 470, fill=(*accent, 250), width=5)
+        draw.ellipse((cx - 18, cy - 18, cx + 18, cy + 18), fill=(250, 244, 255, 250))
+    else:
+        points = []
+        for i in range(12):
+            angle = math.radians(i * 30 - 90)
+            radius = 76 if i % 2 == 0 else 35
+            points.append((cx + math.cos(angle) * radius, cy + math.sin(angle) * radius))
+        draw.polygon(points, fill=(*accent, 75), outline=(239, 228, 255, 250))
+        draw.ellipse((cx - 15, cy - 15, cx + 15, cy + 15), fill=(250, 245, 255, 255))
+
+
+def _draw_covenant(draw: ImageDraw.ImageDraw, box, accent, rng: random.Random, card: dict[str, Any]):
+    x1, y1, x2, y2 = box
+    cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+    # Bandeirolas e escudo principal.
+    draw.polygon([(x1 + 28, y1 + 35), (x1 + 105, y1 + 54), (x1 + 91, y2 - 12),
+                  (x1 + 46, y2 - 40)], fill=(16, 31, 31, 220), outline=(*accent, 170))
+    draw.polygon([(x2 - 28, y1 + 35), (x2 - 105, y1 + 54), (x2 - 91, y2 - 12),
+                  (x2 - 46, y2 - 40)], fill=(16, 31, 31, 220), outline=(*accent, 170))
+    shield = [(cx, y1 + 20), (cx + 105, y1 + 62), (cx + 85, cy + 60),
+              (cx, y2 - 8), (cx - 85, cy + 60), (cx - 105, y1 + 62)]
+    draw.polygon(shield, fill=(23, 42, 41, 255), outline=(*accent, 255), width=5)
+    inner = [(cx, y1 + 43), (cx + 78, y1 + 75), (cx + 64, cy + 47),
+             (cx, y2 - 34), (cx - 64, cy + 47), (cx - 78, y1 + 75)]
+    draw.polygon(inner, fill=(9, 20, 24, 255), outline=(218, 204, 165, 190), width=2)
+    covenant_name = f"{card.get('id', '')} {card.get('nome', '')}".casefold()
+    if "lua" in covenant_name:
+        variant = 0
+    elif "lobo" in covenant_name or "lobos" in covenant_name or "cervo" in covenant_name:
+        variant = 1
+    elif "brasa" in covenant_name or "filhos" in covenant_name:
+        variant = 2
+    elif "coroa" in covenant_name:
+        variant = 3
+    else:
+        variant = rng.randrange(4)
+    if variant == 0:  # lua
+        draw.arc((cx - 48, cy - 61, cx + 52, cy + 39), 60, 300, fill=(*accent, 255), width=14)
+        draw.ellipse((cx + 4, cy - 43, cx + 29, cy - 18), fill=(244, 230, 190, 255))
+    elif variant == 1:  # lobo abstrato
+        draw.polygon([(cx - 48, cy + 17), (cx - 36, cy - 50), (cx - 5, cy - 24),
+                      (cx + 11, cy - 56), (cx + 48, cy + 17), (cx, cy + 47)],
+                     fill=(*accent, 190), outline=(245, 235, 215, 240))
+        draw.ellipse((cx - 18, cy - 7, cx - 8, cy + 3), fill=(9, 15, 18, 255))
+        draw.ellipse((cx + 8, cy - 7, cx + 18, cy + 3), fill=(9, 15, 18, 255))
+    elif variant == 2:  # chama
+        draw.polygon([(cx, cy - 64), (cx + 27, cy - 15), (cx + 14, cy + 5),
+                      (cx + 37, cy - 1), (cx + 26, cy + 39), (cx, cy + 55),
+                      (cx - 29, cy + 30), (cx - 22, cy - 9), (cx - 9, cy + 8)],
+                     fill=(*accent, 225), outline=(247, 225, 188, 235))
+    else:  # estrela
+        points = []
+        for i in range(10):
+            angle = math.radians(-90 + i * 36)
+            radius = 58 if i % 2 == 0 else 25
+            points.append((cx + math.cos(angle) * radius, cy + math.sin(angle) * radius))
+        draw.polygon(points, fill=(*accent, 220), outline=(247, 232, 197, 240))
+
+
+def _draw_game(draw: ImageDraw.ImageDraw, box, accent, rng: random.Random):
+    x1, y1, x2, y2 = box
+    w, h = x2 - x1, y2 - y1
+    cx = (x1 + x2) // 2
+    horizon = y1 + int(h * .72)
+    variant = rng.randrange(4)
+    # Cada título recebe uma cena abstrata diferente: portal, fortaleza, árvore ou mar.
+    if variant == 0:
+        moon_x = x1 + int(w * (.28 + rng.random() * .44))
+        moon_y = y1 + rng.randint(55, 105)
+        moon_r = rng.randint(28, 47)
+        draw.ellipse((moon_x - moon_r, moon_y - moon_r, moon_x + moon_r, moon_y + moon_r),
+                     fill=(*accent, 45), outline=(*accent, 220), width=3)
+        draw.ellipse((moon_x - moon_r // 2, moon_y - moon_r // 2, moon_x + moon_r // 2, moon_y + moon_r // 2),
+                     fill=(234, 232, 220, 225))
+        portal = (cx - 84, y1 + 37, cx + 84, horizon + 28)
+        draw.ellipse(portal, outline=(*accent, 130), width=12)
+        draw.ellipse((portal[0] + 11, portal[1] + 11, portal[2] - 11, portal[3] - 11),
+                     outline=(236, 226, 200, 175), width=3)
+        draw.polygon([(x1, y2), (x1 + 72, horizon - 24), (cx - 26, y2),
+                      (cx + 38, horizon - 52), (x2, y2)], fill=(10, 17, 26, 240))
+        for i in range(5):
+            px = x1 + 25 + i * int(w / 5)
+            ph = rng.randint(30, 83)
+            draw.polygon([(px - 10, horizon), (px, horizon - ph), (px + 10, horizon)],
+                         fill=(13, 23, 33, 255), outline=(*accent, 65))
+    elif variant == 1:
+        # Fortaleza vertical recortada pelo céu.
+        draw.ellipse((cx - 72, y1 + 24, cx + 72, y1 + 168), outline=(*accent, 150), width=5)
+        draw.polygon([(cx - 91, y2), (cx - 69, y1 + 113), (cx - 47, y1 + 136),
+                      (cx - 31, y1 + 60), (cx, y1 + 92), (cx + 31, y1 + 60),
+                      (cx + 47, y1 + 136), (cx + 69, y1 + 113), (cx + 91, y2)],
+                     fill=(13, 20, 31, 255), outline=(*accent, 190), width=3)
+        for side in (-1, 1):
+            sx = cx + side * 117
+            draw.rectangle((sx - 18, y1 + 95, sx + 18, y2 - 9), fill=(9, 16, 26, 255), outline=(*accent, 110), width=2)
+            draw.polygon([(sx - 25, y1 + 96), (sx, y1 + 52), (sx + 25, y1 + 96)],
+                         fill=(20, 27, 39, 255), outline=(*accent, 150))
+        draw.line((x1 + 20, y2 - 34, x2 - 20, y2 - 34), fill=(*accent, 145), width=3)
+    elif variant == 2:
+        # Árvore ancestral e raízes luminosas.
+        trunk = [(cx - 17, y1 + 105), (cx - 35, y2 - 12), (cx + 34, y2 - 12), (cx + 15, y1 + 105)]
+        draw.polygon(trunk, fill=(34, 27, 24, 255), outline=(*accent, 190), width=3)
+        for branch in range(6):
+            angle = math.radians(205 + branch * 26)
+            ex = cx + math.cos(angle) * rng.randint(74, 142)
+            ey = y1 + rng.randint(30, 132)
+            draw.line((cx, y1 + 165, ex, ey), fill=(69, 54, 43, 255), width=rng.randint(7, 13))
+            draw.ellipse((ex - 10, ey - 10, ex + 10, ey + 10), fill=(*accent, 115), outline=(*accent, 240), width=2)
+        for root in (-1, 1):
+            draw.line((cx, y2 - 16, cx + root * 86, y2 - 4), fill=(91, 65, 45, 255), width=7)
+    else:
+        # Mar escuro, pilares e lua refletida.
+        moon_x, moon_y = cx + rng.randint(-80, 80), y1 + 72
+        draw.ellipse((moon_x - 38, moon_y - 38, moon_x + 38, moon_y + 38),
+                     fill=(230, 226, 206, 220), outline=(*accent, 220), width=3)
+        draw.polygon([(x1, horizon), (x1 + 70, horizon - 42), (x1 + 125, horizon + 8),
+                      (cx, horizon - 20), (x2 - 90, horizon + 6), (x2, horizon - 35),
+                      (x2, y2), (x1, y2)], fill=(8, 17, 28, 255), outline=(*accent, 90))
+        for i in range(5):
+            y = horizon + 17 + i * 18
+            draw.arc((cx - 110 + i * 12, y - 8, cx + 110 - i * 12, y + 22), 0, 180,
+                     fill=(*accent, 95 - i * 10), width=3)
+        for px in (x1 + 57, x2 - 57):
+            draw.rectangle((px - 12, y1 + 90, px + 12, horizon + 20), fill=(19, 25, 34, 255), outline=(*accent, 120), width=2)
+            draw.polygon([(px - 23, y1 + 90), (px, y1 + 55), (px + 23, y1 + 90)], fill=(25, 32, 42, 255))
+    # Filetes e pontos de luz, com composição ligada ao identificador da carta.
+    for i in range(14):
+        px = rng.randint(x1 + 13, x2 - 13)
+        py = rng.randint(y1 + 14, y2 - 22)
+        r = rng.randint(1, 3)
+        draw.ellipse((px - r, py - r, px + r, py + r), fill=(*accent, rng.randint(90, 210)))
+
+
+def _draw_patente(draw: ImageDraw.ImageDraw, box, accent, rng: random.Random):
+    x1, y1, x2, y2 = box
+    cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+    for i in range(12):
+        angle = math.radians(i * 30)
+        draw.line((cx, cy, cx + math.cos(angle) * 145, cy + math.sin(angle) * 128),
+                  fill=(*accent, 55), width=2)
+    # Medalhão e fitas.
+    draw.polygon([(cx - 55, cy + 58), (cx - 42, y2 - 7), (cx, y2 - 42),
+                  (cx + 42, y2 - 7), (cx + 55, cy + 58)],
+                 fill=(85, 35, 34, 235), outline=(*accent, 235))
+    draw.ellipse((cx - 105, cy - 105, cx + 105, cy + 105), fill=(32, 28, 24, 255), outline=(*accent, 255), width=8)
+    draw.ellipse((cx - 83, cy - 83, cx + 83, cy + 83), fill=(54, 42, 29, 255), outline=(244, 224, 171, 180), width=3)
+    variant = rng.randrange(3)
+    if variant == 0:
+        draw.polygon([(cx - 57, cy - 9), (cx - 48, cy - 58), (cx - 15, cy - 30),
+                      (cx, cy - 75), (cx + 15, cy - 30), (cx + 48, cy - 58),
+                      (cx + 57, cy - 9), (cx + 36, cy + 40), (cx - 36, cy + 40)],
+                     fill=(*accent, 230), outline=(255, 240, 190, 255))
+    elif variant == 1:
+        draw.polygon([(cx, cy - 65), (cx + 59, cy), (cx, cy + 65), (cx - 59, cy)],
+                     fill=(*accent, 205), outline=(255, 240, 190, 255))
+        draw.ellipse((cx - 18, cy - 18, cx + 18, cy + 18), fill=(30, 26, 21, 255))
+    else:
+        draw.text((cx - 47, cy - 57), "S", font=_font(108, True), fill=(*accent, 255), stroke_width=2,
+                  stroke_fill=(255, 239, 188, 210))
+
+
+def _draw_type_icon(draw: ImageDraw.ImageDraw, center: tuple[int, int], card_type: str, accent):
+    """Ícone vetorial próprio; não depende de glifos emoji instalados no servidor."""
+    cx, cy = center
+    pale = (245, 239, 219, 245)
+    if card_type == "Destreza":
+        draw.arc((cx - 9, cy - 9, cx + 9, cy + 9), 35, 325, fill=(*accent, 255), width=3)
+        draw.arc((cx - 5, cy - 5, cx + 13, cy + 13), 205, 495, fill=pale, width=2)
+        draw.polygon([(cx + 10, cy - 9), (cx + 15, cy - 10), (cx + 12, cy - 4)], fill=(*accent, 255))
+    elif card_type == "Força":
+        draw.line((cx - 9, cy + 10, cx + 9, cy - 10), fill=pale, width=3)
+        draw.line((cx - 9, cy - 10, cx + 9, cy + 10), fill=(*accent, 255), width=3)
+        draw.line((cx - 12, cy + 5, cx - 5, cy + 12), fill=(*accent, 255), width=3)
+        draw.line((cx + 5, cy + 12, cx + 12, cy + 5), fill=pale, width=3)
+    else:
+        points = []
+        for i in range(8):
+            angle = math.radians(-90 + i * 45)
+            radius = 12 if i % 2 == 0 else 5
+            points.append((cx + math.cos(angle) * radius, cy + math.sin(angle) * radius))
+        draw.polygon(points, fill=(*accent, 200), outline=pale)
+        draw.ellipse((cx - 2, cy - 2, cx + 2, cy + 2), fill=(255, 255, 255, 255))
+
+
+def _draw_corner_ornament(draw: ImageDraw.ImageDraw, x: int, y: int, sx: int, sy: int, accent):
+    p1 = (x, y)
+    p2 = (x + sx * 29, y)
+    p3 = (x, y + sy * 29)
+    draw.line((p1, p2), fill=(*accent, 190), width=3)
+    draw.line((p1, p3), fill=(*accent, 190), width=3)
+    draw.polygon([(x + sx * 8, y + sy * 8), (x + sx * 16, y + sy * 8),
+                  (x + sx * 8, y + sy * 16)], fill=(*accent, 210))
+
+
+def _draw_rarity_frame(draw: ImageDraw.ImageDraw, width: int, height: int, rarity: str,
+                       rarity_base, rarity_accent):
+    """Cada raridade recebe uma geometria de moldura própria, não só outra cor."""
+    if rarity == "Comum":
+        draw.rounded_rectangle((5, 5, width - 6, height - 6), radius=18,
+                               fill=(6, 9, 14, 255), outline=(*rarity_accent, 245), width=5)
+        draw.rounded_rectangle((14, 14, width - 15, height - 15), radius=14,
+                               outline=(220, 225, 226, 90), width=1)
+        for x, y, sx, sy in ((23, 23, 1, 1), (width - 23, 23, -1, 1),
+                             (23, height - 23, 1, -1), (width - 23, height - 23, -1, -1)):
+            draw.line((x, y, x + sx * 18, y), fill=(*rarity_accent, 180), width=2)
+            draw.line((x, y, x, y + sy * 18), fill=(*rarity_accent, 180), width=2)
+    elif rarity == "Rara":
+        draw.rounded_rectangle((5, 5, width - 6, height - 6), radius=22,
+                               fill=(6, 9, 14, 255), outline=(*rarity_accent, 255), width=6)
+        draw.rounded_rectangle((14, 14, width - 15, height - 15), radius=16,
+                               outline=(*rarity_accent, 145), width=2)
+        points = [(width // 2, 16), (width - 18, 42), (width - 18, height - 42),
+                  (width // 2, height - 16), (18, height - 42), (18, 42), (width // 2, 16)]
+        draw.line(points, fill=(230, 246, 245, 115), width=1)
+        for cx, cy in ((width // 2, 19), (width - 19, height // 2),
+                       (width // 2, height - 19), (19, height // 2)):
+            draw.polygon([(cx, cy - 6), (cx + 6, cy), (cx, cy + 6), (cx - 6, cy)],
+                         fill=(*rarity_accent, 220))
+    elif rarity == "Épica":
+        draw.rounded_rectangle((5, 5, width - 6, height - 6), radius=18,
+                               fill=(6, 9, 14, 255), outline=(*rarity_accent, 255), width=6)
+        points = [(width // 2, 13), (width - 13, 34), (width - 13, height - 34),
+                  (width // 2, height - 13), (13, height - 34), (13, 34), (width // 2, 13)]
+        draw.line(points, fill=(*rarity_accent, 225), width=3)
+        draw.line([(width // 2, 22), (width - 22, 48), (width - 22, height - 48),
+                   (width // 2, height - 22), (22, height - 48), (22, 48), (width // 2, 22)],
+                  fill=(243, 224, 255, 105), width=1)
+        for cx, cy in ((30, 30), (width - 30, 30), (30, height - 30), (width - 30, height - 30)):
+            draw.polygon([(cx, cy - 9), (cx + 9, cy), (cx, cy + 9), (cx - 9, cy)],
+                         fill=(*rarity_accent, 230), outline=(255, 244, 255, 220))
+    else:  # Lendária: moldura tripla, arabescos laterais e selo superior.
+        draw.rounded_rectangle((4, 4, width - 5, height - 5), radius=24,
+                               fill=(8, 8, 12, 255), outline=(*rarity_accent, 255), width=7)
+        draw.rounded_rectangle((13, 13, width - 14, height - 14), radius=19,
+                               outline=(255, 235, 171, 210), width=2)
+        draw.rounded_rectangle((21, 21, width - 22, height - 22), radius=15,
+                               outline=(*rarity_accent, 105), width=1)
+        for side in (1, -1):
+            x = 27 if side == 1 else width - 27
+            for i in range(4):
+                y = 165 + i * 62
+                draw.arc((x - 14, y - 17, x + 14, y + 17), 205 if side == 1 else -25,
+                         335 if side == 1 else 105, fill=(*rarity_accent, 165), width=2)
+                draw.ellipse((x - 3, y - 3, x + 3, y + 3), fill=(255, 230, 164, 220))
+        # Pequena coroa no topo da moldura, sem invadir o título.
+        cx = width // 2
+        draw.polygon([(cx - 22, 17), (cx - 15, 7), (cx, 18), (cx + 15, 7),
+                      (cx + 22, 17), (cx + 17, 27), (cx - 17, 27)],
+                     fill=(*rarity_base, 250), outline=(255, 231, 165, 255))
+        draw.ellipse((cx - 3, 14, cx + 3, 20), fill=(255, 245, 205, 255))
+
+
+def _draw_card(card: dict[str, Any], width: int = LARGURA_PADRAO, height: int = ALTURA_PADRAO,
+               illustration_bytes: bytes | None = None) -> Image.Image:
+    rarity = str(card.get("raridade", "Comum"))
+    category = str(card.get("categoria", "Carta"))
+    card_type = str(card.get("tipo", "Magia"))
+    rarity_base, rarity_accent = CORES_RARIDADE.get(rarity, CORES_RARIDADE["Comum"])
+    type_accent = CORES_TIPO.get(card_type, (190, 190, 190))
+    category_top, category_bottom = CORES_CATEGORIA.get(category, ((21, 29, 39), (44, 47, 61)))
+    accent = _mix(rarity_accent, type_accent, 0.34)
+    rng = random.Random(_seed(card))
+
+    image = _gradient(width, height, _mix(category_top, rarity_base, .25), (7, 10, 16))
+    draw = ImageDraw.Draw(image, "RGBA")
+
+    # Textura de fundo determinística: poeira, brasas e riscos finos.
+    for _ in range(190):
+        x = rng.randint(12, width - 13)
+        y = rng.randint(12, height - 13)
+        radius = rng.choice((1, 1, 2, 3))
+        alpha = rng.randint(16, 75)
+        draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=(*accent, alpha))
+    for _ in range(18):
+        x = rng.randint(25, width - 25)
+        y = rng.randint(140, 390)
+        draw.line((x, y, x + rng.randint(-16, 16), y - rng.randint(8, 26)),
+                  fill=(*accent, rng.randint(18, 55)), width=1)
+
+    # Luz difusa atrás da ilustração.
+    glow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    glow_draw = ImageDraw.Draw(glow)
+    glow_draw.ellipse((width * .17, height * .22, width * .83, height * .69),
+                      fill=(*accent, 92))
+    glow = glow.filter(ImageFilter.GaussianBlur(max(12, width // 18)))
+    image = Image.alpha_composite(image.convert("RGBA"), glow)
+    draw = ImageDraw.Draw(image, "RGBA")
+
+    # Estrutura externa; o formato da moldura muda de verdade conforme a raridade.
+    _draw_rarity_frame(draw, width, height, rarity, rarity_base, rarity_accent)
+    draw.rounded_rectangle((21, 21, width - 22, height - 22), radius=14,
+                           outline=(238, 231, 211, 38), width=1)
+
+    # Cabeçalho editorial.
+    brand_font = _font(11, True)
+    small_font = _font(13, True)
+    title_font = _font(25, True)
+    draw.text((31, 29), "SOULSBOT  /  COLISEU", font=brand_font, fill=(200, 203, 207, 190))
+    rarity_label = rarity.upper()
+    rarity_box = draw.textbbox((0, 0), rarity_label, font=small_font)
+    pill_w = rarity_box[2] - rarity_box[0] + 22
+    draw.rounded_rectangle((width - 31 - pill_w, 22, width - 31, 48), radius=9,
+                           fill=(*rarity_base, 245), outline=(*rarity_accent, 230), width=1)
+    draw.text((width - 31 - pill_w + 11, 27), rarity_label, font=small_font, fill=(255, 249, 231, 255))
+
+    title = str(card.get("nome", "Carta"))
+    title_lines = _wrap(draw, title, title_font, width - 62)[:2]
+    title_y = 58
+    for line in title_lines:
+        draw.text((31, title_y), line, font=title_font, fill=(245, 241, 229, 255),
+                  stroke_width=0)
+        title_y += 30
+
+    # Janela de ilustração: a composição depende da categoria, não só de um símbolo.
+    art_box = (28, 128, width - 28, 423)
+    x1, y1, x2, y2 = art_box
+    draw.rounded_rectangle(art_box, radius=17, fill=(*category_top, 220), outline=(*accent, 185), width=2)
+    # Delimita a arte com luz periférica.
+    draw.arc((x1 + 12, y1 + 12, x2 - 12, y2 - 12), 190, 350, fill=(*accent, 100), width=2)
+    if illustration_bytes:
+        # A ilustração personalizada é aplicada somente na janela de arte. A moldura,
+        # raridade, título, poder e habilidade continuam sendo renderizados pelo bot.
+        try:
+            with Image.open(io.BytesIO(illustration_bytes)) as custom_source:
+                custom_art = ImageOps.fit(
+                    custom_source.convert("RGB"),
+                    (x2 - x1, y2 - y1),
+                    method=Image.Resampling.LANCZOS,
+                    centering=(0.5, 0.48),
+                ).convert("RGBA")
+            mask = Image.new("L", (x2 - x1, y2 - y1), 0)
+            mask_draw = ImageDraw.Draw(mask)
+            mask_draw.rounded_rectangle((0, 0, x2 - x1 - 1, y2 - y1 - 1), radius=17, fill=255)
+            image.paste(custom_art, (x1, y1), mask)
+            draw = ImageDraw.Draw(image, "RGBA")
+            draw.rounded_rectangle(art_box, radius=17, outline=(*accent, 205), width=2)
+            # Overlay sutil integra a arte externa à paleta do Coliseu sem alterar a composição.
+            shade = Image.new("RGBA", (x2 - x1, y2 - y1), (5, 8, 13, 22))
+            image.alpha_composite(shade, (x1, y1))
+            draw = ImageDraw.Draw(image, "RGBA")
+        except (OSError, ValueError):
+            # Se uma imagem antiga do Discord estiver corrompida, mantém a arte oficial.
+            if category == "Chefe":
+                _draw_boss(draw, art_box, accent, rng, card)
+            elif category == "Arma":
+                _draw_weapon(draw, art_box, accent, rng, card)
+            elif category == "Magia":
+                _draw_magic(draw, art_box, accent, rng, card)
+            elif category == "Covenant":
+                _draw_covenant(draw, art_box, accent, rng, card)
+            elif category == "Jogo":
+                _draw_game(draw, art_box, accent, rng)
+            elif category == "Patente":
+                _draw_patente(draw, art_box, accent, rng)
+            else:
+                _draw_magic(draw, art_box, accent, rng, card)
+    elif category == "Chefe":
+        _draw_boss(draw, art_box, accent, rng, card)
+    elif category == "Arma":
+        _draw_weapon(draw, art_box, accent, rng, card)
+    elif category == "Magia":
+        _draw_magic(draw, art_box, accent, rng, card)
+    elif category == "Covenant":
+        _draw_covenant(draw, art_box, accent, rng, card)
+    elif category == "Jogo":
+        _draw_game(draw, art_box, accent, rng)
+    elif category == "Patente":
+        _draw_patente(draw, art_box, accent, rng)
+    else:
+        _draw_magic(draw, art_box, accent, rng, card)
+
+    # Pequena assinatura de tipo na base da ilustração.
+    type_label = f"{card_type.upper()}  /  {category.upper()}"
+    label_font = _font(12, True)
+    draw.rounded_rectangle((x1 + 12, y2 - 31, x1 + 174, y2 - 9), radius=7,
+                           fill=(5, 9, 15, 205), outline=(*accent, 140), width=1)
+    draw.text((x1 + 21, y2 - 27), type_label[:22], font=label_font, fill=(*accent, 255))
+
+    # Painel de atributos, com poder em selo visual destacado.
+    draw.line((28, 438, width - 28, 438), fill=(*rarity_accent, 180), width=2)
+    power = int(card.get("poder", 0) or 0)
+    cost = int(card.get("custo", 0) or 0)
+    badge_x, badge_y = 72, 493
+    draw.ellipse((badge_x - 39, badge_y - 39, badge_x + 39, badge_y + 39),
+                 fill=(*rarity_base, 255), outline=(*rarity_accent, 255), width=4)
+    draw.ellipse((badge_x - 30, badge_y - 30, badge_x + 30, badge_y + 30),
+                 outline=(255, 244, 211, 125), width=1)
+    _text_center(draw, (badge_x, badge_y - 7), str(power), _font(31, True), (255, 248, 227, 255))
+    _text_center(draw, (badge_x, badge_y + 23), "PODER", _font(9, True), (231, 221, 199, 235))
+
+    # Tipo e custo em etiquetas independentes.
+    draw.rounded_rectangle((127, 459, width - 30, 489), radius=9,
+                           fill=(15, 22, 31, 235), outline=(*type_accent, 185), width=1)
+    _draw_type_icon(draw, (145, 474), card_type, type_accent)
+    draw.text((164, 465), card_type, font=_font(15, True), fill=(242, 240, 232, 255))
+    draw.rounded_rectangle((127, 496, width - 30, 526), radius=9,
+                           fill=(15, 22, 31, 235), outline=(*rarity_accent, 145), width=1)
+    draw.text((140, 502), f"CUSTO DE DECK  ·  {cost}", font=_font(13, True), fill=(231, 226, 211, 255))
+
+    # Habilidade em faixa própria, sempre legível na imagem individual e no pacote.
+    ability = HABILIDADES.get(str(card.get("habilidade", "")), {})
+    ability_name = str(ability.get("nome", "Habilidade"))
+    ability_text = str(ability.get("texto", card.get("descricao", "")))
+    draw.rounded_rectangle((28, 542, width - 28, 588), radius=10,
+                           fill=(12, 17, 25, 245), outline=(*accent, 125), width=1)
+    draw.text((40, 548), ability_name.upper()[:34], font=_font(11, True), fill=(*accent, 255))
+    ability_lines = _wrap(draw, ability_text, _font(11), width - 90)[:2]
+    for index, line in enumerate(ability_lines):
+        draw.text((40, 563 + index * 12), line, font=_font(11), fill=(225, 226, 222, 245))
+
+    # Efeito de brilho e acabamento nítido no contorno do quadro.
+    if rarity == "Lendária":
+        for i in range(5):
+            px = 35 + i * 84
+            py = 120 + (i % 2) * 8
+            draw.polygon([(px, py - 4), (px + 4, py), (px, py + 4), (px - 4, py)],
+                         fill=(255, 235, 164, 225))
+    elif rarity == "Épica":
+        for i in range(4):
+            px = 50 + i * 105
+            draw.ellipse((px - 2, 117, px + 2, 121), fill=(*rarity_accent, 220))
+
+    return image.convert("RGB")
 
 
 def _cache_path(payload: Any, suffix: str) -> Path:
     root = get_data_dir() / "cartas_cache"
     root.mkdir(parents=True, exist_ok=True)
-    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
     digest = hashlib.sha256(f"{VERSAO_ARTES}:{raw}".encode("utf-8")).hexdigest()[:24]
     return root / f"{digest}.{suffix}"
 
@@ -109,14 +781,27 @@ def render_carta(card: dict[str, Any]) -> Path:
 
 
 def render_pacote(cards: list[dict[str, Any]]) -> Path:
-    payload = {"cards": cards, "layout": "pack-3"}
+    payload = {"cards": cards, "layout": "pack-3-v2"}
     path = _cache_path(payload, "png")
     if path.exists():
         return path
-    card_w, card_h, gap = 330, 458, 18
-    canvas = Image.new("RGB", (card_w * 3 + gap * 4, card_h + gap * 2), (10, 12, 16))
+    card_w, card_h, gap = 294, 434, 16
+    canvas = Image.new("RGB", (card_w * 3 + gap * 4, card_h + gap * 2), (7, 10, 16))
+    canvas_draw = ImageDraw.Draw(canvas, "RGBA")
+    for inset, alpha in ((0, 90), (5, 45)):
+        canvas_draw.rounded_rectangle((inset, inset, canvas.width - inset - 1, canvas.height - inset - 1),
+                                      radius=22, outline=(208, 166, 83, alpha), width=2)
     for index, card in enumerate(cards[:3]):
-        art = _draw_card(card, card_w, card_h)
+        art = _draw_card(card).resize((card_w, card_h), Image.Resampling.LANCZOS)
         canvas.paste(art, (gap + index * (card_w + gap), gap))
     canvas.save(path, format="PNG", optimize=True)
     return path
+
+
+def render_carta_bytes(card: dict[str, Any], illustration_bytes: bytes) -> io.BytesIO:
+    """Monta uma carta personalizada em memória, sem criar cópia local da arte do membro."""
+    imagem = _draw_card(card, illustration_bytes=illustration_bytes)
+    saida = io.BytesIO()
+    imagem.save(saida, format="PNG", optimize=True)
+    saida.seek(0)
+    return saida
