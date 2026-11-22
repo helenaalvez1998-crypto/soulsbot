@@ -161,6 +161,8 @@ Versão leve das platinas para quem quer registrar os jogos que finalizou, sem p
 - **Remover zerado** no `/nara`:  o dono pode cancelar um pedido pendente ou remover o próprio registro aprovado; moderadores podem remover registros de qualquer membro. Recompensas concedidas são devolvidas.
 - Moderadores: **`/postar_painel_zerados`** publica o botão fixo no canal.
 - O perfil mostra a contagem de ✅ Zerados ao lado das platinas.
+- Ao registrar um zerado ou uma platina, o membro avalia em três etapas: **nota pessoal de 1 a 10** (quanto gostou), **dificuldade percebida de 1 a 5** (1 = muito fácil; 5 = muito difícil) e comentário de 5 a 500 caracteres. A pergunta de dificuldade é específica para zerar ou conquistar a platina e deixa explícito que vale a experiência de quem está respondendo, não uma classificação universal.
+- As publicações aprovadas mostram nota, dificuldade percebida e comentário. Registros antigos continuam válidos e aparecem sem dificuldade preenchida.
 
 
 Se o primeiro projeto Gemini falhar, a Nara tenta o segundo. Configure `GEMINI_API_KEY` e `GEMINI_BACKUP_API_KEY` de projetos distintos e, para a pesquisa web, `TAVILY_API_KEY` do plano gratuito. Os modelos são definidos por `GEMINI_MODEL` e `GEMINI_BACKUP_MODEL`. Em erro de quota ou `429`, consulte `/gemini_status` para ver o estado dos dois circuit breakers.
@@ -202,11 +204,11 @@ O bot precisa de `Ver canal`, `Ler histórico de mensagens` e `Gerenciar mensage
 
 Quando uma platina é aprovada pela moderação, a NARA registra automaticamente o mesmo jogo em **Jogos Zerados**, usando o membro, título, plataforma e data da conquista.
 
-- O membro não precisa enviar um segundo formulário.
+- O membro não precisa enviar um segundo formulário. Nota pessoal, dificuldade percebida e comentário da platina são reaproveitados no zerado automático.
 - Se já existir um zerado aprovado para o mesmo jogo/plataforma, nenhum registro ou prêmio de zerado duplicado é criado.
 - Se existir um pedido manual de zerado pendente para essa combinação, ele é convertido em aprovado pela validação da platina.
 - A recompensa da platina e a recompensa do zerado seguem suas configurações próprias. O limite diário de recompensas de zerados continua valendo.
 - O vínculo entre o registro de zerado e a platina é armazenado em `source_platina_id`, com índice único para impedir associação duplicada.
-- A migração é incremental: bancos existentes recebem a nova coluna sem apagar os registros atuais.
+- A migração é incremental: bancos existentes recebem as colunas de avaliação sem apagar os registros atuais; avaliações históricas não são preenchidas retroativamente.
 
 A aprovação da platina e a sincronização do zerado, incluindo as recompensas, acontecem na mesma transação do banco de dados.

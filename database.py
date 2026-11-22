@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS platinas (
     earned_at   TEXT NOT NULL,
     proof_url   TEXT NOT NULL,
     proof_msg_id INTEGER,
+    rating      INTEGER,
+    difficulty  INTEGER,
+    comment     TEXT NOT NULL DEFAULT '',
     status      TEXT NOT NULL DEFAULT 'pending',   -- pending | approved | rejected
     reviewer_id INTEGER,
     created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -42,6 +45,9 @@ CREATE TABLE IF NOT EXISTS sl_runs (
     challenge_id  INTEGER NOT NULL,
     build         TEXT NOT NULL DEFAULT '',
     seconds       INTEGER NOT NULL,
+    rating        INTEGER,
+    difficulty    INTEGER,
+    comment       TEXT NOT NULL DEFAULT '',
     proof_msg_id  INTEGER,
     proof_url     TEXT NOT NULL DEFAULT '',
     status        TEXT NOT NULL DEFAULT 'pending',
@@ -64,6 +70,8 @@ CREATE TABLE IF NOT EXISTS zerados (
     platform         TEXT NOT NULL,
     finished_at      TEXT NOT NULL,
     comment          TEXT NOT NULL DEFAULT '',
+    rating           INTEGER,
+    difficulty       INTEGER,
     xp_awarded       INTEGER NOT NULL DEFAULT 0,
     denarios_awarded INTEGER NOT NULL DEFAULT 0,
     status           TEXT NOT NULL DEFAULT 'approved', -- pending | approved | rejected
@@ -444,6 +452,18 @@ MIGRACOES_COLUNAS = {
         "proof_msg_id": "INTEGER",
         "approved_at": "TEXT",
         "source_platina_id": "INTEGER",
+        "rating": "INTEGER",
+        "difficulty": "INTEGER",
+    },
+    "platinas": {
+        "rating": "INTEGER",
+        "difficulty": "INTEGER",
+        "comment": "TEXT NOT NULL DEFAULT ''",
+    },
+    "sl_runs": {
+        "rating": "INTEGER",
+        "difficulty": "INTEGER",
+        "comment": "TEXT NOT NULL DEFAULT ''",
     },
     "sl_challenges": {
         # NULL mantém compatibilidade com desafios globais já cadastrados.
@@ -757,16 +777,24 @@ class Database:
         )
         return row is not None
 
-    async def criar_platina(self, user_id, game, platform, earned_at, proof_url, proof_msg_id=None) -> int:
+    async def criar_platina(self, user_id, game, platform, earned_at, proof_url, proof_msg_id=None,
+                            rating=None, comment="", difficulty=None) -> int:
+        if difficulty is not None and (type(difficulty) is not int or not 1 <= difficulty <= 5):
+            raise ValueError("A dificuldade percebida deve ser um número inteiro entre 1 e 5.")
         cur = await self.conn.execute(
-            "INSERT INTO platinas(user_id, game, platform, earned_at, proof_url, proof_msg_id) VALUES (?,?,?,?,?,?)",
-            (user_id, game, platform, earned_at, proof_url, proof_msg_id),
+            "INSERT INTO platinas(user_id, game, platform, earned_at, proof_url, proof_msg_id, rating, difficulty, comment) VALUES (?,?,?,?,?,?,?,?,?)",
+            (user_id, game, platform, earned_at, proof_url, proof_msg_id, rating, difficulty, str(comment or "")[:500]),
         )
         await self.conn.commit()
         return cur.lastrowid
 
-    async def criar_platina_unica(self, user_id, game, platform, earned_at, proof_url, proof_msg_id=None):
+    async def criar_platina_unica(self, user_id, game, platform, earned_at, proof_url, proof_msg_id=None,
+                                  rating=None, comment="", difficulty=None):
         """Cria registro sob BEGIN IMMEDIATE para impedir duplicata em cliques simultâneos."""
+        if rating is not None and (type(rating) is not int or not 1 <= rating <= 10):
+            raise ValueError("A nota do jogo deve ser um número inteiro entre 1 e 10.")
+        if difficulty is not None and (type(difficulty) is not int or not 1 <= difficulty <= 5):
+            raise ValueError("A dificuldade percebida deve ser um número inteiro entre 1 e 5.")
         async with self.transaction() as tx:
             existente = await tx._one(
                 """SELECT id FROM platinas WHERE user_id=? AND lower(game)=lower(?)
@@ -776,8 +804,8 @@ class Database:
             if existente:
                 return None
             cur = await tx.conn.execute(
-                "INSERT INTO platinas(user_id, game, platform, earned_at, proof_url, proof_msg_id) VALUES (?,?,?,?,?,?)",
-                (user_id, game, platform, earned_at, proof_url, proof_msg_id),
+                "INSERT INTO platinas(user_id, game, platform, earned_at, proof_url, proof_msg_id, rating, difficulty, comment) VALUES (?,?,?,?,?,?,?,?,?)",
+                (user_id, game, platform, earned_at, proof_url, proof_msg_id, rating, difficulty, str(comment or "")[:500]),
             )
             return cur.lastrowid
 
@@ -860,11 +888,12 @@ class Database:
             if existing is None:
                 cur_z = await tx.conn.execute(
                     """INSERT INTO zerados(
-                           user_id, game, platform, finished_at, comment, status,
-                           reviewer_id, approved_at, source_platina_id
-                       ) VALUES (?,?,?,?,?,'approved',?,CURRENT_TIMESTAMP,?)""",
+                           user_id, game, platform, finished_at, comment, rating, status,
+                           reviewer_id, approved_at, source_platina_id, difficulty
+                       ) VALUES (?,?,?,?,?,?,'approved',?,CURRENT_TIMESTAMP,?,?)""",
                     (user_id, platina["game"], platina["platform"], platina["earned_at"],
-                     "Registro automático pela aprovação da platina.", reviewer_id, platina_id),
+                     str(platina["comment"] or "Registro automático pela aprovação da platina."),
+                     platina["rating"], reviewer_id, platina_id, platina["difficulty"]),
                 )
                 zerado_id = int(cur_z.lastrowid)
                 deve_premiar_zerado = True
@@ -874,8 +903,14 @@ class Database:
                 # Já existe conclusão validada. Apenas vincula a origem se ainda não houver.
                 zerado_id = int(existing["id"])
                 await tx.conn.execute(
-                    "UPDATE zerados SET source_platina_id=COALESCE(source_platina_id, ?) WHERE id=?",
-                    (platina_id, zerado_id),
+                    """UPDATE zerados
+                       SET source_platina_id=COALESCE(source_platina_id, ?),
+                           rating=COALESCE(rating, ?),
+                           difficulty=COALESCE(difficulty, ?),
+                           comment=CASE WHEN trim(comment)='' THEN ? ELSE comment END
+                       WHERE id=?""",
+                    (platina_id, platina["rating"], platina["difficulty"],
+                     str(platina["comment"] or ""), zerado_id),
                 )
                 deve_premiar_zerado = False
                 zerado_status_anterior = "approved"
@@ -887,8 +922,13 @@ class Database:
                 zerado_status_anterior = "pending"
                 cur_z = await tx.conn.execute(
                     """UPDATE zerados SET status='approved', reviewer_id=?, approved_at=CURRENT_TIMESTAMP,
-                           finished_at=?, source_platina_id=? WHERE id=? AND status='pending'""",
-                    (reviewer_id, platina["earned_at"], platina_id, zerado_id),
+                           finished_at=?, source_platina_id=?, rating=COALESCE(?, rating),
+                           difficulty=COALESCE(?, difficulty),
+                           comment=CASE WHEN trim(?)<>'' THEN ? ELSE comment END
+                       WHERE id=? AND status='pending'""",
+                    (reviewer_id, platina["earned_at"], platina_id, platina["rating"],
+                     platina["difficulty"], str(platina["comment"] or ""),
+                     str(platina["comment"] or ""), zerado_id),
                 )
                 deve_premiar_zerado = cur_z.rowcount == 1
 
@@ -930,6 +970,9 @@ class Database:
                 "zerado_converted": zerado_status_anterior == "pending",
                 "zerado_preexisting": zerado_status_anterior == "approved",
                 "zerado_proof_msg_id": proof_msg_id,
+                "platina_rating": platina["rating"],
+                "platina_difficulty": platina["difficulty"],
+                "platina_comment": platina["comment"],
                 "zerado_xp": xp_z, "zerado_denarios": den_z,
                 "zerado_daily_limit_reached": limite_atingido,
                 "zerado_old_xp": zerado_old_xp, "zerado_new_xp": zerado_new_xp,
@@ -989,8 +1032,12 @@ class Database:
         )
         return row is not None
 
-    async def criar_zerado_pendente(self, user_id, game, platform, finished_at, comment=""):
+    async def criar_zerado_pendente(self, user_id, game, platform, finished_at, comment="", rating=None, difficulty=None):
         """Cria uma solicitação pendente sem creditar XP/Denários antes da revisão."""
+        if rating is not None and (type(rating) is not int or not 1 <= rating <= 10):
+            raise ValueError("A nota do jogo deve ser um número inteiro entre 1 e 10.")
+        if difficulty is not None and (type(difficulty) is not int or not 1 <= difficulty <= 5):
+            raise ValueError("A dificuldade percebida deve ser um número inteiro entre 1 e 5.")
         async with self.transaction() as tx:
             dup = await tx._one(
                 """SELECT id FROM zerados
@@ -1001,9 +1048,10 @@ class Database:
             if dup:
                 return None
             cur = await tx.conn.execute(
-                """INSERT INTO zerados(user_id, game, platform, finished_at, comment, status)
-                   VALUES (?,?,?,?,?,'pending')""",
-                (user_id, game, platform, finished_at, comment),
+                """INSERT INTO zerados(
+                       user_id, game, platform, finished_at, comment, rating, difficulty, status
+                   ) VALUES (?,?,?,?,?,?,?,'pending')""",
+                (user_id, game, platform, finished_at, str(comment or "")[:500], rating, difficulty),
             )
             return int(cur.lastrowid)
 
@@ -1059,7 +1107,7 @@ class Database:
             return {
                 "id": zerado_id, "user_id": int(row["user_id"]), "game": row["game"],
                 "platform": row["platform"], "finished_at": row["finished_at"],
-                "comment": row["comment"], "proof_msg_id": row["proof_msg_id"],
+                "comment": row["comment"], "rating": row["rating"], "proof_msg_id": row["proof_msg_id"],
                 "xp": xp, "denarios": denarios, "old_xp": old_xp, "new_xp": new_xp,
                 "old_level": old_level, "new_level": new_level,
                 "daily_limit_reached": limite_atingido,
