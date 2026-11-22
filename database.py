@@ -3233,17 +3233,35 @@ class Database:
             return {"status": "ok", "custo": sum(int(c["custo"]) for c in cards)}
 
     async def coliseu_obter_deck(self, user_id: int):
+        """Carrega o deck e migra apenas o ID da habilidade para o catálogo atual."""
         import json
+        from sistemas.cartas import carta_dict
+
         rows = await self._all(
-            "SELECT snapshot_json FROM cartas_deck_itens WHERE user_id=? ORDER BY slot",
+            "SELECT slot,snapshot_json FROM cartas_deck_itens WHERE user_id=? ORDER BY slot",
             (int(user_id),),
         )
         result = []
+        atualizacoes = []
         for row in rows:
             try:
-                result.append(json.loads(row["snapshot_json"]))
+                carta = json.loads(row["snapshot_json"])
             except (TypeError, ValueError):
                 continue
+            canonica = carta_dict(str(carta.get("id", "")), str(carta.get("jogo_origem", "")))
+            # Não alteramos poder, custo, tipo ou raridade de cartas já salvas; somente
+            # sincronizamos a habilidade para que decks antigos recebam o novo catálogo.
+            if canonica and carta.get("habilidade") != canonica.get("habilidade"):
+                carta["habilidade"] = canonica["habilidade"]
+                atualizacoes.append((json.dumps(carta, ensure_ascii=False), int(row["slot"])))
+            result.append(carta)
+        for snapshot, slot in atualizacoes:
+            await self.conn.execute(
+                "UPDATE cartas_deck_itens SET snapshot_json=? WHERE user_id=? AND slot=?",
+                (snapshot, int(user_id), int(slot)),
+            )
+        if atualizacoes:
+            await self.conn.commit()
         return result
 
     async def coliseu_criar_convite(self, guild_id: int, channel_id: int, creator_id: int,
