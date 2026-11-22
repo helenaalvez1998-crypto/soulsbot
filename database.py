@@ -949,6 +949,74 @@ class Database:
             novo_xp = int(atualizado["xp"])
             return antigo, nivel_por_xp(novo_xp), novo_xp
 
+    async def ajustar_economia_por_admin(
+        self, user_id: int, actor_id: int, xp_delta: int = 0,
+        denarios_delta: int = 0, motivo: str = "", guild_id: int | None = None,
+    ) -> dict:
+        """Ajusta XP/Denários atomicamente e registra a auditoria na mesma transação.
+
+        Valores finais nunca ficam negativos. Os deltas retornados representam o que
+        realmente foi aplicado (importante quando a remoção supera o saldo disponível).
+        """
+        user_id = int(user_id)
+        actor_id = int(actor_id)
+        guild_id = int(guild_id) if guild_id is not None else None
+        xp_delta = int(xp_delta)
+        denarios_delta = int(denarios_delta)
+        motivo = " ".join(str(motivo or "").split())[:200]
+        limite = 1_000_000_000
+        if user_id <= 0 or actor_id <= 0:
+            raise ValueError("Identificadores de usuário inválidos.")
+        if abs(xp_delta) > limite or abs(denarios_delta) > limite:
+            raise ValueError("O ajuste máximo permitido é de 1.000.000.000 por recurso.")
+        if xp_delta == 0 and denarios_delta == 0:
+            raise ValueError("Informe uma quantidade de XP ou Denários diferente de zero.")
+        if not motivo:
+            raise ValueError("Informe o motivo do ajuste administrativo.")
+
+        async with self.transaction() as tx:
+            await tx.conn.execute(
+                "INSERT OR IGNORE INTO users(user_id) VALUES (?)", (user_id,)
+            )
+            antes = await tx._one(
+                "SELECT xp, denarios FROM users WHERE user_id=?", (user_id,)
+            )
+            xp_antes = int(antes["xp"] or 0)
+            denarios_antes = int(antes["denarios"] or 0)
+            xp_depois = max(0, xp_antes + xp_delta)
+            denarios_depois = max(0, denarios_antes + denarios_delta)
+            xp_aplicado = xp_depois - xp_antes
+            denarios_aplicados = denarios_depois - denarios_antes
+
+            await tx.conn.execute(
+                "UPDATE users SET xp=?, denarios=? WHERE user_id=?",
+                (xp_depois, denarios_depois, user_id),
+            )
+            detalhes = (
+                f"guild={guild_id or 0}; target={user_id}; "
+                f"xp={xp_antes}->{xp_depois}; xp_delta={xp_aplicado}; "
+                f"denarios={denarios_antes}->{denarios_depois}; "
+                f"denarios_delta={denarios_aplicados}; motivo={motivo}"
+            )
+            await tx.conn.execute(
+                "INSERT INTO logs(actor_id, action, details) VALUES (?,?,?)",
+                (actor_id, "admin_economia_ajustada", detalhes),
+            )
+
+            return {
+                "user_id": user_id,
+                "actor_id": actor_id,
+                "xp_antes": xp_antes,
+                "xp_depois": xp_depois,
+                "xp_delta": xp_aplicado,
+                "denarios_antes": denarios_antes,
+                "denarios_depois": denarios_depois,
+                "denarios_delta": denarios_aplicados,
+                "nivel_antes": nivel_por_xp(xp_antes),
+                "nivel_depois": nivel_por_xp(xp_depois),
+                "motivo": motivo,
+            }
+
     async def aprovar_run_com_recompensa(self, run_id: int, reviewer_id: int):
         """Aprova uma run e credita XP base/bônus na mesma transação indivisível.
 
