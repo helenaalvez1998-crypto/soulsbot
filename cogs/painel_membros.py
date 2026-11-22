@@ -80,6 +80,7 @@ MEMBROS_CATEGORIAS = {
         "descricao": "Acesse suas platinas, jogos zerados e runs. Acompanhe os registros enviados e o resultado da moderação.",
         "acoes": [
             ("biblioteca_platinas", "Platinas", "🏆", discord.ButtonStyle.primary),
+            ("coliseu", "Painel de platinas", "⚔️", discord.ButtonStyle.secondary),
             ("zerados", "Zerados", "✅", discord.ButtonStyle.success),
             ("biblioteca_runs", "Runs e desafios", "⚔️", discord.ButtonStyle.danger),
             ("meus_registros", "Meus registros e aprovações", "📬", discord.ButtonStyle.secondary),
@@ -88,11 +89,12 @@ MEMBROS_CATEGORIAS = {
     },
     "progresso": {
         "titulo": "🏆 Meu progresso e recompensas",
-        "descricao": "Consulte seu nível, compare seu XP e utilize seus Denários.",
+        "descricao": "Consulte seu nível, compare seu XP, utilize seus Denários e entre no Coliseu de Cartas.",
         "acoes": [
             ("nivel", "Meu nível e XP", "🛡️", discord.ButtonStyle.primary),
             ("ranking_xp", "Ranking de XP", "🏆", discord.ButtonStyle.secondary),
             ("loja", "Loja de recompensas", "🪙", discord.ButtonStyle.success),
+            ("cartas_coliseu", "Coliseu de cartas", "⚔️", discord.ButtonStyle.danger),
         ],
     },
     "preferencias": {
@@ -563,6 +565,12 @@ async def _executar_acao_membro(
             view=view_so_com_voltar(voltar),
         )
 
+    if action == "cartas_coliseu":
+        cog = bot.get_cog("ColiseuCartas")
+        if cog is None:
+            return await interaction.response.send_message("O Coliseu de cartas está indisponível no momento.", ephemeral=True)
+        return await cog.abrir_painel(interaction, editar=True)
+
     if action == "memoria":
         cog = bot.get_cog("NaraIA")
         if cog is None:
@@ -792,7 +800,7 @@ class PainelMembros(commands.Cog):
                 "**Seu progresso agora**\n" + resumo + "\n\n"
                 "🎮 **Ports & Mods:** explore ports de jogos e mods da comunidade, pesquise e envie sugestões.\n"
                 "📚 **Minha biblioteca:** acesse Platinas, Zerados e Runs e desafios.\n"
-                "🏆 **Meu progresso:** acompanhe nível, XP, ranking e Loja.\n"
+                "🏆 **Meu progresso:** acompanhe nível, XP, ranking, Loja e Coliseu de Cartas.\n"
                 "👤 **Meu perfil:** veja suas estatísticas e posições nos rankings.\n"
                 "🏛️ **Meu Santuário:** personalize seu espaço e galeria de platinas.\n"
                 "🧠 **Preferências:** acesse suas opções pessoais da Nara.\n"
