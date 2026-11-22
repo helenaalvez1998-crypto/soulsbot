@@ -445,6 +445,20 @@ CREATE TABLE IF NOT EXISTS user_notification_preferences (
     PRIMARY KEY(guild_id, user_id)
 );
 
+-- Caixa de entrada persistente para avisos cuja DM não pôde ser entregue.
+CREATE TABLE IF NOT EXISTS user_notification_inbox (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    category TEXT NOT NULL,
+    message TEXT NOT NULL,
+    dedupe_hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    read_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_notification_inbox_user
+    ON user_notification_inbox(guild_id, user_id, read_at, id DESC);
+
 -- Evita premiar mensagens repetidas e limita XP por atividade textual diária.
 CREATE TABLE IF NOT EXISTS xp_message_awards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2134,6 +2148,38 @@ class Database:
         )
         keys = ("approvals", "rejections", "levels", "replies", "challenges")
         return {key: bool(row[key]) if row else True for key in keys}
+
+    async def registrar_notificacao_pendente(
+        self, guild_id: int, user_id: int, categoria: str, mensagem: str, dedupe_hash: str,
+    ) -> bool:
+        cur = await self.conn.execute(
+            """INSERT OR IGNORE INTO user_notification_inbox
+               (guild_id,user_id,category,message,dedupe_hash)
+               VALUES (?,?,?,?,?)""",
+            (int(guild_id), int(user_id), str(categoria)[:40], str(mensagem)[:1800], str(dedupe_hash)),
+        )
+        await self.conn.commit()
+        return cur.rowcount == 1
+
+    async def listar_notificacoes_pendentes(
+        self, guild_id: int, user_id: int, limite: int = 10,
+    ) -> list:
+        cur = await self.conn.execute(
+            """SELECT id,category,message,created_at FROM user_notification_inbox
+               WHERE guild_id=? AND user_id=? AND read_at IS NULL
+               ORDER BY id DESC LIMIT ?""",
+            (int(guild_id), int(user_id), max(1, min(int(limite), 25))),
+        )
+        return await cur.fetchall()
+
+    async def marcar_notificacoes_lidas(self, guild_id: int, user_id: int) -> int:
+        cur = await self.conn.execute(
+            """UPDATE user_notification_inbox SET read_at=CURRENT_TIMESTAMP
+               WHERE guild_id=? AND user_id=? AND read_at IS NULL""",
+            (int(guild_id), int(user_id)),
+        )
+        await self.conn.commit()
+        return int(cur.rowcount)
 
     async def definir_preferencia_notificacao(
         self, guild_id: int, user_id: int, key: str, enabled: bool
