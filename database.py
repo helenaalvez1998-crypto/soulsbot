@@ -426,6 +426,38 @@ CREATE TABLE IF NOT EXISTS community_activity_preferences (
     PRIMARY KEY(guild_id, user_id)
 );
 
+-- Preferências úteis do membro, sem depender do estado volátil das Views do Discord.
+CREATE TABLE IF NOT EXISTS user_game_preferences (
+    user_id INTEGER PRIMARY KEY,
+    last_platform TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS user_notification_preferences (
+    guild_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    approvals INTEGER NOT NULL DEFAULT 1,
+    rejections INTEGER NOT NULL DEFAULT 1,
+    levels INTEGER NOT NULL DEFAULT 1,
+    replies INTEGER NOT NULL DEFAULT 1,
+    challenges INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(guild_id, user_id)
+);
+
+-- Evita premiar mensagens repetidas e limita XP por atividade textual diária.
+CREATE TABLE IF NOT EXISTS xp_message_awards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    content_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_xp_message_user_time
+    ON xp_message_awards(guild_id, user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_xp_message_hash_time
+    ON xp_message_awards(guild_id, user_id, content_hash, created_at);
+
 """
 
 
@@ -454,11 +486,13 @@ MIGRACOES_COLUNAS = {
         "source_platina_id": "INTEGER",
         "rating": "INTEGER",
         "difficulty": "INTEGER",
+        "reject_reason": "TEXT NOT NULL DEFAULT ''",
     },
     "platinas": {
         "rating": "INTEGER",
         "difficulty": "INTEGER",
         "comment": "TEXT NOT NULL DEFAULT ''",
+        "reject_reason": "TEXT NOT NULL DEFAULT ''",
     },
     "sl_runs": {
         "rating": "INTEGER",
@@ -838,14 +872,17 @@ class Database:
         )
         await self.conn.commit()
 
-    async def decidir_platina(self, platina_id: int, status: str, reviewer_id: int) -> bool:
-        """Registra a decisão somente se a platina ainda estiver pendente."""
+    async def decidir_platina(
+        self, platina_id: int, status: str, reviewer_id: int, motivo: str = ""
+    ) -> bool:
+        """Registra a decisão e o motivo, somente se a platina ainda estiver pendente."""
         if status not in ("approved", "rejected"):
             return False
         async with self.transaction() as tx:
             cur = await tx.conn.execute(
-                "UPDATE platinas SET status=?, reviewer_id=? WHERE id=? AND status='pending'",
-                (status, reviewer_id, platina_id),
+                """UPDATE platinas SET status=?, reviewer_id=?, reject_reason=?
+                   WHERE id=? AND status='pending'""",
+                (status, reviewer_id, str(motivo or "")[:300] if status == "rejected" else "", platina_id),
             )
             return cur.rowcount == 1
 
@@ -1099,7 +1136,7 @@ class Database:
             new_level = nivel_por_xp(new_xp)
             cur = await tx.conn.execute(
                 """UPDATE zerados SET status='approved', reviewer_id=?, approved_at=CURRENT_TIMESTAMP,
-                       xp_awarded=?, denarios_awarded=? WHERE id=? AND status='pending'""",
+                       xp_awarded=?, denarios_awarded=?, reject_reason='' WHERE id=? AND status='pending'""",
                 (reviewer_id, xp, denarios, zerado_id),
             )
             if cur.rowcount != 1:
@@ -1107,18 +1144,18 @@ class Database:
             return {
                 "id": zerado_id, "user_id": int(row["user_id"]), "game": row["game"],
                 "platform": row["platform"], "finished_at": row["finished_at"],
-                "comment": row["comment"], "rating": row["rating"], "proof_msg_id": row["proof_msg_id"],
+                "comment": row["comment"], "rating": row["rating"], "difficulty": row["difficulty"], "proof_msg_id": row["proof_msg_id"],
                 "xp": xp, "denarios": denarios, "old_xp": old_xp, "new_xp": new_xp,
                 "old_level": old_level, "new_level": new_level,
                 "daily_limit_reached": limite_atingido,
             }
 
-    async def rejeitar_zerado(self, zerado_id: int, reviewer_id: int) -> bool:
+    async def rejeitar_zerado(self, zerado_id: int, reviewer_id: int, motivo: str = "") -> bool:
         async with self.transaction() as tx:
             cur = await tx.conn.execute(
-                """UPDATE zerados SET status='rejected', reviewer_id=?
+                """UPDATE zerados SET status='rejected', reviewer_id=?, reject_reason=?
                    WHERE id=? AND status='pending'""",
-                (reviewer_id, zerado_id),
+                (reviewer_id, str(motivo or "")[:300], zerado_id),
             )
             return cur.rowcount == 1
 
@@ -1833,6 +1870,288 @@ class Database:
         )
         keys = ("platinas", "zerados", "runs", "lore", "guides", "challenges")
         return {key: bool(row[key]) if row else True for key in keys}
+
+    async def get_ultima_plataforma(self, user_id: int) -> str | None:
+        row = await self._one(
+            "SELECT last_platform FROM user_game_preferences WHERE user_id=?", (int(user_id),)
+        )
+        valor = str(row["last_platform"] or "").strip() if row else ""
+        return valor or None
+
+    async def set_ultima_plataforma(self, user_id: int, platform: str) -> None:
+        platform = str(platform or "").strip()[:30]
+        if not platform:
+            return
+        await self.conn.execute(
+            """INSERT INTO user_game_preferences(user_id,last_platform) VALUES (?,?)
+               ON CONFLICT(user_id) DO UPDATE SET last_platform=excluded.last_platform,
+               updated_at=CURRENT_TIMESTAMP""",
+            (int(user_id), platform),
+        )
+        await self.conn.commit()
+
+    async def titulos_semelhantes(self, nome: str, limite: int = 3) -> list[str]:
+        """Sugere títulos existentes para ajudar a evitar variações/duplicatas de nomes."""
+        from difflib import SequenceMatcher
+        import unicodedata
+
+        def normalizar(valor: str) -> str:
+            valor = unicodedata.normalize("NFKD", str(valor or ""))
+            valor = "".join(ch for ch in valor if not unicodedata.combining(ch))
+            return " ".join(valor.lower().strip().split())
+
+        alvo = normalizar(nome)
+        if len(alvo) < 4:
+            return []
+        rows = await self._all(
+            """SELECT name AS titulo FROM games_catalog WHERE status IN ('ready','review')
+               UNION SELECT game FROM platinas WHERE status='approved'
+               UNION SELECT game FROM zerados WHERE status='approved'
+               UNION SELECT name FROM sl_games"""
+        )
+        candidatos = {}
+        for row in rows:
+            titulo = str(row["titulo"] if "titulo" in row.keys() else row[0]).strip()
+            chave = normalizar(titulo)
+            if chave and chave != alvo:
+                razao = SequenceMatcher(None, alvo, chave).ratio()
+                if razao >= 0.78 or (min(len(alvo), len(chave)) >= 5 and (alvo in chave or chave in alvo)):
+                    candidatos[titulo] = max(razao, candidatos.get(titulo, 0))
+        return [titulo for titulo, _ in sorted(candidatos.items(), key=lambda item: (-item[1], item[0].lower()))[:max(1, min(int(limite), 5))]]
+
+    async def get_preferencias_notificacao(self, guild_id: int, user_id: int) -> dict:
+        row = await self._one(
+            "SELECT * FROM user_notification_preferences WHERE guild_id=? AND user_id=?",
+            (int(guild_id), int(user_id)),
+        )
+        keys = ("approvals", "rejections", "levels", "replies", "challenges")
+        return {key: bool(row[key]) if row else True for key in keys}
+
+    async def definir_preferencia_notificacao(
+        self, guild_id: int, user_id: int, key: str, enabled: bool
+    ) -> None:
+        permitidos = {"approvals", "rejections", "levels", "replies", "challenges"}
+        if key not in permitidos:
+            raise ValueError("Tipo de notificação desconhecido.")
+        await self.conn.execute(
+            """INSERT INTO user_notification_preferences(guild_id,user_id) VALUES (?,?)
+               ON CONFLICT(guild_id,user_id) DO NOTHING""",
+            (int(guild_id), int(user_id)),
+        )
+        await self.conn.execute(
+            f"UPDATE user_notification_preferences SET {key}=?,updated_at=CURRENT_TIMESTAMP WHERE guild_id=? AND user_id=?",
+            (int(bool(enabled)), int(guild_id), int(user_id)),
+        )
+        await self.conn.commit()
+
+    async def registrar_xp_mensagem(
+        self, guild_id: int, user_id: int, content_hash: str, limite_diario: int = 20
+    ) -> bool:
+        """Registra uma mensagem elegível sem duplicar texto recente nem exceder a cota diária."""
+        async with self.transaction() as tx:
+            await tx.conn.execute(
+                "DELETE FROM xp_message_awards WHERE created_at < datetime('now','-30 days')"
+            )
+            duplicada = await tx._one(
+                """SELECT 1 FROM xp_message_awards
+                   WHERE guild_id=? AND user_id=? AND content_hash=?
+                     AND created_at >= datetime('now','-7 days') LIMIT 1""",
+                (int(guild_id), int(user_id), str(content_hash)),
+            )
+            if duplicada:
+                return False
+            total = await tx._one(
+                """SELECT COUNT(*) AS total FROM xp_message_awards
+                   WHERE guild_id=? AND user_id=? AND created_at >= datetime('now','-1 day')""",
+                (int(guild_id), int(user_id)),
+            )
+            if int(total["total"] or 0) >= max(1, int(limite_diario)):
+                return False
+            await tx.conn.execute(
+                "INSERT INTO xp_message_awards(guild_id,user_id,content_hash) VALUES (?,?,?)",
+                (int(guild_id), int(user_id), str(content_hash)),
+            )
+            return True
+
+    async def registros_do_usuario(self, user_id: int, limite: int = 30):
+        """Lista platinas, zerados e runs em uma linha do tempo com estado e motivo."""
+        limite = max(1, min(int(limite), 100))
+        return await self._all(
+            """SELECT * FROM (
+                SELECT 'Platina' AS tipo, p.id, p.game AS titulo, p.platform AS detalhe,
+                       p.earned_at AS data, p.status, COALESCE(p.reject_reason,'') AS motivo,
+                       p.rating, p.difficulty, COALESCE(p.comment,'') AS comentario,
+                       p.created_at AS criado
+                  FROM platinas p WHERE p.user_id=?
+                UNION ALL
+                SELECT 'Zerado' AS tipo, z.id, z.game AS titulo, z.platform AS detalhe,
+                       z.finished_at AS data, z.status, COALESCE(z.reject_reason,'') AS motivo,
+                       z.rating, z.difficulty, COALESCE(z.comment,'') AS comentario,
+                       z.created_at AS criado
+                  FROM zerados z WHERE z.user_id=? AND (z.source_platina_id IS NULL OR z.status='rejected')
+                UNION ALL
+                SELECT 'Run' AS tipo, r.id, g.name AS titulo, c.name AS detalhe,
+                       substr(r.created_at,1,10) AS data, r.status, COALESCE(r.reject_reason,'') AS motivo,
+                       r.rating, r.difficulty, COALESCE(r.comment,'') AS comentario,
+                       r.created_at AS criado
+                  FROM sl_runs r JOIN sl_games g ON g.id=r.game_id
+                  JOIN sl_challenges c ON c.id=r.challenge_id WHERE r.user_id=?
+            ) ORDER BY criado DESC, id DESC LIMIT ?""",
+            (int(user_id), int(user_id), int(user_id), limite),
+        )
+
+    async def estatisticas_gamer(self, user_id: int) -> dict:
+        """Indicadores do perfil sem contar duas vezes o zerado gerado por uma platina."""
+        user_id = int(user_id)
+        row = await self._one(
+            """SELECT COUNT(*) AS total,
+                      AVG(rating) AS media_nota, COUNT(rating) AS notas,
+                      AVG(difficulty) AS media_dificuldade, COUNT(difficulty) AS dificuldades
+               FROM (
+                   SELECT rating,difficulty FROM platinas WHERE user_id=? AND status='approved'
+                   UNION ALL
+                   SELECT rating,difficulty FROM zerados
+                     WHERE user_id=? AND status='approved' AND source_platina_id IS NULL
+                   UNION ALL
+                   SELECT rating,difficulty FROM sl_runs WHERE user_id=? AND status='approved'
+               )""",
+            (user_id, user_id, user_id),
+        )
+        plataformas = await self._all(
+            """SELECT platform,COUNT(*) AS total FROM (
+                   SELECT platform FROM platinas WHERE user_id=? AND status='approved'
+                   UNION ALL
+                   SELECT platform FROM zerados WHERE user_id=? AND status='approved'
+                     AND source_platina_id IS NULL
+               ) GROUP BY platform ORDER BY total DESC,platform COLLATE NOCASE LIMIT 3""",
+            (user_id, user_id),
+        )
+        melhores = await self._all(
+            """SELECT * FROM (
+                   SELECT game AS titulo, platform AS detalhe, rating, difficulty, earned_at AS data, 'Platina' AS tipo
+                     FROM platinas WHERE user_id=? AND status='approved' AND rating IS NOT NULL
+                   UNION ALL
+                   SELECT game AS titulo, platform AS detalhe, rating, difficulty, finished_at AS data, 'Zerado' AS tipo
+                     FROM zerados WHERE user_id=? AND status='approved' AND source_platina_id IS NULL AND rating IS NOT NULL
+                   UNION ALL
+                   SELECT g.name AS titulo,c.name AS detalhe,r.rating,r.difficulty,substr(r.created_at,1,10) AS data,'Run' AS tipo
+                     FROM sl_runs r JOIN sl_games g ON g.id=r.game_id JOIN sl_challenges c ON c.id=r.challenge_id
+                    WHERE r.user_id=? AND r.status='approved' AND r.rating IS NOT NULL
+               ) ORDER BY rating DESC, data DESC LIMIT 3""",
+            (user_id, user_id, user_id),
+        )
+        recentes = await self._all(
+            """SELECT * FROM (
+                   SELECT game AS titulo,platform AS detalhe,earned_at AS data,'Platina' AS tipo
+                     FROM platinas WHERE user_id=? AND status='approved'
+                   UNION ALL
+                   SELECT game AS titulo,platform AS detalhe,finished_at AS data,'Zerado' AS tipo
+                     FROM zerados WHERE user_id=? AND status='approved' AND source_platina_id IS NULL
+                   UNION ALL
+                   SELECT g.name AS titulo,c.name AS detalhe,substr(r.created_at,1,10) AS data,'Run' AS tipo
+                     FROM sl_runs r JOIN sl_games g ON g.id=r.game_id JOIN sl_challenges c ON c.id=r.challenge_id
+                    WHERE r.user_id=? AND r.status='approved'
+               ) ORDER BY data DESC LIMIT 3""",
+            (user_id, user_id, user_id),
+        )
+        return {
+            "total_avaliacoes": int(row["total"] or 0),
+            "media_nota": float(row["media_nota"]) if row["media_nota"] is not None else None,
+            "qtd_notas": int(row["notas"] or 0),
+            "media_dificuldade": float(row["media_dificuldade"]) if row["media_dificuldade"] is not None else None,
+            "qtd_dificuldades": int(row["dificuldades"] or 0),
+            "plataformas": plataformas,
+            "melhores": melhores,
+            "recentes": recentes,
+        }
+
+    async def ranking_jogos_avaliacao(self, minimo: int = 3, limite: int = 10):
+        """Classifica jogos pela média das notas aprovadas, com amostra mínima."""
+        return await self._all(
+            """SELECT titulo,AVG(rating) AS valor,COUNT(rating) AS quantidade FROM (
+                   SELECT game AS titulo,rating FROM platinas
+                     WHERE status='approved' AND rating IS NOT NULL
+                   UNION ALL
+                   SELECT game AS titulo,rating FROM zerados
+                     WHERE status='approved' AND source_platina_id IS NULL AND rating IS NOT NULL
+                   UNION ALL
+                   SELECT g.name AS titulo,r.rating FROM sl_runs r
+                     JOIN sl_games g ON g.id=r.game_id
+                    WHERE r.status='approved' AND r.rating IS NOT NULL
+               ) GROUP BY titulo COLLATE NOCASE HAVING COUNT(rating)>=?
+               ORDER BY valor DESC,quantidade DESC,titulo COLLATE NOCASE LIMIT ?""",
+            (max(1, int(minimo)), max(1, min(int(limite), 50))),
+        )
+
+    async def ranking_jogos_dificuldade(self, minimo: int = 3, limite: int = 10):
+        """Classifica jogos pela dificuldade percebida média, com amostra mínima."""
+        return await self._all(
+            """SELECT titulo,AVG(difficulty) AS valor,COUNT(difficulty) AS quantidade FROM (
+                   SELECT game AS titulo,difficulty FROM platinas
+                     WHERE status='approved' AND difficulty IS NOT NULL
+                   UNION ALL
+                   SELECT game AS titulo,difficulty FROM zerados
+                     WHERE status='approved' AND source_platina_id IS NULL AND difficulty IS NOT NULL
+                   UNION ALL
+                   SELECT g.name AS titulo,r.difficulty FROM sl_runs r
+                     JOIN sl_games g ON g.id=r.game_id
+                    WHERE r.status='approved' AND r.difficulty IS NOT NULL
+               ) GROUP BY titulo COLLATE NOCASE HAVING COUNT(difficulty)>=?
+               ORDER BY valor DESC,quantidade DESC,titulo COLLATE NOCASE LIMIT ?""",
+            (max(1, int(minimo)), max(1, min(int(limite), 50))),
+        )
+
+    async def ranking_media_avaliacoes(self, minimo: int = 3, limite: int = 10):
+        return await self._all(
+            """SELECT user_id,AVG(rating) AS valor,COUNT(rating) AS quantidade FROM (
+                   SELECT user_id,rating FROM platinas WHERE status='approved' AND rating IS NOT NULL
+                   UNION ALL
+                   SELECT user_id,rating FROM zerados WHERE status='approved'
+                     AND source_platina_id IS NULL AND rating IS NOT NULL
+                   UNION ALL
+                   SELECT user_id,rating FROM sl_runs WHERE status='approved' AND rating IS NOT NULL
+               ) GROUP BY user_id HAVING COUNT(rating)>=?
+               ORDER BY valor DESC,quantidade DESC,user_id LIMIT ?""",
+            (max(1, int(minimo)), max(1, min(int(limite), 50))),
+        )
+
+    async def ranking_media_dificuldade(self, minimo: int = 3, limite: int = 10):
+        return await self._all(
+            """SELECT user_id,AVG(difficulty) AS valor,COUNT(difficulty) AS quantidade FROM (
+                   SELECT user_id,difficulty FROM platinas WHERE status='approved' AND difficulty IS NOT NULL
+                   UNION ALL
+                   SELECT user_id,difficulty FROM zerados WHERE status='approved'
+                     AND source_platina_id IS NULL AND difficulty IS NOT NULL
+                   UNION ALL
+                   SELECT user_id,difficulty FROM sl_runs WHERE status='approved' AND difficulty IS NOT NULL
+               ) GROUP BY user_id HAVING COUNT(difficulty)>=?
+               ORDER BY valor DESC,quantidade DESC,user_id LIMIT ?""",
+            (max(1, int(minimo)), max(1, min(int(limite), 50))),
+        )
+
+    async def resumo_registros_usuario(self, user_id: int) -> dict:
+        """Contagens completas por status, sem limitar a linha do tempo recente."""
+        rows = await self._all(
+            """SELECT status,COUNT(*) AS total FROM (
+                   SELECT status FROM platinas WHERE user_id=?
+                   UNION ALL
+                   SELECT status FROM zerados WHERE user_id=? AND (source_platina_id IS NULL OR status='rejected')
+                   UNION ALL
+                   SELECT status FROM sl_runs WHERE user_id=?
+               ) GROUP BY status""",
+            (int(user_id), int(user_id), int(user_id)),
+        )
+        return {str(row["status"]): int(row["total"] or 0) for row in rows}
+
+    async def registros_pendentes_usuario(self, user_id: int) -> int:
+        row = await self._one(
+            """SELECT
+               (SELECT COUNT(*) FROM platinas WHERE user_id=? AND status='pending') +
+               (SELECT COUNT(*) FROM zerados WHERE user_id=? AND status='pending') +
+               (SELECT COUNT(*) FROM sl_runs WHERE user_id=? AND status='pending') AS total""",
+            (int(user_id), int(user_id), int(user_id)),
+        )
+        return int(row["total"] or 0)
 
 
     async def ativar_faq_comunitaria(self, contribution_id: int) -> int | None:
