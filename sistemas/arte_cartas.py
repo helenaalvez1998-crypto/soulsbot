@@ -1430,6 +1430,9 @@ def render_duel_board_bytes(
             label = "NÃO JOGADA"
         draw.rounded_rectangle((x, track_y, x + seg_w, track_y + track_h), radius=14,
                                fill=(*accent, 27), outline=(*accent, 180), width=2)
+        if status == "finished" and number == max(rounds_by_no, default=0):
+            draw.rounded_rectangle((x - 3, track_y - 3, x + seg_w + 3, track_y + track_h + 3),
+                                   radius=17, outline=(255, 221, 145, 230), width=3)
         draw.text((x + 15, track_y + 10), f"RODADA {number}", font=_font(11, True), fill=(211, 218, 223, 255))
         draw.text((x + 15, track_y + 31), label, font=_font(12, True), fill=(*accent, 255))
 
@@ -1467,9 +1470,37 @@ def render_duel_board_bytes(
             draw.text((x + 12, mini_y + mini_h + 12), _texto_ajustado(draw, row.get("card_a_name", card_a.get("nome")), slot_w // 2 - 17, 11, True, 18),
                       font=_font(11, True), fill=(139, 218, 185, 255))
             draw.text((x + 12, mini_y + mini_h + 31), f"PODER {int(row.get('power_a', 0) or 0)}", font=_font(10, True), fill=(181, 193, 202, 255))
+            if int(row.get("combo_bonus_a", 0) or 0):
+                combo_label_a = f"{row.get('combo_name_a') or 'COMBO'} +{int(row.get('combo_bonus_a', 0))}"
+                draw.text((x + 12, mini_y + mini_h + 49), _texto_ajustado(draw, combo_label_a.upper(), slot_w // 2 - 17, 9, True, 22),
+                          font=_font(9, True), fill=(255, 211, 121, 255))
             draw.text((x + slot_w // 2 + 4, mini_y + mini_h + 12), _texto_ajustado(draw, row.get("card_b_name", card_b.get("nome")), slot_w // 2 - 17, 11, True, 18),
                       font=_font(11, True), fill=(231, 154, 149, 255))
             draw.text((x + slot_w // 2 + 4, mini_y + mini_h + 31), f"PODER {int(row.get('power_b', 0) or 0)}", font=_font(10, True), fill=(181, 193, 202, 255))
+            if int(row.get("combo_bonus_b", 0) or 0):
+                combo_label_b = f"{row.get('combo_name_b') or 'COMBO'} +{int(row.get('combo_bonus_b', 0))}"
+                draw.text((x + slot_w // 2 + 4, mini_y + mini_h + 49), _texto_ajustado(draw, combo_label_b.upper(), slot_w // 2 - 17, 9, True, 22),
+                          font=_font(9, True), fill=(255, 211, 121, 255))
+            # Mostra de forma legível como cada carta chegou ao poder final.
+            type_a = int(row.get("type_bonus_a", 0) or 0)
+            skill_a = int(row.get("skill_bonus_a", 0) or 0)
+            type_b = int(row.get("type_bonus_b", 0) or 0)
+            skill_b = int(row.get("skill_bonus_b", 0) or 0)
+            effect_a = f"TIPO +{type_a}  ·  HABIL. +{skill_a}"
+            effect_b = f"TIPO +{type_b}  ·  HABIL. +{skill_b}"
+            draw.text((x + 12, mini_y + mini_h + 69), _texto_ajustado(draw, effect_a, slot_w // 2 - 17, 9, True, 22),
+                      font=_font(9, True), fill=(151, 208, 185, 255))
+            draw.text((x + slot_w // 2 + 4, mini_y + mini_h + 69), _texto_ajustado(draw, effect_b, slot_w // 2 - 17, 9, True, 22),
+                      font=_font(9, True), fill=(229, 167, 158, 255))
+            for side, detail_x, accent_text in (
+                ("a", x + 12, (151, 208, 185, 255)),
+                ("b", x + slot_w // 2 + 4, (229, 167, 158, 255)),
+            ):
+                skill_text = str(row.get(f"skill_text_{side}", "") or "")
+                if skill_text:
+                    draw.text((detail_x, mini_y + mini_h + 87),
+                              _texto_ajustado(draw, skill_text.upper(), slot_w // 2 - 17, 8, True, 23),
+                              font=_font(8, True), fill=accent_text)
             winner = str(row.get("winner_side", "empate"))
             result_label = "EMPATE" if winner == "empate" else "PONTO PARA A" if winner == "a" else "PONTO PARA B"
             result_color = (177, 180, 188) if winner == "empate" else (87, 202, 153) if winner == "a" else (222, 122, 116)
@@ -1511,6 +1542,8 @@ def render_duel_board_bytes(
                 f"VENCEDOR: {nome_a}  ·  PRÊMIO {int(duel.get('payout', 0) or 0):,}  ·  "
                 f"LUCRO +{lucro:,}  ·  {int(duel.get('burned', 0) or 0):,} REMOVIDOS"
             )
+            if len(rounds) < 5:
+                outcome += f"  ·  {len(rounds)}/5 RODADAS"
             outcome_color = (102, 218, 164)
         else:
             lucro = int(duel.get("payout", 0) or 0) - aposta
@@ -1518,6 +1551,8 @@ def render_duel_board_bytes(
                 f"VENCEDOR: {nome_b}  ·  PRÊMIO {int(duel.get('payout', 0) or 0):,}  ·  "
                 f"LUCRO +{lucro:,}  ·  {int(duel.get('burned', 0) or 0):,} REMOVIDOS"
             )
+            if len(rounds) < 5:
+                outcome += f"  ·  {len(rounds)}/5 RODADAS"
             outcome_color = (237, 153, 130)
     elif status == "active":
         outcome = f"RODADA {current_round}/5  ·  {int(picks_count)}/2 ESCOLHAS RECEBIDAS  ·  {int(tempo_rodada)} SEGUNDOS POR ESCOLHA"
@@ -1535,6 +1570,130 @@ def render_duel_board_bytes(
 
     output = io.BytesIO()
     image.save(output, format="PNG", optimize=False)
+    output.seek(0)
+    return output
+
+
+def render_duel_reveal_gif_bytes(
+    duel: dict[str, Any],
+    rounds: list[dict[str, Any]],
+    deck_a: list[dict[str, Any]],
+    deck_b: list[dict[str, Any]],
+    nome_a: str,
+    nome_b: str,
+    picks_count: int = 0,
+    tempo_rodada: int = 30,
+) -> io.BytesIO:
+    """Revelação animada da rodada recém-resolvida, seguida do placar atualizado.
+
+    A animação usa o mesmo tabuleiro oficial: primeiro mantém a rodada mais recente
+    oculta, depois revela as duas cartas e por fim destaca o resultado. Não altera
+    regras nem dados da partida.
+    """
+    if not rounds:
+        raise ValueError("Não há rodada resolvida para animar.")
+
+    rodada_atual = int(rounds[-1].get("round_no", 1) or 1)
+    estado_antes = dict(duel)
+    estado_antes["status"] = "active"
+    estado_antes["current_round"] = rodada_atual
+
+    frame_oculto = render_duel_board_bytes(
+        estado_antes, rounds[:-1], deck_a, deck_b, nome_a, nome_b, 2, tempo_rodada,
+    )
+    frame_revelado = render_duel_board_bytes(
+        duel, rounds, deck_a, deck_b, nome_a, nome_b, picks_count, tempo_rodada,
+    )
+
+    frame_1 = Image.open(frame_oculto).convert("RGB")
+    frame_2 = Image.open(frame_revelado).convert("RGB")
+    frame_3 = frame_2.copy()
+    draw = ImageDraw.Draw(frame_3, "RGBA")
+
+    # Destaca a rodada recém-revelada e a carta que venceu o confronto.
+    width, height = frame_3.size
+    slot_gap = 14
+    slot_w = (width - 2 * 58 - 4 * slot_gap) // 5
+    x = 58 + (max(1, min(5, rodada_atual)) - 1) * (slot_w + slot_gap)
+    y = 470
+    draw.rounded_rectangle(
+        (x + 5, y + 5, x + slot_w - 5, y + 477),
+        radius=19,
+        outline=(255, 218, 133, 245),
+        width=6,
+    )
+    draw.rounded_rectangle(
+        (x + 12, y + 12, x + slot_w - 12, y + 470),
+        radius=15,
+        outline=(255, 237, 190, 105),
+        width=2,
+    )
+
+    ultima = dict(rounds[-1])
+    lado_vencedor = str(ultima.get("winner_side", "empate"))
+    largura_mini = 112
+    mini_y = y + 51
+    if lado_vencedor in {"a", "b"}:
+        x_vencedor = x + 15 if lado_vencedor == "a" else x + slot_w - 15 - largura_mini
+        card_id = str(ultima.get("card_a_id" if lado_vencedor == "a" else "card_b_id", ""))
+        deck = deck_a if lado_vencedor == "a" else deck_b
+        carta_vencedora = next((c for c in deck if str(c.get("id")) == card_id), {})
+        tipo = str(carta_vencedora.get("tipo", ""))
+        accent = CORES_TIPO.get(tipo, (255, 218, 133))
+        draw.rounded_rectangle(
+            (x_vencedor - 5, mini_y - 5, x_vencedor + largura_mini + 5, mini_y + 176),
+            radius=12,
+            outline=(*accent, 245),
+            width=5,
+        )
+        # Faíscas geométricas curtas dão sensação de impacto sem ocultar a carta.
+        cx = x_vencedor + largura_mini // 2
+        cy = mini_y + 82
+        for dx, dy, radius in ((-49, -50, 5), (48, -35, 4), (-45, 53, 4), (44, 58, 5)):
+            draw.ellipse((cx + dx - radius, cy + dy - radius, cx + dx + radius, cy + dy + radius),
+                         fill=(*accent, 225))
+
+    combo_lado = "a" if int(ultima.get("combo_bonus_a", 0) or 0) else "b" if int(ultima.get("combo_bonus_b", 0) or 0) else ""
+    if combo_lado:
+        nome_combo = str(ultima.get(f"combo_name_{combo_lado}") or "COMBO")
+        bonus_combo = int(ultima.get(f"combo_bonus_{combo_lado}", 0) or 0)
+        banner = f"✦ {nome_combo.upper()}  +{bonus_combo} ✦"
+        draw.rounded_rectangle((x + 25, y + 392, x + slot_w - 25, y + 427),
+                               radius=11, fill=(89, 62, 26, 235), outline=(255, 211, 121, 245), width=2)
+        _text_center(draw, (x + slot_w // 2, y + 409), banner, _font(11, True), (255, 232, 174, 255))
+
+    habilidades_ativadas = []
+    for side in ("a", "b"):
+        detalhe = str(ultima.get(f"skill_text_{side}", "") or "")
+        if detalhe:
+            habilidades_ativadas.append(f"{side.upper()}: {detalhe}")
+    if habilidades_ativadas:
+        banner_habilidade = "  ·  ".join(habilidades_ativadas)
+        faixa_y = y + 435 if combo_lado else y + 392
+        draw.rounded_rectangle((x + 16, faixa_y, x + slot_w - 16, faixa_y + 32),
+                               radius=10, fill=(30, 49, 70, 238), outline=(115, 174, 222, 230), width=2)
+        _text_center(draw, (x + slot_w // 2, faixa_y + 16),
+                     _texto_ajustado(draw, banner_habilidade.upper(), slot_w - 42, 9, True, 44),
+                     _font(9, True), (203, 230, 249, 255))
+
+    narracao = str(ultima.get("narration", ""))
+    if "VIRADA:" in narracao.upper():
+        faixa_x = width // 2 - 155
+        draw.rounded_rectangle((faixa_x, 433, faixa_x + 310, 462), radius=12,
+                               fill=(83, 52, 20, 240), outline=(255, 211, 121, 245), width=2)
+        _text_center(draw, (width // 2, 447), "⚡ VIRADA NA ARENA! ⚡", _font(12, True), (255, 232, 174, 255))
+
+    output = io.BytesIO()
+    frame_1.save(
+        output,
+        format="GIF",
+        save_all=True,
+        append_images=[frame_2, frame_3, frame_2],
+        duration=[420, 620, 620, 1250],
+        loop=1,
+        disposal=2,
+        optimize=True,
+    )
     output.seek(0)
     return output
 

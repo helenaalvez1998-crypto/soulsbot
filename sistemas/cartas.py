@@ -375,12 +375,36 @@ def bonus_habilidade(carta: dict[str, Any], round_no: int, resultado_anterior: s
     )["bonus"])
 
 
+def _bonus_triada_elemental(
+    tipos_anteriores: list[str] | tuple[str, ...] | None,
+    tipo_atual: str,
+    combo_ja_usado: bool,
+) -> dict[str, Any]:
+    """Premia uma única vez a primeira sequência que completa os três tipos.
+
+    A tríade exige que o jogador já tenha usado exatamente dois tipos diferentes e
+    escolha o terceiro. O bônus é pequeno e limitado a uma ativação por duelo, para
+    recompensar planejamento sem criar uma vantagem acumulativa.
+    """
+    usados = {str(tipo) for tipo in (tipos_anteriores or ()) if str(tipo) in TIPOS}
+    if not combo_ja_usado and len(usados) == 2 and tipo_atual in TIPOS and tipo_atual not in usados:
+        return {
+            "bonus": 2,
+            "nome": "Tríade Elemental",
+            "texto": "Tríade Elemental: +2 de poder ao completar Destreza, Força e Magia (uma vez por duelo).",
+        }
+    return {"bonus": 0, "nome": "", "texto": ""}
+
+
 def resolver_rodada(
     carta_a: dict[str, Any], carta_b: dict[str, Any], round_no: int,
     resultado_a_anterior: str | None, resultado_b_anterior: str | None,
     tipo_anterior_a: str | None = None, tipo_anterior_b: str | None = None,
+    *, tipos_anteriores_a: list[str] | tuple[str, ...] | None = None,
+    tipos_anteriores_b: list[str] | tuple[str, ...] | None = None,
+    combo_ja_usado_a: bool = False, combo_ja_usado_b: bool = False,
 ) -> dict[str, Any]:
-    """Resolve o confronto no servidor; habilidades podem dar bônus ou mitigar tipo."""
+    """Resolve o confronto no servidor; habilidades e combos são calculados aqui."""
     vantagem_a = vantagem_tipo(carta_a["tipo"], carta_b["tipo"])
     tipo_a_base = max(0, vantagem_a)
     tipo_b_base = max(0, -vantagem_a)
@@ -399,8 +423,12 @@ def resolver_rodada(
     tipo_b = max(0, tipo_b_base - int(efeito_a["reducao_tipo_rival"]))
     habilidade_a = int(efeito_a["bonus"])
     habilidade_b = int(efeito_b["bonus"])
-    poder_a = int(carta_a["poder"]) + tipo_a + habilidade_a
-    poder_b = int(carta_b["poder"]) + tipo_b + habilidade_b
+    combo_a = _bonus_triada_elemental(tipos_anteriores_a, str(carta_a.get("tipo", "")), combo_ja_usado_a)
+    combo_b = _bonus_triada_elemental(tipos_anteriores_b, str(carta_b.get("tipo", "")), combo_ja_usado_b)
+    combo_bonus_a = int(combo_a["bonus"])
+    combo_bonus_b = int(combo_b["bonus"])
+    poder_a = int(carta_a["poder"]) + tipo_a + habilidade_a + combo_bonus_a
+    poder_b = int(carta_b["poder"]) + tipo_b + habilidade_b + combo_bonus_b
     vencedor = "a" if poder_a > poder_b else "b" if poder_b > poder_a else "empate"
     return {
         "power_a": poder_a,
@@ -411,6 +439,12 @@ def resolver_rodada(
         "skill_bonus_b": habilidade_b,
         "skill_text_a": efeito_a["texto"],
         "skill_text_b": efeito_b["texto"],
+        "combo_bonus_a": combo_bonus_a,
+        "combo_bonus_b": combo_bonus_b,
+        "combo_name_a": str(combo_a["nome"]),
+        "combo_name_b": str(combo_b["nome"]),
+        "combo_text_a": str(combo_a["texto"]),
+        "combo_text_b": str(combo_b["texto"]),
         "winner": vencedor,
     }
 
@@ -435,8 +469,30 @@ def narrar_rodada(round_no: int, carta_a: dict[str, Any], carta_b: dict[str, Any
         efeitos.append(f"**{carta_a['nome']}** ativa {resultado['skill_text_a']}.")
     if resultado.get("skill_text_b"):
         efeitos.append(f"**{carta_b['nome']}** ativa {resultado['skill_text_b']}.")
+    if resultado.get("combo_text_a"):
+        efeitos.append(f"✨ **{carta_a['nome']}** ativa o combo {resultado['combo_text_a']}.")
+    if resultado.get("combo_text_b"):
+        efeitos.append(f"✨ **{carta_b['nome']}** ativa o combo {resultado['combo_text_b']}.")
+    if resultado.get("match_note"):
+        efeitos.append(f"🏟️ **{resultado['match_note']}**")
     complemento = "\n" + "\n".join(efeitos) if efeitos else ""
     return f"{texto}\n{decisao}{complemento}"
+
+
+def vencedor_matematicamente_garantido(
+    vitorias_a: int,
+    vitorias_b: int,
+    rodada_atual: int,
+    total_rodadas: int = 5,
+) -> str | None:
+    """Retorna o lado que já não pode ser alcançado, ou None se a partida segue."""
+    restantes = max(0, int(total_rodadas) - int(rodada_atual))
+    a, b = int(vitorias_a), int(vitorias_b)
+    if a > b + restantes:
+        return "a"
+    if b > a + restantes:
+        return "b"
+    return None
 
 
 def resolver_duelo(rounds: list[dict[str, Any]]) -> str:
