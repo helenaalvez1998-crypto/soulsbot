@@ -1273,9 +1273,14 @@ class ConviteDueloView(discord.ui.View):
 
 
 class BatalhaDueloView(discord.ui.View):
+    """Painel do Discord acompanha a partida; as jogadas acontecem somente no site."""
     def __init__(self, duel_id: int):
         super().__init__(timeout=None)
-        self.add_item(BotaoDueloColiseu("jogar", duel_id))
+        base_url = os.getenv("SOULSBOT_PUBLIC_URL", "https://narabot.sbs").rstrip("/")
+        self.add_item(discord.ui.Button(
+            label="Abrir partida no site", emoji="⚔️", style=discord.ButtonStyle.link,
+            url=f"{base_url}/?duel={int(duel_id)}",
+        ))
         self.add_item(BotaoDueloColiseu("atualizar", duel_id))
 
 
@@ -2859,9 +2864,10 @@ class ColiseuCartas(commands.Cog):
                 else:
                     await interaction.followup.send("O duelo foi iniciado e as apostas estão travadas. A mensagem pública foi reparada; use o botão Escolher carta.", ephemeral=True)
                 return
+            base_url = os.getenv("SOULSBOT_PUBLIC_URL", "https://narabot.sbs").rstrip("/")
             await interaction.followup.send(
                 f"Duelo #{duel_id} iniciado. As duas apostas de {int(duel['aposta'])} Denários foram travadas. "
-                "Use **Escolher carta** para registrar sua primeira jogada em segredo.",
+                f"Jogue exclusivamente no site: {base_url}/?duel={duel_id}",
                 ephemeral=True,
             )
             return
@@ -2880,88 +2886,11 @@ class ColiseuCartas(commands.Cog):
                 return await interaction.response.send_message("Você não participa desta batalha.", ephemeral=True)
             if duel["status"] != "active":
                 return await interaction.response.send_message("Este duelo não está mais ativo.", ephemeral=True)
-            cards = await self.bot.db.coliseu_cartas_disponiveis(duel_id, uid)
-            if not cards:
-                return await interaction.response.send_message("Você já utilizou suas cinco cartas ou não há escolhas disponíveis.", ephemeral=True)
-            historico = [dict(r) for r in await self.bot.db.coliseu_historico_rodadas(duel_id)]
-            deck_proprio = await self.bot.db.coliseu_deck_da_partida(duel_id, uid)
-            mapa_proprio = {str(c.get("id")): c for c in deck_proprio}
-            lado = "a" if uid == creator_id else "b"
-            campo_id = "card_a_id" if lado == "a" else "card_b_id"
-            tipos_usados = [
-                str(mapa_proprio.get(str(r[campo_id]), {}).get("tipo", ""))
-                for r in historico
-                if mapa_proprio.get(str(r[campo_id]), {}).get("tipo")
-            ]
-            combo_ja_ativado = any(int(r.get(f"combo_bonus_{lado}", 0) or 0) > 0 for r in historico)
-            tipos_distintos = set(tipos_usados)
-            if combo_ja_ativado:
-                progresso_combo = "✅ **Tríade Elemental já ativada** nesta partida."
-            elif len(tipos_distintos) == 2:
-                faltante = next((tipo for tipo in ("Destreza", "Força", "Magia") if tipo not in tipos_distintos), None)
-                progresso_combo = (
-                    f"✨ **Tríade pronta:** usar {EMOJIS_TIPO.get(faltante, '✦')} **{faltante}** nesta rodada concede +2 de poder."
-                    if faltante else ""
-                )
-            elif len(tipos_distintos) == 1:
-                faltantes = [tipo for tipo in ("Destreza", "Força", "Magia") if tipo not in tipos_distintos]
-                progresso_combo = f"Tríade Elemental: você já usou {next(iter(tipos_distintos))}; faltam {', '.join(faltantes)}."
-            elif len(tipos_distintos) >= 3:
-                progresso_combo = "Tríade Elemental: os três tipos já foram usados nesta partida; não há nova ativação disponível."
-            else:
-                progresso_combo = "Tríade Elemental: complete os três tipos diferentes para ganhar +2 uma vez por duelo."
-            wins_a = sum(str(r["winner_side"]) == "a" for r in historico)
-            wins_b = sum(str(r["winner_side"]) == "b" for r in historico)
-            vitorias_proprias, vitorias_rival = (wins_a, wins_b) if lado == "a" else (wins_b, wins_a)
-            resultado_anterior_proprio = None
-            if historico:
-                ultimo_vencedor = str(historico[-1]["winner_side"])
-                resultado_anterior_proprio = (
-                    "empatou" if ultimo_vencedor == "empate"
-                    else "venceu" if ultimo_vencedor == lado else "perdeu"
-                )
-            tipo_anterior_proprio = tipos_usados[-1] if tipos_usados else None
-            linha_historico = " → ".join(
-                f"{EMOJIS_TIPO.get(tipo, '✦')} {tipo}" for tipo in tipos_usados
-            ) or "Nenhuma carta utilizada ainda"
-            embed = discord.Embed(
-                title=f"⚔️ ESCOLHA SUA CARTA · RODADA {duel['current_round']}/5",
-                description=(
-                    f"**Placar:** você {vitorias_proprias} × {vitorias_rival} adversário\n"
-                    f"**Sua sequência:** {linha_historico}\n"
-                    f"{progresso_combo}\n\n"
-                    "Escolha uma carta pelos botões numerados abaixo. A seleção é secreta, imediata e não pode ser trocada."
-                ),
-                color=config.COR_OURO,
-            )
-            for indice, carta in enumerate(cards, 1):
-                embed.add_field(
-                    name=f"{indice} · {carta.get('nome', 'Carta')}",
-                    value=(
-                        f"{carta.get('raridade', 'Comum')} · **{carta.get('poder', 0)} poder**\n"
-                        f"{EMOJIS_TIPO.get(str(carta.get('tipo')), '✦')} {carta.get('tipo', 'Magia')}\n"
-                        f"{_descricao_habilidade(carta)}\n"
-                        f"{_previsao_habilidade(carta, int(duel['current_round']), resultado_anterior_proprio, tipo_anterior_proprio)}"
-                    )[:1024],
-                    inline=True,
-                )
-            embed.add_field(
-                name="Ciclo de tipos",
-                value="🌀 Destreza vence ⚔️ Força · ⚔️ Força vence 🔮 Magia · 🔮 Magia vence 🌀 Destreza",
-                inline=False,
-            )
-            nome_arquivo = f"mao-duelo-{duel_id}-{duel['current_round']}.png"
-            preview = await asyncio.to_thread(render_duel_hand_bytes, cards, duel_id, int(duel["current_round"]))
-            arquivo = discord.File(preview, filename=nome_arquivo)
-            embed.set_image(url=f"attachment://{nome_arquivo}")
-            embed.set_footer(text=f"Duelo #{duel_id} · {len(cards)} carta(s) restantes · bônus de tipo +3 · Tríade Elemental +2 uma vez por duelo")
+            base_url = os.getenv("SOULSBOT_PUBLIC_URL", "https://narabot.sbs").rstrip("/")
             return await interaction.response.send_message(
-                embed=embed,
-                file=arquivo,
-                view=SelecaoCartaView(self, duel_id, uid, cards),
+                f"As partidas agora são jogadas exclusivamente no site: {base_url}/?duel={duel_id}",
                 ephemeral=True,
             )
-
     async def _notificar_niveis_por_duelo(self, duel: dict, recompensas: dict):
         """Sincroniza patentes após XP já creditado; falhas de notificação não desfazem o duelo."""
         progressao = self.bot.get_cog("ProgressaoXP")
