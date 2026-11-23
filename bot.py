@@ -539,6 +539,7 @@ class NaraBot(commands.Bot):
         self._tarefa_lag: asyncio.Task | None = None
         self._web_runner: web.AppRunner | None = None
         self._web_presence: dict[int, float] = {}
+        self._web_sockets: dict[int, set[web.WebSocketResponse]] = {}
 
     def _handle_asyncio_exception(self, loop: asyncio.AbstractEventLoop, context: dict[str, Any]) -> None:
         exception = context.get("exception")
@@ -647,6 +648,7 @@ class NaraBot(commands.Bot):
         app.router.add_get("/api/duels/{duel_id}", self._api_duel_detail)
         app.router.add_post("/api/duels/{duel_id}/accept", self._api_duel_accept)
         app.router.add_post("/api/duels/{duel_id}/moves", self._api_duel_move)
+        app.router.add_get("/ws/duels/{duel_id}", self._ws_duel_room)
         app.router.add_get("/api/cards/{card_id}/image", self._api_card_image)
         app.router.add_post("/auth/logout", self._oauth_logout)
         runner = web.AppRunner(app, access_log=None)
@@ -795,6 +797,48 @@ class NaraBot(commands.Bot):
         players.sort(key=lambda item: (not item["web_online"], item["discord_presence"] == "offline", item["name"].casefold()))
         return web.json_response({"players": players, "server": guild.name})
 
+    async def _broadcast_duel_event(self, duel_id: int, event: str = "duel_updated") -> None:
+        """Notifica em tempo real apenas os sockets autenticados da sala correspondente."""
+        sockets = self._web_sockets.get(int(duel_id), set()).copy()
+        if not sockets:
+            return
+        payload = json.dumps({"type": event, "duel_id": int(duel_id)})
+        stale = []
+        for socket in sockets:
+            try:
+                await socket.send_str(payload)
+            except Exception:
+                stale.append(socket)
+        for socket in stale:
+            self._web_sockets.get(int(duel_id), set()).discard(socket)
+
+    async def _ws_duel_room(self, request: web.Request) -> web.StreamResponse:
+        """Canal de eventos da sala; a autorização continua baseada na sessão e participação."""
+        user_id = self._api_user_id(request)
+        if user_id is None:
+            raise web.HTTPUnauthorized(text="Faça login com Discord.")
+        try:
+            duel_id = int(request.match_info["duel_id"])
+        except (TypeError, ValueError):
+            raise web.HTTPBadRequest(text="Duelo inválido.")
+        duel = await self.db.coliseu_obter_duelo(duel_id)
+        if not duel or user_id not in (int(duel["creator_id"]), int(duel["opponent_id"])):
+            raise web.HTTPNotFound(text="Duelo não encontrado.")
+        ws = web.WebSocketResponse(heartbeat=25, max_msg_size=1024)
+        await ws.prepare(request)
+        room = self._web_sockets.setdefault(duel_id, set())
+        room.add(ws)
+        await ws.send_json({"type": "connected", "duel_id": duel_id})
+        try:
+            async for message in ws:
+                if message.type == web.WSMsgType.ERROR:
+                    break
+        finally:
+            room.discard(ws)
+            if not room:
+                self._web_sockets.pop(duel_id, None)
+        return ws
+
     async def _api_presence_heartbeat(self, request: web.Request) -> web.Response:
         user_id = self._api_user_id(request)
         if user_id is None:
@@ -802,11 +846,22 @@ class NaraBot(commands.Bot):
         self._web_presence[user_id] = time.time()
         return web.json_response({"ok": True, "web_online": True})
 
+    def _api_origin_ok(self, request: web.Request) -> bool:
+        """Aceita apenas POSTs originados na mesma origem do painel, quando Origin existe."""
+        origin = request.headers.get("Origin")
+        if not origin:
+            return True
+        from urllib.parse import urlsplit
+        parsed = urlsplit(origin)
+        return parsed.scheme == "https" and parsed.netloc.lower() == request.host.lower()
+
     async def _api_duel_create(self, request: web.Request) -> web.Response:
         """Cria convite pelo site e publica no canal Discord configurado."""
         user_id = self._api_user_id(request)
         if user_id is None:
             return web.json_response({"error": "Autenticação necessária."}, status=401)
+        if not self._api_origin_ok(request):
+            return web.json_response({"error": "Origem da solicitação não autorizada."}, status=403)
         try:
             body = await request.json()
             opponent_id = int(body.get("opponent_id", 0))
@@ -863,6 +918,7 @@ class NaraBot(commands.Bot):
             await self.db.coliseu_decidir_convite(duel_id, user_id, False)
             return web.json_response({"error": "Não foi possível publicar o convite no Discord; o convite foi cancelado."}, status=502)
         base_url = os.getenv("SOULSBOT_PUBLIC_URL", "https://narabot.sbs").rstrip("/")
+        await self._broadcast_duel_event(duel_id, "duel_created")
         return web.json_response({"ok": True, "duel_id": duel_id, "discord_message": message.jump_url,
                                   "match_url": f"{base_url}/?duel={duel_id}"}, status=201)
 
@@ -932,6 +988,8 @@ class NaraBot(commands.Bot):
         user_id = self._api_user_id(request)
         if user_id is None:
             return web.json_response({"error": "Autenticação necessária."}, status=401)
+        if not self._api_origin_ok(request):
+            return web.json_response({"error": "Origem da solicitação não autorizada."}, status=403)
         try:
             duel_id = int(request.match_info["duel_id"])
         except (TypeError, ValueError):
@@ -948,6 +1006,7 @@ class NaraBot(commands.Bot):
                 await cog.atualizar_mensagem_duelo(duel_id)
             except Exception:
                 log.exception("Falha ao sincronizar mensagem Discord após aceitar duelo #%s pelo site", duel_id)
+        await self._broadcast_duel_event(duel_id, "duel_accepted")
         base_url = os.getenv("SOULSBOT_PUBLIC_URL", "https://narabot.sbs").rstrip("/")
         return web.json_response({"ok": True, "duel_id": duel_id, "match_url": f"{base_url}/?duel={duel_id}"})
 
@@ -955,6 +1014,8 @@ class NaraBot(commands.Bot):
         user_id = self._api_user_id(request)
         if user_id is None:
             return web.json_response({"error": "Autenticação necessária."}, status=401)
+        if not self._api_origin_ok(request):
+            return web.json_response({"error": "Origem da solicitação não autorizada."}, status=403)
         try:
             duel_id = int(request.match_info["duel_id"])
             body = await request.json()
@@ -977,6 +1038,7 @@ class NaraBot(commands.Bot):
             except Exception:
                 log.exception("Falha ao resolver rodada %s do duelo #%s via site", resultado.get("round_no"), duel_id)
                 return web.json_response({"error": "A jogada foi registrada, mas houve falha ao resolver a rodada. Atualize a partida."}, status=500)
+            await self._broadcast_duel_event(duel_id, "round_resolved")
             return web.json_response({"ok": True, "status": "round_resolved"})
         if resultado.get("status") == "aguardando":
             cog = self.get_cog("ColiseuCartas")
@@ -985,6 +1047,7 @@ class NaraBot(commands.Bot):
                     await cog.atualizar_mensagem_duelo(duel_id)
                 except Exception:
                     log.exception("Falha ao atualizar painel Discord do duelo #%s", duel_id)
+            await self._broadcast_duel_event(duel_id, "move_received")
             return web.json_response({"ok": True, "status": "waiting_opponent"})
         status_http = 409 if resultado.get("status") in {"ja_escolheu", "carta_usada", "carta_invalida", "expirado", "inativo"} else 403
         return web.json_response({"error": str(resultado.get("status", "falha"))}, status=status_http)
