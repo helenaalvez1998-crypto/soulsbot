@@ -13,6 +13,7 @@
       <button class="nav active" data-page="home">⌂ <span>Visão geral</span></button>
       <button class="nav" data-page="collection">▧ <span>Minha coleção</span></button>
       <button class="nav" data-page="deck">♜ <span>Meu deck</span></button>
+      <button class="nav" data-page="duels">⚔ <span>Meus duelos</span></button>
     </nav>
     <div class="side-bottom">
       <div class="profile"><div class="avatar">S</div><div><b id="profile-name">Visitante</b><small id="profile-status">Conecte sua conta Discord</small></div></div>
@@ -43,6 +44,11 @@
       <div class="deck-status" id="deck-status">Carregando seu deck...</div>
       <div class="deck-layout"><div><div class="section-head"><div><small class="eyebrow">SELEÇÃO ATUAL</small><h3>Seu deck de batalha</h3></div><button class="text-btn" id="clear-deck" type="button">Limpar seleção</button></div><div class="deck-grid" id="deck-grid"></div><div class="deck-summary" id="deck-summary"></div><button class="primary" id="save-deck" type="button" disabled>Salvar deck no SoulsBot</button></div>
       <div><div class="section-head"><div><small class="eyebrow">CARTAS DISPONÍVEIS</small><h3>Adicionar ao deck</h3></div></div><input id="deck-search" class="deck-search" type="search" placeholder="Buscar carta pelo nome..."><div class="deck-available" id="deck-available"></div></div></div>
+    </section>
+    <section id="duels" class="page">
+      <div class="collection-intro"><div><small class="eyebrow">ARENA OFICIAL</small><h2>Meus duelos</h2><p class="muted">Convites, partidas e resultados da mesma arena usada pelo SoulsBot no Discord.</p></div><button class="primary" id="refresh-duels" type="button">Atualizar duelos</button></div>
+      <div id="duel-list" class="duel-list"><div class="empty-state">Carregando seus duelos...</div></div>
+      <div id="duel-room" class="duel-room" hidden></div>
     </section>
     <footer>SOULSBOT CARD GAME <span>Interface web conectada ao servidor oficial</span></footer>
   </main>

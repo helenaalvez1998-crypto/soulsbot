@@ -3,6 +3,8 @@ let collection = [];
 let currentUser = null;
 let savedDeck = [];
 let selectedDeck = [];
+let currentDuelId = null;
+let duelRefreshHandle = null;
 
 const text = (value, fallback = '—') => value === null || value === undefined || value === '' ? fallback : String(value);
 const number = (value) => new Intl.NumberFormat('pt-BR').format(Number(value || 0));
@@ -18,8 +20,9 @@ function showNotice(message, kind = 'info') {
 function showPage(page) {
   document.querySelectorAll('.page').forEach((element) => element.classList.toggle('show', element.id === page));
   document.querySelectorAll('.nav').forEach((button) => button.classList.toggle('active', button.dataset.page === page));
-  $('#page-title').textContent = page === 'collection' ? 'Minha coleção' : page === 'deck' ? 'Meu deck' : 'Visão geral';
+  $('#page-title').textContent = page === 'collection' ? 'Minha coleção' : page === 'deck' ? 'Meu deck' : page === 'duels' ? 'Meus duelos' : 'Visão geral';
   if (page === 'deck') loadDeck();
+  if (page === 'duels') loadDuels();
 }
 
 document.querySelectorAll('[data-page]').forEach((button) => button.addEventListener('click', () => showPage(button.dataset.page)));
@@ -158,6 +161,79 @@ $('#save-deck').addEventListener('click', async () => {
   finally { button.textContent = 'Salvar deck no SoulsBot'; renderDeck(); }
 });
 
+async function loadDuels() {
+  const list = $('#duel-list');
+  if (!currentUser) { list.innerHTML = '<div class="empty-state">Entre com Discord para consultar seus duelos.</div>'; return; }
+  list.innerHTML = '<div class="empty-state">Sincronizando duelos...</div>';
+  try {
+    const response = await fetch('/api/duels', {credentials:'same-origin', cache:'no-store'});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Não foi possível carregar os duelos.');
+    const duels = data.duels || [];
+    list.innerHTML = duels.length ? duels.map(duel => `<article class="duel-item"><div><small class="eyebrow">DUELO #${number(duel.id)}</small><h3>${duel.is_creator ? 'Você desafiou um jogador' : 'Você recebeu um convite'}</h3><p>${escapeHTML(duel.status)} · Rodada ${number(duel.current_round)}/5 · Aposta ${number(duel.aposta)} Denários por jogador</p></div><button class="primary" data-open-duel="${duel.id}">${duel.status === 'invited' && !duel.is_creator ? 'Aceitar convite' : 'Abrir partida'}</button></article>`).join('') : '<div class="empty-state">Você ainda não tem convites ou partidas registrados.</div>';
+  } catch (error) { list.innerHTML = `<div class="empty-state">${escapeHTML(error.message)}</div>`; }
+}
+
+async function openDuel(duelId) {
+  currentDuelId = Number(duelId);
+  showPage('duels');
+  const room = $('#duel-room');
+  room.hidden = false;
+  room.innerHTML = '<div class="empty-state">Carregando arena...</div>';
+  try {
+    let response = await fetch(`/api/duels/${currentDuelId}`, {credentials:'same-origin', cache:'no-store'});
+    let data = await response.json();
+    if (!response.ok && data.error === 'Duelo não encontrado.') throw new Error(data.error);
+    if (!response.ok) {
+      const accept = await fetch(`/api/duels/${currentDuelId}/accept`, {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:'{}'});
+      const accepted = await accept.json();
+      if (!accept.ok) throw new Error(accepted.error || 'Não foi possível aceitar o convite.');
+      response = await fetch(`/api/duels/${currentDuelId}`, {credentials:'same-origin', cache:'no-store'});
+      data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Não foi possível abrir a partida.');
+      showNotice('Convite aceito. As apostas foram travadas e a partida começou.', 'success');
+    }
+    renderDuel(data);
+  } catch (error) { room.innerHTML = `<div class="empty-state">${escapeHTML(error.message)}</div>`; }
+}
+
+function renderDuel(data) {
+  const room = $('#duel-room');
+  const duel = data.duel;
+  const score = data.score || {};
+  const isInvite = duel.status === 'invited';
+  const cards = data.available_cards || [];
+  const rounds = data.rounds || [];
+  room.hidden = false;
+  room.innerHTML = `<div class="section-head"><div><small class="eyebrow">ARENA · DUELO #${number(duel.id)}</small><h2>${duel.status === 'active' ? `Rodada ${duel.current_round}/5` : escapeHTML(duel.status)}</h2></div><button class="text-btn" id="close-duel">Voltar aos duelos</button></div>
+    <div class="duel-score"><b>${number(score.creator || 0)} : ${number(score.opponent || 0)}</b><span>${number(score.rounds_played || 0)} rodada(s) concluída(s) · ${number(score.choices_received || 0)}/2 escolhas na rodada atual</span></div>
+    ${isInvite ? (duel.is_creator ? `<p>Convite enviado. Aguardando o outro jogador aceitar. Aposta: <b>${number(duel.aposta)} Denários</b> por jogador.</p>` : `<p>Você recebeu um convite. Aposta: <b>${number(duel.aposta)} Denários</b> por jogador.</p><button class="primary" id="accept-duel">Aceitar duelo</button>`) : ''}
+    ${duel.status === 'active' ? (score.own_choice_submitted ? '<div class="notice">Sua escolha foi registrada. Aguardando o adversário.</div>' : `<p>Escolha uma carta ainda não utilizada. Sua escolha fica oculta até o adversário confirmar.</p><div class="duel-cards">${cards.map(card => `<button class="duel-card" data-play-card="${escapeHTML(card.id)}"><img src="${escapeHTML(card.image_url || `/api/cards/${encodeURIComponent(card.id)}/image`)}" alt=""><b>${escapeHTML(card.nome)}</b><span>${number(card.poder)} poder · ${escapeHTML(card.tipo)}</span></button>`).join('')}</div>`) : ''}
+    ${duel.status === 'finished' ? `<div class="notice success">Partida encerrada. ${duel.winner_id ? `Vencedor: ${duel.winner_id}. Prêmio: ${number(duel.payout)} Denários.` : 'Empate.'}</div>` : ''}
+    <div class="duel-rounds">${rounds.map(round => `<article><b>Rodada ${number(round.round_no)}</b><span>${escapeHTML(round.card_a_name)} (${number(round.power_a)}) × ${escapeHTML(round.card_b_name)} (${number(round.power_b)})</span><small>${escapeHTML(round.narration || '')}</small></article>`).join('')}</div>`;
+  $('#close-duel').addEventListener('click', () => { room.hidden = true; currentDuelId = null; loadDuels(); });
+  $('#accept-duel')?.addEventListener('click', async () => {
+    const response = await fetch(`/api/duels/${duel.id}/accept`, {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:'{}'});
+    const result = await response.json();
+    if (!response.ok) { showNotice(result.error || 'Não foi possível aceitar.', 'error'); return; }
+    await openDuel(duel.id);
+  });
+  room.querySelectorAll('[data-play-card]').forEach(button => button.addEventListener('click', async () => {
+    room.querySelectorAll('[data-play-card]').forEach(item => item.disabled = true);
+    const response = await fetch(`/api/duels/${duel.id}/moves`, {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({card_id:button.dataset.playCard})});
+    const result = await response.json();
+    if (!response.ok) { showNotice(result.error || 'Jogada não registrada.', 'error'); }
+    else showNotice(result.status === 'waiting_opponent' ? 'Carta registrada. Aguardando o adversário.' : 'Rodada resolvida.', 'success');
+    await openDuel(duel.id);
+  }));
+}
+
+$('#refresh-duels')?.addEventListener('click', loadDuels);
+document.addEventListener('click', event => {
+  const button = event.target.closest('[data-open-duel]');
+  if (button) openDuel(button.dataset.openDuel);
+});
+
 function openCard(card) {
   $('#modal-image').src = imageUrl(card);
   $('#modal-image').alt = card.nome;
@@ -184,7 +260,7 @@ $('#modal-close').addEventListener('click', () => { $('#card-modal').hidden = tr
 $('#card-modal').addEventListener('click', (event) => { if (event.target === $('#card-modal')) $('#card-modal').hidden = true; });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') $('#card-modal').hidden = true; });
 ['search', 'rarity', 'category', 'type'].forEach((id) => $(`#${id}`).addEventListener('input', renderCollection));
-$('#login-button').addEventListener('click', () => { window.location.href = '/auth/discord/login'; });
+$('#login-button').addEventListener('click', () => { const next = window.location.pathname + window.location.search; window.location.href = `/auth/discord/login?next=${encodeURIComponent(next)}`; });
 $('#logout-button').addEventListener('click', async () => {
   await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
   collection = [];
@@ -195,4 +271,4 @@ $('#logout-button').addEventListener('click', async () => {
   await loadAccount();
 });
 
-loadAccount();
+loadAccount().then(() => { const requested = new URLSearchParams(window.location.search).get('duel'); if (requested && currentUser && /^\d+$/.test(requested)) openDuel(requested); });
