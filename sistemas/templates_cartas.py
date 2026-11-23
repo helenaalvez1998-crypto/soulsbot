@@ -10,6 +10,7 @@ com `LAYOUT_PADRAO["arte"]`, pois os demais campos não devem mudar por raridade
 """
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import threading
@@ -58,61 +59,48 @@ class TemplateInvalido(ValueError):
     """Mensagem pensada para ser mostrada ao proprietário do bot."""
 
 
-# ---------------------------------------------------------------- caminhos
+# ---------------------------------------------------------------- armazenamento Discord + cache local
 def pasta_templates() -> Path:
+    """Cache local regenerável; a fonte oficial dos templates é o Discord."""
     return get_data_dir() / "cartas_templates"
 
 
-def caminho_template_persistente(raridade: str) -> Path:
-    """Caminho de um template enviado pelo proprietário (volume persistente)."""
+def caminho_cache_template(raridade: str) -> Path:
     slug = RARIDADES_TEMPLATE.get(str(raridade))
     if not slug:
         raise ValueError(f"Raridade sem template configurável: {raridade}")
     return pasta_templates() / f"{slug}.png"
 
 
-def caminho_template_embutido(raridade: str) -> Path:
-    """Template padrão distribuído junto com o código do SoulsBot."""
+def caminho_metadados_template(raridade: str) -> Path:
     slug = RARIDADES_TEMPLATE.get(str(raridade))
     if not slug:
         raise ValueError(f"Raridade sem template configurável: {raridade}")
-    return Path(__file__).resolve().parents[1] / "assets" / "cartas_templates" / f"{slug}.png"
+    return pasta_templates() / f"{slug}.discord.json"
 
 
-def caminho_template(raridade: str) -> Path:
-    """Retorna o upload válido ou o template padrão incluído no projeto."""
-    persistente = caminho_template_persistente(raridade)
-    if persistente.is_file():
-        try:
-            processar_template(persistente.read_bytes())
-            return persistente
-        except (OSError, TemplateInvalido):
-            pass
-    return caminho_template_embutido(raridade)
-
-
-def caminho_layout_raridade(raridade: str) -> Path:
-    # Overrides de coordenadas são sempre persistentes e nunca modificam os assets inclusos.
-    return caminho_template_persistente(raridade).with_suffix(".json")
+def _ler_metadados(raridade: str) -> dict[str, Any] | None:
+    caminho = caminho_metadados_template(raridade)
+    try:
+        dados = json.loads(caminho.read_text(encoding="utf-8"))
+        if not all(int(dados.get(chave, 0)) > 0 for chave in ("channel_id", "message_id", "attachment_id")):
+            return None
+        return dados
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
 
 
 def listar_templates() -> dict[str, bool]:
-    return {raridade: carregar_template(raridade) is not None for raridade in RARIDADES_TEMPLATE}
+    return {raridade: _ler_metadados(raridade) is not None and caminho_cache_template(raridade).is_file()
+            for raridade in RARIDADES_TEMPLATE}
 
 
 def origem_template(raridade: str) -> str | None:
-    """Origem efetiva; uploads antigos inválidos não substituem o padrão do projeto."""
-    persistente = caminho_template_persistente(raridade)
-    embutido = caminho_template_embutido(raridade)
-    if persistente.is_file():
-        try:
-            processar_template(persistente.read_bytes())
-            return "personalizado"
-        except (OSError, TemplateInvalido):
-            return "padrão (upload inválido ignorado)" if embutido.is_file() else "inválido"
-    if embutido.is_file():
-        return "padrão"
-    return None
+    if raridade not in RARIDADES_TEMPLATE:
+        return None
+    if _ler_metadados(raridade) is None:
+        return None
+    return "Discord (cache local ativo)" if caminho_cache_template(raridade).is_file() else "Discord (sincronização pendente)"
 
 
 def limpar_cache_templates(raridade: str | None = None) -> None:
@@ -283,72 +271,128 @@ def processar_template(dados: bytes) -> tuple[Image.Image, list[int]]:
     return imagem, janela
 
 
-def salvar_template(raridade: str, dados: bytes) -> tuple[Path, list[int]]:
+def preparar_template_discord(dados: bytes) -> tuple[bytes, list[int]]:
+    """Valida e normaliza o template antes de publicá-lo como anexo no Discord."""
     imagem, janela = processar_template(dados)
-    destino = caminho_template_persistente(raridade)
-    destino.parent.mkdir(parents=True, exist_ok=True)
+    buffer = io.BytesIO()
+    imagem.save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue(), janela
+
+
+def registrar_template_discord(
+    raridade: str,
+    dados: bytes,
+    *,
+    channel_id: int,
+    message_id: int,
+    attachment_id: int,
+) -> tuple[Path, list[int]]:
+    """Grava cache regenerável e metadados que apontam para a mensagem oficial no Discord."""
+    if raridade not in RARIDADES_TEMPLATE:
+        raise ValueError(f"Raridade sem template configurável: {raridade}")
+    imagem, janela = processar_template(dados)
+    pasta_templates().mkdir(parents=True, exist_ok=True)
+    destino = caminho_cache_template(raridade)
     temporario = destino.with_suffix(".png.tmp")
     imagem.save(temporario, format="PNG", optimize=True)
     temporario.replace(destino)
+    metadados = {
+        "provider": "discord",
+        "channel_id": int(channel_id),
+        "message_id": int(message_id),
+        "attachment_id": int(attachment_id),
+        "filename": f"template_{RARIDADES_TEMPLATE[raridade]}.png",
+        "width": imagem.width,
+        "height": imagem.height,
+    }
+    meta_path = caminho_metadados_template(raridade)
+    meta_tmp = meta_path.with_suffix(".json.tmp")
+    meta_tmp.write_text(json.dumps(metadados, ensure_ascii=False, indent=2), encoding="utf-8")
+    meta_tmp.replace(meta_path)
     limpar_cache_templates(raridade)
     return destino, janela
 
 
 def remover_template(raridade: str) -> bool:
-    """Remove o upload personalizado e restaura o template padrão incluso no projeto."""
-    caminho = caminho_template_persistente(raridade)
-    existia = caminho.is_file()
-    if existia:
-        caminho.unlink(missing_ok=True)
+    """Remove a referência Discord e o cache; não reativa assets embutidos."""
+    if raridade not in RARIDADES_TEMPLATE:
+        return False
+    removido = False
+    for caminho in (caminho_cache_template(raridade), caminho_metadados_template(raridade)):
+        try:
+            if caminho.is_file():
+                caminho.unlink()
+                removido = True
+        except OSError:
+            pass
     limpar_cache_templates(raridade)
-    return existia
+    return removido
+
+
+async def sincronizar_templates_discord(bot) -> dict[str, str]:
+    """Reconstrói o cache local usando as mensagens oficiais armazenadas no Discord."""
+    resultados: dict[str, str] = {}
+    for raridade in RARIDADES_TEMPLATE:
+        meta = _ler_metadados(raridade)
+        if not meta:
+            resultados[raridade] = "não cadastrado"
+            continue
+        cache = caminho_cache_template(raridade)
+        try:
+            if cache.is_file() and cache.stat().st_size > 0:
+                try:
+                    processar_template(cache.read_bytes())
+                    # Cache válido evita requisição ao Discord durante a inicialização.
+                    resultados[raridade] = "cache local"
+                    continue
+                except (OSError, TemplateInvalido, ValueError):
+                    cache.unlink(missing_ok=True)
+            canal = await bot.fetch_channel(int(meta["channel_id"]))
+            mensagem = await canal.fetch_message(int(meta["message_id"]))
+            anexo = next((a for a in mensagem.attachments if int(a.id) == int(meta["attachment_id"])), None)
+            if anexo is None:
+                raise RuntimeError("anexo não encontrado na mensagem de armazenamento")
+            bruto = await anexo.read(use_cached=False)
+            await asyncio.to_thread(
+                registrar_template_discord,
+                raridade,
+                bruto,
+                channel_id=int(meta["channel_id"]),
+                message_id=int(meta["message_id"]),
+                attachment_id=int(meta["attachment_id"]),
+            )
+            resultados[raridade] = "recuperado do Discord"
+        except Exception as exc:
+            resultados[raridade] = f"falha: {type(exc).__name__}"
+    return resultados
 
 
 def carregar_template(raridade: str) -> tuple[Image.Image, dict[str, Any]] | None:
-    """Carrega um template validado; se um upload antigo estiver inválido, usa o padrão.
-
-    A janela é detectada e validada contra o guia oficial. Nenhum JSON legado pode
-    deslocar os textos ou a ilustração para compensar uma placa fora de posição.
-    """
-    if raridade not in RARIDADES_TEMPLATE:
+    """Carrega somente templates cadastrados no Discord e presentes no cache local."""
+    if raridade not in RARIDADES_TEMPLATE or _ler_metadados(raridade) is None:
         return None
-
-    candidatos = [caminho_template_persistente(raridade), caminho_template_embutido(raridade)]
-    vistos: set[str] = set()
+    caminho = caminho_cache_template(raridade)
     with _LOCK:
-        for caminho in candidatos:
-            try:
-                if not caminho.is_file():
-                    continue
-                origem_path = str(caminho.resolve())
-                if origem_path in vistos:
-                    continue
-                vistos.add(origem_path)
-                info = caminho.stat()
-            except OSError:
-                continue
-
-            existente = _CACHE.get(raridade)
-            if (existente and existente[0] == origem_path
-                    and existente[1] == info.st_mtime_ns and existente[2] == info.st_size):
-                return existente[3].copy(), json.loads(json.dumps(existente[4]))
-
-            try:
-                imagem, janela = processar_template(caminho.read_bytes())
-                layout = carregar_layout(raridade)
-                layout["arte"] = janela
-            except (OSError, TemplateInvalido, ValueError):
-                # Um upload persistente inválido não deve inutilizar a raridade:
-                # tenta o template oficial incluído no próprio pacote.
-                _CACHE.pop(raridade, None)
-                continue
-
-            _CACHE[raridade] = (
-                origem_path, info.st_mtime_ns, info.st_size, imagem.copy(),
-                json.loads(json.dumps(layout)),
-            )
-            return imagem, layout
-
-    limpar_cache_templates(raridade)
-    return None
-
+        try:
+            if not caminho.is_file():
+                return None
+            info = caminho.stat()
+        except OSError:
+            return None
+        origem_path = str(caminho.resolve())
+        existente = _CACHE.get(raridade)
+        if (existente and existente[0] == origem_path
+                and existente[1] == info.st_mtime_ns and existente[2] == info.st_size):
+            return existente[3].copy(), json.loads(json.dumps(existente[4]))
+        try:
+            imagem, janela = processar_template(caminho.read_bytes())
+            layout = carregar_layout(raridade)
+            layout["arte"] = janela
+        except (OSError, TemplateInvalido, ValueError):
+            _CACHE.pop(raridade, None)
+            return None
+        _CACHE[raridade] = (
+            origem_path, info.st_mtime_ns, info.st_size, imagem.copy(),
+            json.loads(json.dumps(layout)),
+        )
+        return imagem, layout
