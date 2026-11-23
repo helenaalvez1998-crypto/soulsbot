@@ -538,6 +538,7 @@ class NaraBot(commands.Bot):
         self._tarefas_auto_defer: set[asyncio.Task] = set()
         self._tarefa_lag: asyncio.Task | None = None
         self._web_runner: web.AppRunner | None = None
+        self._web_presence: dict[int, float] = {}
 
     def _handle_asyncio_exception(self, loop: asyncio.AbstractEventLoop, context: dict[str, Any]) -> None:
         exception = context.get("exception")
@@ -639,6 +640,9 @@ class NaraBot(commands.Bot):
         app.router.add_get("/api/collection", self._api_collection)
         app.router.add_get("/api/deck", self._api_deck)
         app.router.add_post("/api/deck", self._api_deck_save)
+        app.router.add_get("/api/players", self._api_players)
+        app.router.add_post("/api/presence/heartbeat", self._api_presence_heartbeat)
+        app.router.add_post("/api/duels", self._api_duel_create)
         app.router.add_get("/api/duels", self._api_duels)
         app.router.add_get("/api/duels/{duel_id}", self._api_duel_detail)
         app.router.add_post("/api/duels/{duel_id}/accept", self._api_duel_accept)
@@ -761,6 +765,106 @@ class NaraBot(commands.Bot):
         if not user_id.isdigit() or expires_at < int(time.time()):
             return None
         return int(user_id)
+
+    async def _api_players(self, request: web.Request) -> web.Response:
+        """Lista membros humanos do servidor configurado e combina presença Discord/site."""
+        user_id = self._api_user_id(request)
+        if user_id is None:
+            return web.json_response({"error": "Autenticação necessária."}, status=401)
+        try:
+            guild_id = int(getattr(config, "GUILD_ID", 0) or 0)
+        except (TypeError, ValueError):
+            guild_id = 0
+        guild = self.get_guild(guild_id) if guild_id else None
+        if guild is None:
+            return web.json_response({"error": "Servidor do SoulsBot indisponível."}, status=503)
+        now = time.time()
+        # Heartbeats expirados não são tratados como usuários online no site.
+        self._web_presence = {uid: stamp for uid, stamp in self._web_presence.items() if now - stamp <= 75}
+        players = []
+        for member in guild.members:
+            if member.bot:
+                continue
+            status = str(member.status)
+            players.append({
+                "id": str(member.id), "name": member.display_name,
+                "discord_presence": status,
+                "web_online": member.id in self._web_presence,
+                "is_self": member.id == user_id,
+            })
+        players.sort(key=lambda item: (not item["web_online"], item["discord_presence"] == "offline", item["name"].casefold()))
+        return web.json_response({"players": players, "server": guild.name})
+
+    async def _api_presence_heartbeat(self, request: web.Request) -> web.Response:
+        user_id = self._api_user_id(request)
+        if user_id is None:
+            return web.json_response({"error": "Autenticação necessária."}, status=401)
+        self._web_presence[user_id] = time.time()
+        return web.json_response({"ok": True, "web_online": True})
+
+    async def _api_duel_create(self, request: web.Request) -> web.Response:
+        """Cria convite pelo site e publica no canal Discord configurado."""
+        user_id = self._api_user_id(request)
+        if user_id is None:
+            return web.json_response({"error": "Autenticação necessária."}, status=401)
+        try:
+            body = await request.json()
+            opponent_id = int(body.get("opponent_id", 0))
+            aposta = int(body.get("aposta", 0))
+        except (TypeError, ValueError):
+            return web.json_response({"error": "Informe jogador e aposta válidos."}, status=400)
+        if opponent_id <= 0 or opponent_id == user_id or aposta < 0 or aposta > 500:
+            return web.json_response({"error": "Jogador ou aposta inválidos. A aposta máxima é 500 Denários."}, status=400)
+        try:
+            guild_id = int(getattr(config, "GUILD_ID", 0) or 0)
+            channel_id = int(os.getenv("SOULSBOT_DUELOS_CHANNEL_ID", "0") or 0)
+        except (TypeError, ValueError):
+            guild_id, channel_id = 0, 0
+        guild = self.get_guild(guild_id) if guild_id else None
+        channel = guild.get_channel(channel_id) if guild and channel_id else None
+        if guild is None or channel is None or not hasattr(channel, "send"):
+            return web.json_response({"error": "Configure SOULSBOT_DUELOS_CHANNEL_ID com o ID do canal de convites no Discord."}, status=503)
+        creator = guild.get_member(user_id)
+        opponent = guild.get_member(opponent_id)
+        if creator is None or opponent is None or creator.bot or opponent.bot:
+            return web.json_response({"error": "Os dois jogadores precisam ser membros humanos do servidor SoulsBot."}, status=404)
+        cog = self.get_cog("ColiseuCartas")
+        if cog is None:
+            return web.json_response({"error": "Motor do Coliseu indisponível."}, status=503)
+        from cogs.cartas_coliseu import ConviteDueloView, DIFERENCA_MAXIMA_PODER_DECK, TEMPO_RODADA_SEGUNDOS
+        result = await self.db.coliseu_criar_convite(
+            guild.id, channel.id, user_id, opponent_id, aposta,
+            nivel_minimo=5, limite_diario=5, limite_par=2, max_aposta_dia=1500,
+            cooldown_segundos=60, diferenca_maxima_poder=DIFERENCA_MAXIMA_PODER_DECK,
+        )
+        if result.get("status") != "ok":
+            return web.json_response({"error": str(result.get("status", "falha")), "details": result}, status=409)
+        duel_id = int(result["duel_id"])
+        embed = discord.Embed(
+            title="⚔️ Convite para o Coliseu",
+            description=(f"{creator.mention} desafiou {opponent.mention} para um duelo de cinco rodadas.\n\n"
+                         f"**Aposta por jogador:** {aposta} Denários\n**Pote total:** {aposta * 2} Denários\n"
+                         f"**Poder dos decks:** {result['deck_power'][user_id]} × {result['deck_power'][opponent_id]}\n"
+                         "As apostas só serão travadas quando o convite for aceito.\n"
+                         f"Cada rodada tem {TEMPO_RODADA_SEGUNDOS} segundos. O convite expira em dois minutos."),
+            color=config.COR_OURO,
+        )
+        embed.set_footer(text=f"Coliseu de Cartas • Duelo #{duel_id} • criado pelo site")
+        try:
+            embed, attachment = await cog.preparar_ficha_visual_duelo(duel_id, guild)
+            kwargs = {"content": opponent.mention, "embed": embed, "view": ConviteDueloView(duel_id),
+                      "allowed_mentions": discord.AllowedMentions(users=[opponent], roles=False, everyone=False)}
+            if attachment is not None:
+                kwargs["file"] = attachment
+            message = await channel.send(**kwargs)
+            await self.db.coliseu_definir_mensagem_convite(duel_id, message.id)
+        except Exception:
+            log.exception("Falha ao publicar convite web do duelo #%s", duel_id)
+            await self.db.coliseu_decidir_convite(duel_id, user_id, False)
+            return web.json_response({"error": "Não foi possível publicar o convite no Discord; o convite foi cancelado."}, status=502)
+        base_url = os.getenv("SOULSBOT_PUBLIC_URL", "https://narabot.sbs").rstrip("/")
+        return web.json_response({"ok": True, "duel_id": duel_id, "discord_message": message.jump_url,
+                                  "match_url": f"{base_url}/?duel={duel_id}"}, status=201)
 
     async def _api_duels(self, request: web.Request) -> web.Response:
         """Lista apenas duelos dos quais a conta autenticada participa."""
