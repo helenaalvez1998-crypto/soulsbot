@@ -614,6 +614,7 @@ class NaraBot(commands.Bot):
         app.router.add_get("/auth/discord/login", self._oauth_login)
         app.router.add_get("/auth/discord/callback", self._oauth_callback)
         app.router.add_get("/api/me", self._api_me)
+        app.router.add_get("/api/collection", self._api_collection)
         app.router.add_post("/auth/logout", self._oauth_logout)
         runner = web.AppRunner(app, access_log=None)
         try:
@@ -727,6 +728,65 @@ class NaraBot(commands.Bot):
             "authenticated": True,
             "user": {"id": user_id},
         })
+
+    async def _api_collection(self, request: web.Request) -> web.Response:
+        """Retorna somente a coleção do usuário autenticado, usando o banco atual do bot."""
+        raw_session = request.cookies.get(WEB_SESSION_COOKIE, "")
+        payload = _validar_payload_assinado(raw_session)
+        if not payload:
+            return web.json_response({"authenticated": False}, status=401)
+
+        try:
+            user_id_raw, expires_raw = payload.split(":", 1)
+            expires_at = int(expires_raw)
+        except (ValueError, TypeError):
+            return web.json_response({"authenticated": False}, status=401)
+
+        if not user_id_raw.isdigit() or expires_at < int(time.time()):
+            return web.json_response({"authenticated": False}, status=401)
+
+        user_id = int(user_id_raw)
+        try:
+            from sistemas.cartas import get_carta, carta_de_jogo_por_id
+
+            estado = await self.db.coliseu_estado_usuario(user_id)
+            rows = await self.db.coliseu_listar_colecao(user_id)
+            cartas = []
+
+            for row in rows:
+                card_id = str(row["card_id"])
+                carta = get_carta(card_id)
+                if carta is None and card_id.startswith("jogo_") and row["game_name"]:
+                    try:
+                        carta = carta_de_jogo_por_id(card_id, str(row["game_name"]))
+                    except ValueError:
+                        carta = None
+                if carta is None:
+                    log.warning(
+                        "Carta da coleção não encontrada no catálogo: user_id=%s card_id=%s",
+                        user_id, card_id,
+                    )
+                    continue
+
+                item = carta.para_dict()
+                item["quantidade"] = int(row["quantidade"] or 1)
+                item["source"] = str(row["source"] or "")
+                item["obtained_at"] = str(row["obtained_at"] or "")
+                cartas.append(item)
+
+            return web.json_response({
+                "authenticated": True,
+                "summary": {
+                    "cards": int(estado["cartas"]),
+                    "souls": int(estado["almas"]),
+                    "denarios": int(estado["denarios"]),
+                    "deck_cards": int(estado["deck"]),
+                },
+                "collection": cartas,
+            })
+        except Exception:
+            log.exception("Falha ao consultar coleção web do usuário %s.", user_id)
+            raise web.HTTPInternalServerError(text="Não foi possível carregar sua coleção.")
 
     async def _oauth_logout(self, request: web.Request) -> web.Response:
         response = web.json_response({"ok": True})
