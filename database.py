@@ -3572,7 +3572,7 @@ class Database:
                     )
             cur = await tx.conn.execute(
                 """UPDATE cartas_duelos SET status='active',accepted_at=CURRENT_TIMESTAMP,
-                       round_deadline=datetime('now','+40 seconds'),current_round=1
+                       round_deadline=datetime('now','+30 seconds'),current_round=1
                    WHERE id=? AND status='invited'""",
                 (int(duel_id),),
             )
@@ -3585,6 +3585,50 @@ class Database:
     async def coliseu_obter_duelo(self, duel_id: int):
         row = await self._one("SELECT * FROM cartas_duelos WHERE id=?", (int(duel_id),))
         return dict(row) if row else None
+
+    async def coliseu_listar_duelos_usuario(self, user_id: int, limite: int = 25):
+        """Lista cada confronto individual do membro, inclusive convites e partidas canceladas."""
+        return await self._all(
+            """SELECT * FROM cartas_duelos
+               WHERE creator_id=? OR opponent_id=?
+               ORDER BY id DESC LIMIT ?""",
+            (int(user_id), int(user_id), max(1, min(int(limite), 100))),
+        )
+
+    async def coliseu_estatisticas_duelos_usuario(self, user_id: int):
+        """Retorna o histórico agregado sem misturar convites ou partidas canceladas."""
+        uid = int(user_id)
+        row = await self._one(
+            """SELECT
+                 COUNT(*) AS partidas,
+                 SUM(CASE WHEN winner_id=? THEN 1 ELSE 0 END) AS vitorias,
+                 SUM(CASE WHEN winner_id IS NOT NULL AND winner_id<>? THEN 1 ELSE 0 END) AS derrotas,
+                 SUM(CASE WHEN winner_id IS NULL THEN 1 ELSE 0 END) AS empates,
+                 SUM(CASE WHEN winner_id=? THEN payout-aposta
+                          WHEN winner_id IS NOT NULL THEN -aposta ELSE 0 END) AS saldo_liquido
+               FROM cartas_duelos
+               WHERE status='finished' AND (creator_id=? OR opponent_id=?)""",
+            (uid, uid, uid, uid, uid),
+        )
+        return {
+            "partidas": int(row["partidas"] or 0),
+            "vitorias": int(row["vitorias"] or 0),
+            "derrotas": int(row["derrotas"] or 0),
+            "empates": int(row["empates"] or 0),
+            "saldo_liquido": int(row["saldo_liquido"] or 0),
+        }
+
+    async def coliseu_contagem_jogadas_rodada(self, duel_id: int):
+        """Conta apenas quantas escolhas secretas chegaram, sem revelar os autores."""
+        row = await self._one(
+            """SELECT d.current_round, COUNT(j.user_id) AS escolhas
+               FROM cartas_duelos d
+               LEFT JOIN cartas_duelo_jogadas j
+                 ON j.duel_id=d.id AND j.round_no=d.current_round
+               WHERE d.id=? GROUP BY d.id""",
+            (int(duel_id),),
+        )
+        return int(row["escolhas"] or 0) if row else 0
 
     async def coliseu_duelos_publicados(self, statuses: tuple[str, ...] = ("invited", "active")):
         marks = ",".join("?" for _ in statuses)
@@ -3713,7 +3757,7 @@ class Database:
             )
             if int(round_no) < 5:
                 await tx.conn.execute(
-                    "UPDATE cartas_duelos SET current_round=?,round_deadline=datetime('now','+40 seconds') WHERE id=?",
+                    "UPDATE cartas_duelos SET current_round=?,round_deadline=datetime('now','+30 seconds') WHERE id=?",
                     (int(round_no) + 1, int(duel_id)),
                 )
                 return {"status": "round_ok", "round_no": int(round_no)}

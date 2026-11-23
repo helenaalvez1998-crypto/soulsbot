@@ -21,13 +21,23 @@ A integração aparece no painel **Meu Progresso** como **Coliseu de cartas**. O
 - O lançamento oferece apenas duelos com aposta: 10 a 500 Denários por jogador, nível mínimo 5, até cinco duelos aceitos por dia, no máximo dois confrontos entre o mesmo par em 24 horas, limite diário de 1.500 Denários apostados por membro e cooldown de 60 segundos. A compra de pacotes também tem limite de três por janela móvel de 24 horas (360 Denários/dia ao preço atual de 120 por pacote).
 - A aposta só é debitada de ambos quando o convite é aceito. O vencedor recebe 90% do pote; 10% é removido da economia. Empate devolve as duas apostas. Inatividade de três minutos durante uma partida também devolve as duas apostas.
 - O convite expira em dois minutos e não movimenta Denários se não for aceito. Depois de um duelo concluído, qualquer um dos participantes pode solicitar uma revanche em um clique; o convite usa a aposta anterior como sugestão e o adversário ainda precisa aceitar. A revanche respeita saldo, nível, disponibilidade, limites diários, limite de confrontos e compatibilidade dos decks.
-- Cada uma das cinco rodadas tem até 40 segundos para as duas escolhas secretas e simultâneas. Se não houver as duas escolhas dentro do prazo, a partida é encerrada e as duas apostas são devolvidas. Jogadores que escolhem rapidamente normalmente concluem o duelo em cerca de 2–4 minutos.
+- Cada uma das cinco rodadas tem até 30 segundos para as duas escolhas secretas e simultâneas. Se não houver as duas escolhas dentro do prazo, a partida é encerrada e as duas apostas são devolvidas. Jogadores que escolhem rapidamente normalmente concluem o duelo em cerca de 2–4 minutos.
 - Cada duelo concluído concede +8 XP aos dois participantes, independentemente do vencedor, limitado a três duelos recompensados por membro em uma janela móvel de 24 horas. O XP não depende do valor apostado; partidas expiradas ou canceladas não geram XP.
 - Há três missões semanais opcionais: concluir 1 duelo (+2 Almas), concluir 3 duelos (+4 Almas) e vencer 2 duelos (+6 Almas). O progresso e as recompensas são individuais, creditados automaticamente e reiniciados por semana ISO no fuso de São Paulo. Não há sequência diária ou penalidade por ausência.
 - O pacote Fogueira é revelado carta por carta, com a opção de revelar todas ou abrir um resumo visual. A compra e o crédito das três cartas acontecem de forma atômica antes da animação; sair da mensagem não remove as cartas já adquiridas.
 - A habilidade Encadeamento concede +2 de poder se o jogador venceu a rodada anterior e repetir o tipo de carta. Ela foi adicionada sem alterar os atributos determinísticos das cartas de jogo e patente que já haviam sido entregues.
 - O histórico de rivalidade exibe o placar completo entre dois membros e os cinco confrontos mais recentes.
 - A escolha de cartas é privada e simultânea. O servidor valida os participantes, o deck travado, o uso único das cartas e todos os cálculos.
+
+## Experiência visual dos duelos
+
+- A Arena abre um painel gráfico pessoal com vitórias, derrotas, empates, aproveitamento, saldo líquido, partidas ativas e resultados recentes. O menu de partidas permite abrir a ficha de qualquer confronto salvo.
+- Ao iniciar um desafio, o convite já mostra o tabuleiro da partida, os dois duelistas, o poder dos decks e o valor em jogo. Ao aceitar, o mesmo tabuleiro passa ao estado de confronto ativo.
+- A escolha privada mostra todas as cartas restantes em uma única imagem horizontal, numeradas de 1 a 5. O jogador toca no botão que corresponde ao número da carta; não precisa abrir um menu suspenso nem confirmar uma segunda vez.
+- Depois da escolha, o participante recebe a imagem da própria carta com o selo **CARTA TRAVADA**. A escolha continua secreta para o adversário.
+- O tabuleiro público acompanha o placar, o progresso das cinco rodadas e a quantidade de escolhas recebidas. Cada rodada resolvida revela as duas cartas lado a lado, seus poderes, o vencedor da rodada e a narração. Rodadas futuras permanecem com cartas fechadas.
+- Ao encerrar, a ficha individual destaca o campeão, o placar final, o prêmio creditado, o lucro líquido e o valor removido da economia. Empates e partidas canceladas também têm desfecho visual próprio. Cada confronto mantém seu próprio registro.
+- As imagens são compostas localmente por Pillow a partir das artes das cartas; não dependem de serviços externos. No Discord, as áreas da imagem não aceitam cliques, então a seleção usa botões numerados imediatamente abaixo da mão ilustrada.
 
 ## Persistência e arquivos
 
