@@ -615,6 +615,7 @@ class NaraBot(commands.Bot):
         app.router.add_get("/auth/discord/callback", self._oauth_callback)
         app.router.add_get("/api/me", self._api_me)
         app.router.add_get("/api/collection", self._api_collection)
+        app.router.add_get("/api/cards/{card_id}/image", self._api_card_image)
         app.router.add_post("/auth/logout", self._oauth_logout)
         runner = web.AppRunner(app, access_log=None)
         try:
@@ -772,6 +773,7 @@ class NaraBot(commands.Bot):
                 item["quantidade"] = int(row["quantidade"] or 1)
                 item["source"] = str(row["source"] or "")
                 item["obtained_at"] = str(row["obtained_at"] or "")
+                item["image_url"] = f"/api/cards/{card_id}/image"
                 cartas.append(item)
 
             return web.json_response({
@@ -787,6 +789,70 @@ class NaraBot(commands.Bot):
         except Exception:
             log.exception("Falha ao consultar coleção web do usuário %s.", user_id)
             raise web.HTTPInternalServerError(text="Não foi possível carregar sua coleção.")
+
+    async def _api_card_image(self, request: web.Request) -> web.Response:
+        """Entrega o PNG da carta somente ao dono autenticado da carta."""
+        raw_session = request.cookies.get(WEB_SESSION_COOKIE, "")
+        payload = _validar_payload_assinado(raw_session)
+        if not payload:
+            raise web.HTTPUnauthorized(text="Faça login com o Discord.")
+
+        try:
+            user_id_raw, expires_raw = payload.split(":", 1)
+            expires_at = int(expires_raw)
+        except (ValueError, TypeError):
+            raise web.HTTPUnauthorized(text="Sessão inválida.")
+
+        if not user_id_raw.isdigit() or expires_at < int(time.time()):
+            raise web.HTTPUnauthorized(text="Sessão expirada.")
+
+        user_id = int(user_id_raw)
+        card_id = str(request.match_info.get("card_id", "")).strip()
+        if not card_id or len(card_id) > 120:
+            raise web.HTTPNotFound(text="Carta não encontrada.")
+
+        try:
+            rows = await self.db.coliseu_listar_colecao(user_id)
+            row = next((item for item in rows if str(item["card_id"]) == card_id), None)
+            if row is None:
+                # Não revela se a carta existe na coleção de outra pessoa.
+                raise web.HTTPNotFound(text="Carta não encontrada.")
+
+            cog = self.get_cog("ColiseuCartas")
+            if cog is None:
+                raise web.HTTPServiceUnavailable(text="Sistema de cartas indisponível.")
+
+            carta = cog._carta_da_linha(row)
+            if carta is None:
+                raise web.HTTPNotFound(text="Carta não encontrada no catálogo.")
+
+            arte_personalizada = await cog._obter_arte_personalizada(user_id, card_id)
+            if arte_personalizada:
+                from sistemas.arte_cartas import render_carta_bytes
+                imagem = render_carta_bytes(carta, arte_personalizada)
+                png = imagem.getvalue()
+            else:
+                from sistemas.arte_cartas import render_carta
+                caminho = render_carta(carta)
+                png = caminho.read_bytes()
+
+            return web.Response(
+                body=png,
+                content_type="image/png",
+                headers={
+                    "Content-Disposition": "inline",
+                    "Cache-Control": "private, no-store",
+                    "X-Content-Type-Options": "nosniff",
+                },
+            )
+        except web.HTTPException:
+            raise
+        except Exception:
+            log.exception(
+                "Falha ao renderizar imagem da carta para usuário %s (card_id=%s).",
+                user_id, card_id,
+            )
+            raise web.HTTPInternalServerError(text="Não foi possível carregar a imagem da carta.")
 
     async def _oauth_logout(self, request: web.Request) -> web.Response:
         response = web.json_response({"ok": True})
