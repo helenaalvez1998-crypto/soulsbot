@@ -12,6 +12,7 @@
     <nav>
       <button class="nav active" data-page="home">⌂ <span>Visão geral</span></button>
       <button class="nav" data-page="collection">▧ <span>Minha coleção</span></button>
+      <button class="nav" data-page="deck">♜ <span>Meu deck</span></button>
     </nav>
     <div class="side-bottom">
       <div class="profile"><div class="avatar">S</div><div><b id="profile-name">Visitante</b><small id="profile-status">Conecte sua conta Discord</small></div></div>
@@ -35,6 +36,13 @@
       <div class="collection-intro"><div><small class="eyebrow">ACERVO PESSOAL</small><h2>Minha coleção</h2><p class="muted">Cartas obtidas no jogo do Discord. Os dados são carregados diretamente da sua conta.</p></div><div class="collection-total" id="collection-total">0 cartas</div></div>
       <div class="toolbar"><input id="search" type="search" placeholder="Buscar pelo nome ou habilidade..."><select id="rarity"><option value="">Todas as raridades</option><option>Comum</option><option>Rara</option><option>Épica</option><option>Lendária</option><option>Primordial</option></select><select id="category"><option value="">Todas as categorias</option></select><select id="type"><option value="">Todos os tipos</option><option>Destreza</option><option>Força</option><option>Magia</option></select></div>
       <div class="collection-grid" id="collection-grid"><div class="empty-state">Entre com Discord para carregar as cartas.</div></div>
+    </section>
+    <section id="deck" class="page">
+      <div class="collection-intro"><div><small class="eyebrow">PREPARAÇÃO PARA A ARENA</small><h2>Meu deck</h2><p class="muted">Monte seu deck com as cartas da sua coleção. O salvamento atualiza o mesmo deck usado nos duelos do Discord.</p></div><div class="collection-total" id="deck-count">0/5 cartas</div></div>
+      <div class="deck-rules"><b>Regras do Coliseu</b><span>5 cartas diferentes</span><span>Custo máximo: 12</span><span>Até 1 Lendária</span></div>
+      <div class="deck-status" id="deck-status">Carregando seu deck...</div>
+      <div class="deck-layout"><div><div class="section-head"><div><small class="eyebrow">SELEÇÃO ATUAL</small><h3>Seu deck de batalha</h3></div><button class="text-btn" id="clear-deck" type="button">Limpar seleção</button></div><div class="deck-grid" id="deck-grid"></div><div class="deck-summary" id="deck-summary"></div><button class="primary" id="save-deck" type="button" disabled>Salvar deck no SoulsBot</button></div>
+      <div><div class="section-head"><div><small class="eyebrow">CARTAS DISPONÍVEIS</small><h3>Adicionar ao deck</h3></div></div><input id="deck-search" class="deck-search" type="search" placeholder="Buscar carta pelo nome..."><div class="deck-available" id="deck-available"></div></div></div>
     </section>
     <footer>SOULSBOT CARD GAME <span>Interface web conectada ao servidor oficial</span></footer>
   </main>

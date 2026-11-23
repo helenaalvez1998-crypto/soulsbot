@@ -1,6 +1,8 @@
 const $ = (selector) => document.querySelector(selector);
 let collection = [];
 let currentUser = null;
+let savedDeck = [];
+let selectedDeck = [];
 
 const text = (value, fallback = '—') => value === null || value === undefined || value === '' ? fallback : String(value);
 const number = (value) => new Intl.NumberFormat('pt-BR').format(Number(value || 0));
@@ -16,7 +18,8 @@ function showNotice(message, kind = 'info') {
 function showPage(page) {
   document.querySelectorAll('.page').forEach((element) => element.classList.toggle('show', element.id === page));
   document.querySelectorAll('.nav').forEach((button) => button.classList.toggle('active', button.dataset.page === page));
-  $('#page-title').textContent = page === 'collection' ? 'Minha coleção' : 'Visão geral';
+  $('#page-title').textContent = page === 'collection' ? 'Minha coleção' : page === 'deck' ? 'Meu deck' : 'Visão geral';
+  if (page === 'deck') loadDeck();
 }
 
 document.querySelectorAll('[data-page]').forEach((button) => button.addEventListener('click', () => showPage(button.dataset.page)));
@@ -89,6 +92,71 @@ async function loadAccount() {
     showNotice(error.message || 'Não foi possível conectar ao servidor.', 'error');
   }
 }
+
+async function loadDeck() {
+  if (!currentUser) return;
+  const status = $('#deck-status');
+  status.textContent = 'Sincronizando com o deck do Discord...';
+  try {
+    const response = await fetch('/api/deck', { credentials: 'same-origin', cache: 'no-store' });
+    if (!response.ok) throw new Error(response.status === 401 ? 'Sua sessão expirou. Entre novamente com Discord.' : 'Não foi possível carregar o deck.');
+    const data = await response.json();
+    savedDeck = Array.isArray(data.deck) ? data.deck : [];
+    selectedDeck = savedDeck.map(card => card.id);
+    renderDeck();
+    status.textContent = savedDeck.length === 5 ? 'Deck carregado. Ele é o mesmo utilizado nos duelos do Discord.' : 'Você ainda não tem um deck salvo. Escolha cinco cartas para montar seu deck.';
+  } catch (error) { status.textContent = error.message; }
+}
+
+function deckValidation(cards) {
+  if (cards.length > 5) return 'O deck aceita exatamente cinco cartas.';
+  const cost = cards.reduce((sum, card) => sum + Number(card.custo || 0), 0);
+  if (cost > 12) return `Custo ${cost}/12: remova uma carta para respeitar o limite.`;
+  if (cards.filter(card => card.raridade === 'Lendária').length > 1) return 'O deck pode conter no máximo uma carta Lendária.';
+  if (new Set(cards.map(card => card.id)).size !== cards.length) return 'Não é permitido repetir cartas.';
+  return '';
+}
+
+function renderDeck() {
+  const chosen = selectedDeck.map(id => collection.find(card => card.id === id)).filter(Boolean);
+  const cost = chosen.reduce((sum, card) => sum + Number(card.custo || 0), 0);
+  const error = deckValidation(chosen);
+  $('#deck-count').textContent = `${chosen.length}/5 cartas`;
+  $('#deck-grid').innerHTML = Array.from({length:5}, (_, index) => {
+    const card = chosen[index];
+    return card ? `<article class="deck-slot"><img src="${escapeHTML(imageUrl(card))}" alt="${escapeHTML(card.nome)}"><div><b>${escapeHTML(card.nome)}</b><small>${escapeHTML(card.raridade)} · custo ${number(card.custo)}</small><button type="button" data-remove-deck="${escapeHTML(card.id)}">Remover</button></div></article>` : `<div class="deck-slot empty-slot"><span>${index + 1}</span><small>Espaço disponível</small></div>`;
+  }).join('');
+  $('#deck-summary').textContent = `Cartas: ${chosen.length}/5 · Custo: ${cost}/12 · Lendárias: ${chosen.filter(card => card.raridade === 'Lendária').length}/1` + (error ? ` · ${error}` : '');
+  $('#save-deck').disabled = chosen.length !== 5 || Boolean(error) || JSON.stringify(selectedDeck) === JSON.stringify(savedDeck.map(card => card.id));
+  const query = ($('#deck-search').value || '').trim().toLocaleLowerCase('pt-BR');
+  const selected = new Set(selectedDeck);
+  const available = collection.filter(card => !selected.has(card.id) && (!query || card.nome.toLocaleLowerCase('pt-BR').includes(query)));
+  $('#deck-available').innerHTML = available.map(card => `<article class="available-card"><img src="${escapeHTML(imageUrl(card))}" alt=""><div><b>${escapeHTML(card.nome)}</b><small>${escapeHTML(card.raridade)} · ${escapeHTML(card.tipo)} · custo ${number(card.custo)}</small></div><button type="button" data-add-deck="${escapeHTML(card.id)}" ${chosen.length >= 5 ? 'disabled' : ''}>Adicionar</button></article>`).join('') || '<div class="empty-state">Nenhuma carta disponível para esse filtro.</div>';
+}
+
+document.addEventListener('click', (event) => {
+  const add = event.target.closest('[data-add-deck]');
+  const remove = event.target.closest('[data-remove-deck]');
+  if (add && selectedDeck.length < 5) { selectedDeck.push(add.dataset.addDeck); renderDeck(); }
+  if (remove) { selectedDeck = selectedDeck.filter(id => id !== remove.dataset.removeDeck); renderDeck(); }
+});
+$('#deck-search').addEventListener('input', renderDeck);
+$('#clear-deck').addEventListener('click', () => { selectedDeck = []; renderDeck(); });
+$('#save-deck').addEventListener('click', async () => {
+  const button = $('#save-deck');
+  button.disabled = true; button.textContent = 'Salvando...';
+  try {
+    const response = await fetch('/api/deck', { method: 'POST', credentials: 'same-origin', headers: {'Content-Type':'application/json'}, body: JSON.stringify({card_ids: selectedDeck}) });
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || 'Não foi possível salvar o deck.');
+    savedDeck = data.deck || [];
+    selectedDeck = savedDeck.map(card => card.id);
+    $('#deck-status').textContent = 'Deck salvo no banco compartilhado. Ele já está disponível para os duelos do Discord.';
+    showNotice('Deck sincronizado com o SoulsBot e com o Discord.', 'success');
+    renderDeck();
+  } catch (error) { $('#deck-status').textContent = error.message; }
+  finally { button.textContent = 'Salvar deck no SoulsBot'; renderDeck(); }
+});
 
 function openCard(card) {
   $('#modal-image').src = imageUrl(card);
