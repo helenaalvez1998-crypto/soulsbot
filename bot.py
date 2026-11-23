@@ -636,6 +636,8 @@ class NaraBot(commands.Bot):
         app.router.add_get("/auth/discord/callback", self._oauth_callback)
         app.router.add_get("/api/me", self._api_me)
         app.router.add_get("/api/collection", self._api_collection)
+        app.router.add_get("/api/deck", self._api_deck)
+        app.router.add_post("/api/deck", self._api_deck_save)
         app.router.add_get("/api/cards/{card_id}/image", self._api_card_image)
         app.router.add_post("/auth/logout", self._oauth_logout)
         runner = web.AppRunner(app, access_log=None)
@@ -810,6 +812,86 @@ class NaraBot(commands.Bot):
         except Exception:
             log.exception("Falha ao consultar coleção web do usuário %s.", user_id)
             raise web.HTTPInternalServerError(text="Não foi possível carregar sua coleção.")
+
+    async def _api_deck(self, request: web.Request) -> web.Response:
+        """Retorna o deck salvo do jogador autenticado, compartilhado com os duelos do Discord."""
+        raw_session = request.cookies.get(WEB_SESSION_COOKIE, "")
+        payload = _validar_payload_assinado(raw_session)
+        if not payload:
+            raise web.HTTPUnauthorized(text="Faça login com o Discord.")
+        try:
+            user_id_raw, expires_raw = payload.split(":", 1)
+            expires_at = int(expires_raw)
+        except (ValueError, TypeError):
+            raise web.HTTPUnauthorized(text="Sessão inválida.")
+        if not user_id_raw.isdigit() or expires_at < int(time.time()):
+            raise web.HTTPUnauthorized(text="Sessão expirada.")
+
+        user_id = int(user_id_raw)
+        try:
+            deck = await self.db.coliseu_obter_deck(user_id)
+            return web.json_response({
+                "authenticated": True,
+                "deck": [{**carta, "image_url": f"/api/cards/{carta['id']}/image"} for carta in deck],
+                "rules": {"cards": 5, "max_cost": 12, "max_legendary": 1, "unique_cards": True},
+            })
+        except Exception:
+            log.exception("Falha ao consultar deck web do usuário %s.", user_id)
+            raise web.HTTPInternalServerError(text="Não foi possível carregar seu deck.")
+
+    async def _api_deck_save(self, request: web.Request) -> web.Response:
+        """Salva somente IDs de cartas; o banco valida posse e reconstrói atributos canônicos."""
+        raw_session = request.cookies.get(WEB_SESSION_COOKIE, "")
+        payload = _validar_payload_assinado(raw_session)
+        if not payload:
+            raise web.HTTPUnauthorized(text="Faça login com o Discord.")
+        try:
+            user_id_raw, expires_raw = payload.split(":", 1)
+            expires_at = int(expires_raw)
+        except (ValueError, TypeError):
+            raise web.HTTPUnauthorized(text="Sessão inválida.")
+        if not user_id_raw.isdigit() or expires_at < int(time.time()):
+            raise web.HTTPUnauthorized(text="Sessão expirada.")
+
+        # Bloqueia submissões cross-site. O site e a API são servidos na mesma origem.
+        origin = request.headers.get("Origin")
+        if origin:
+            from urllib.parse import urlsplit
+            origem = urlsplit(origin)
+            if origem.scheme != "https" or origem.netloc.lower() != request.host.lower():
+                raise web.HTTPForbidden(text="Origem da solicitação não autorizada.")
+        if request.content_type != "application/json":
+            raise web.HTTPUnsupportedMediaType(text="Envie os dados em JSON.")
+        try:
+            body = await request.json()
+        except (ValueError, TypeError):
+            raise web.HTTPBadRequest(text="JSON inválido.")
+        card_ids = body.get("card_ids") if isinstance(body, dict) else None
+        if not isinstance(card_ids, list) or len(card_ids) != 5 or any(not isinstance(x, str) or not x or len(x) > 120 for x in card_ids):
+            raise web.HTTPBadRequest(text="Envie exatamente cinco IDs de cartas.")
+        if len(set(card_ids)) != 5:
+            raise web.HTTPBadRequest(text="Não é permitido repetir uma carta no deck.")
+
+        try:
+            resultado = await self.db.coliseu_salvar_deck(
+                int(user_id_raw), [{"id": card_id} for card_id in card_ids]
+            )
+            status = resultado.get("status")
+            if status == "ok":
+                deck = await self.db.coliseu_obter_deck(int(user_id_raw))
+                return web.json_response({"ok": True, "deck": deck, "custo": resultado.get("custo", 0)})
+            if status == "invalido":
+                return web.json_response({"ok": False, "error": resultado.get("motivo", "Deck inválido.")}, status=400)
+            if status == "nao_possui":
+                return web.json_response({"ok": False, "error": "Uma das cartas não pertence à sua coleção."}, status=403)
+            if status == "carta_indisponivel":
+                return web.json_response({"ok": False, "error": "Uma das cartas não está disponível no catálogo."}, status=400)
+            raise web.HTTPInternalServerError(text="Não foi possível salvar o deck.")
+        except web.HTTPException:
+            raise
+        except Exception:
+            log.exception("Falha ao salvar deck web do usuário %s.", user_id_raw)
+            raise web.HTTPInternalServerError(text="Não foi possível salvar seu deck.")
 
     async def _api_card_image(self, request: web.Request) -> web.Response:
         """Entrega o PNG da carta somente ao dono autenticado da carta."""
