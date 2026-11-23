@@ -550,9 +550,10 @@ class RevelacaoPacoteView(discord.ui.View):
                 return await interaction.response.send_message("As três cartas já foram reveladas.", ephemeral=True)
             self.indice += 1
             self.rebuild()
+            await interaction.response.defer()
             path = await asyncio.to_thread(render_carta, self.cards[self.indice])
             arquivo = discord.File(str(path), filename="carta.png")
-            await interaction.response.edit_message(
+            await interaction.edit_original_response(
                 embed=self.embed_carta_atual(), attachments=[arquivo], view=self,
             )
 
@@ -564,9 +565,10 @@ class RevelacaoPacoteView(discord.ui.View):
                 return await interaction.response.send_message("O resumo deste pacote já está aberto.", ephemeral=True)
             self.todas_reveladas = True
             self.rebuild()
+            await interaction.response.defer()
             path = await asyncio.to_thread(render_pacote, self.cards)
             arquivo = discord.File(str(path), filename="pacote_completo.png")
-            await interaction.response.edit_message(
+            await interaction.edit_original_response(
                 embed=self.embed_todas(), attachments=[arquivo], view=self,
             )
 
@@ -1064,9 +1066,10 @@ class DesafioColiseuView(discord.ui.View):
         if not self.members:
             if self.total_conectados:
                 embed.description = (
-                    f"Há **{self.total_conectados}** membro(s) conectado(s), mas nenhum está disponível para duelo agora.\n\n"
-                    "Nesta fase, basta ter uma conta no Coliseu, um deck válido de cinco cartas e não estar em outro duelo. "
-                    "Não exigimos nível mínimo, saldo mínimo nem equilíbrio de poder entre os decks."
+                    f"Há **{self.total_conectados}** membro(s) conectado(s), mas ninguém atende aos requisitos do Coliseu agora.\n\n"
+                    f"Para aparecer na lista, a pessoa precisa ter nível {NIVEL_MINIMO_DUELO}, saldo mínimo de {APOSTA_MINIMA} Denários, "
+                    f"um deck válido de cinco cartas com diferença máxima de {DIFERENCA_MAXIMA_PODER_DECK} pontos em relação ao seu, "
+                    "e não pode estar em outro duelo."
                 )
             else:
                 embed.description = (
@@ -1076,13 +1079,13 @@ class DesafioColiseuView(discord.ui.View):
         else:
             embed.description = (
                 f"**{len(self.members)}** membro(s) conectado(s) e apto(s) para duelo.\n\n"
-                 "Escolha quem deseja desafiar. A aposta é opcional: use 0 para um duelo amistoso. "
-                "A lista inclui membros Online, Ausentes e em Não perturbe."
+                "Escolha quem deseja desafiar. A próxima etapa será definir sua aposta. "
+                "A lista inclui estados Online, Ausente e Não perturbe. O convidado precisará aceitar e cobrir o mesmo valor."
             )
             if self.pages > 1:
                 embed.set_footer(text=f"Página {self.page + 1}/{self.pages} · A lista mostra até 25 membros por página")
             else:
-                embed.set_footer(text="Modo inicial: sem nível mínimo ou diferença máxima de poder; deck válido continua necessário.")
+                embed.set_footer(text="Somente membros humanos conectados, com nível, saldo e deck válidos aparecem aqui.")
         return embed
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -1099,8 +1102,8 @@ class DesafioColiseuModal(discord.ui.Modal, title="Definir aposta do duelo"):
         self.creator_id = int(creator_id)
         self.target_id = int(target_id)
         self.aposta = discord.ui.TextInput(
-            label="Aposta opcional por pessoa (0 = amistoso)",
-            placeholder="0 para jogar sem apostar", min_length=1, max_length=4, default="0",
+            label=f"Aposta por pessoa ({APOSTA_MINIMA}–{APOSTA_MAXIMA} Denários)",
+            placeholder="Ex.: 50", min_length=1, max_length=4, default=str(APOSTA_MINIMA),
         )
         self.add_item(self.aposta)
 
@@ -1121,18 +1124,18 @@ class DesafioColiseuModal(discord.ui.Modal, title="Definir aposta do duelo"):
             aposta = int(str(self.aposta.value).strip())
         except ValueError:
             return await interaction.response.send_message("Informe a aposta usando apenas números.", ephemeral=True)
-        if not 0 <= aposta <= APOSTA_MAXIMA:
-            return await interaction.response.send_message(f"A aposta precisa ficar entre 0 e {APOSTA_MAXIMA} Denários.", ephemeral=True)
+        if not APOSTA_MINIMA <= aposta <= APOSTA_MAXIMA:
+            return await interaction.response.send_message(f"A aposta precisa ficar entre {APOSTA_MINIMA} e {APOSTA_MAXIMA} Denários.", ephemeral=True)
 
         await interaction.response.defer(ephemeral=True, thinking=True)
         resultado = await self.cog.bot.db.coliseu_criar_convite(
             interaction.guild.id, interaction.channel.id, self.creator_id, alvo.id, aposta,
-            nivel_minimo=0,
+            nivel_minimo=NIVEL_MINIMO_DUELO,
             limite_diario=LIMITE_DUELOS_DIA,
             limite_par=LIMITE_DUELOS_PAR_DIA,
             max_aposta_dia=LIMITE_APOSTA_DIA,
             cooldown_segundos=COOLDOWN_DESAFIO_SEGUNDOS,
-            diferenca_maxima_poder=999999,
+            diferenca_maxima_poder=DIFERENCA_MAXIMA_PODER_DECK,
         )
         if resultado["status"] != "ok":
             await interaction.followup.send(self.cog.mensagem_erro_convite(resultado), ephemeral=True)
@@ -1142,18 +1145,17 @@ class DesafioColiseuModal(discord.ui.Modal, title="Definir aposta do duelo"):
             title="⚔️ Convite para o Coliseu",
             description=(
                 f"{interaction.user.mention} desafiou {alvo.mention} para um duelo de cinco rodadas.\n\n"
-                + (
-                    "**Duelo amistoso:** sem aposta e sem perda de Denários.\n"
-                    if aposta == 0 else
-                    f"**Aposta por jogador:** {aposta} Denários · **Pote:** {aposta * 2} Denários.\n"
-                )
-                + "Não há exigência de nível nem limite de diferença de poder entre decks.\n"
-                + f"Cada rodada tem {TEMPO_RODADA_SEGUNDOS} segundos para escolha; o duelo costuma levar 2–4 minutos com respostas rápidas.\n"
-                + "O convite expira em dois minutos."
+                f"**Aposta por jogador:** {aposta} Denários\n"
+                f"**Pote total:** {aposta * 2} Denários\n"
+                f"**Poder dos decks:** {resultado['deck_power'][self.creator_id]} × {resultado['deck_power'][alvo.id]} "
+                f"(diferença {resultado['power_gap']}/{DIFERENCA_MAXIMA_PODER_DECK})\n"
+                "As duas apostas só serão travadas quando o convite for aceito.\n"
+                f"Cada rodada tem {TEMPO_RODADA_SEGUNDOS} segundos para escolha; o duelo costuma levar 2–4 minutos com respostas rápidas.\n"
+                "O convite expira em dois minutos."
             ),
             color=config.COR_OURO,
         )
-        embed.set_footer(text=f"Coliseu de Cartas • Duelo #{duel_id} • Modo inicial simplificado")
+        embed.set_footer(text=f"Coliseu de Cartas • Duelo #{duel_id} • Nível mínimo 5")
         try:
             message = await interaction.channel.send(
                 content=alvo.mention,
@@ -1366,6 +1368,7 @@ class ColiseuCartas(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self._retornos_nara: dict[int, object] = {}
+        self._cache_artes_personalizadas: dict[int, bytes] = {}
         # Sessões curtas de upload de moldura; os arquivos finais ficam no DATA_DIR persistente.
         self._pending_moldura_uploads: dict[int, dict] = {}
         # Sessões curtas de upload de template completo (cartas com arte enviada pelo membro).
@@ -1756,10 +1759,7 @@ class ColiseuCartas(commands.Cog):
                 value="\n".join(f"{i}. **{c['nome']}** · {c['raridade']} · {c['tipo']}" for i, c in enumerate(deck, 1)),
                 inline=False,
             )
-            deck_image = discord.File(await self._preview_deck(user_id, deck), filename="meu_deck.png")
-            embed.set_image(url="attachment://meu_deck.png")
         else:
-            deck_image = None
             embed.add_field(
                 name="Seu primeiro deck",
                 value="Ainda não há cinco cartas diferentes na coleção. Abra um Pacote Fogueira ou registre uma conquista aprovada para completar seu deck.",
@@ -1774,17 +1774,13 @@ class ColiseuCartas(commands.Cog):
                 attachments=[deck_image] if deck_image else [],
                 view=view,
             )
-        elif deck_image:
-            await interaction.response.send_message(
-                content=None, embed=embed, view=view, file=deck_image, ephemeral=True,
-            )
         else:
             await interaction.response.send_message(
                 content=None, embed=embed, view=view, ephemeral=True,
             )
 
     async def abrir_selecao_desafio(self, interaction: discord.Interaction, user_id: int):
-        """Lista membros conectados; no início, duelos amistosos têm requisitos mínimos."""
+        """Mostra apenas membros conectados que já podem entrar em um duelo."""
         guild = interaction.guild
         if guild is None:
             return await interaction.response.edit_message(
@@ -1792,9 +1788,35 @@ class ColiseuCartas(commands.Cog):
                 view=discord.ui.View(timeout=60).add_item(VoltarColiseuButton(self, user_id)),
             )
 
-        if not interaction.response.is_done():
-            await interaction.response.defer()
+        db = self.bot.db
+        user = await db.get_user(int(user_id))
+        nivel = nivel_por_xp(int(user["xp"] or 0))
+        if nivel < NIVEL_MINIMO_DUELO:
+            texto = f"Você precisa alcançar o nível {NIVEL_MINIMO_DUELO} para desafiar outros membros. Seu nível atual é {nivel}."
+            return await interaction.response.edit_message(
+                embed=discord.Embed(title="⚔️ Ainda não é hora de entrar na arena", description=texto, color=config.COR_OURO),
+                view=discord.ui.View(timeout=60).add_item(VoltarColiseuButton(self, user_id)),
+            )
+        if int(user["denarios"] or 0) < APOSTA_MINIMA:
+            texto = f"Você precisa ter pelo menos {APOSTA_MINIMA} Denários para propor um duelo. Seu saldo atual é {int(user['denarios'] or 0)}."
+            return await interaction.response.edit_message(
+                embed=discord.Embed(title="⚔️ Saldo insuficiente", description=texto, color=config.COR_OURO),
+                view=discord.ui.View(timeout=60).add_item(VoltarColiseuButton(self, user_id)),
+            )
+        deck_proprio = await db.coliseu_obter_deck(int(user_id))
+        deck_valido, motivo = cards_em_deck_validos(deck_proprio)
+        if not deck_valido:
+            texto = f"Antes de desafiar alguém, salve um deck válido de cinco cartas. {motivo}"
+            return await interaction.response.edit_message(
+                embed=discord.Embed(title="🛡️ Seu deck ainda não está pronto", description=texto, color=config.COR_OURO),
+                view=discord.ui.View(timeout=60).add_item(VoltarColiseuButton(self, user_id)),
+            )
 
+        # A consulta ao cache de presença pode levar alguns segundos; confirma a interação
+        # antes de solicitar o chunk para não deixar o Discord expirar o clique.
+        await interaction.response.defer()
+
+        # O cache de membros e os status de presença dependem dos intents de membros/presenças.
         if not guild.chunked:
             try:
                 await guild.chunk(cache=True)
@@ -1814,21 +1836,26 @@ class ColiseuCartas(commands.Cog):
             discord.Status.dnd: ("Não perturbe", "🔴"),
         }
         conectados.sort(key=lambda m: (prioridade_status.get(m.status, 9), m.display_name.casefold()))
+        poder_deck_proprio = poder_total_deck(deck_proprio)
 
-        db = self.bot.db
         candidatos: list[dict] = []
         for member in conectados:
-            dados = await db._one("SELECT xp FROM users WHERE user_id=?", (int(member.id),))
+            dados = await db._one("SELECT xp,denarios FROM users WHERE user_id=?", (int(member.id),))
             if not dados:
+                continue
+            nivel_membro = nivel_por_xp(int(dados["xp"] or 0))
+            if nivel_membro < NIVEL_MINIMO_DUELO or int(dados["denarios"] or 0) < APOSTA_MINIMA:
                 continue
             deck = await db.coliseu_obter_deck(int(member.id))
             valido, _ = cards_em_deck_validos(deck)
             if not valido:
                 continue
+            poder_deck_membro = poder_total_deck(deck)
+            if abs(poder_deck_proprio - poder_deck_membro) > DIFERENCA_MAXIMA_PODER_DECK:
+                continue
             ocupado = await db._one(
-                "SELECT id FROM cartas_duelos WHERE status IN ('invited','active') "
-                "AND (creator_id=? OR opponent_id=? OR creator_id=? OR opponent_id=?) LIMIT 1",
-                (int(member.id), int(member.id), int(member.id), int(member.id)),
+                "SELECT id FROM cartas_duelos WHERE status IN ('invited','active') AND (creator_id=? OR opponent_id=?) LIMIT 1",
+                (int(member.id), int(member.id)),
             )
             if ocupado:
                 continue
@@ -1837,8 +1864,8 @@ class ColiseuCartas(commands.Cog):
                 "member": member,
                 "status_label": status_label,
                 "status_emoji": status_emoji,
-                "nivel": nivel_por_xp(int(dados["xp"] or 0)),
-                "poder": poder_total_deck(deck),
+                "nivel": nivel_membro,
+                "poder": poder_deck_membro,
             })
 
         view = DesafioColiseuView(self, int(user_id), candidatos, len(conectados))
@@ -1935,11 +1962,19 @@ class ColiseuCartas(commands.Cog):
             canal = self.bot.get_channel(int(registro["channel_id"]))
             if canal is None:
                 canal = await self.bot.fetch_channel(int(registro["channel_id"]))
+            attachment_id = int(registro["attachment_id"])
+            cache = getattr(self, "_cache_artes_personalizadas", {})
+            if attachment_id in cache:
+                return cache[attachment_id]
             mensagem = await canal.fetch_message(int(registro["message_id"]))
-            anexo = next((a for a in mensagem.attachments if int(a.id) == int(registro["attachment_id"])), None)
+            anexo = next((a for a in mensagem.attachments if int(a.id) == attachment_id), None)
             if anexo is None:
                 return None
-            return await anexo.read(use_cached=True)
+            dados = await anexo.read(use_cached=True)
+            if len(cache) >= 48:
+                cache.pop(next(iter(cache)))
+            cache[attachment_id] = dados
+            return dados
         except (discord.NotFound, discord.Forbidden, discord.HTTPException, AttributeError):
             log.warning("Arte personalizada indisponível para user=%s card=%s", user_id, card_id)
             return None
@@ -1949,8 +1984,9 @@ class ColiseuCartas(commands.Cog):
         *, collection_view: CollectionView | None = None, editar: bool = False,
         mensagem_status: str | None = None,
     ):
-        # O detalhe substitui a lista na mesma mensagem efêmera. Assim o membro
-        # sempre tem um caminho de volta e não acumula respostas privadas separadas.
+        # Reconhece o clique antes da consulta ao Discord e da composição Pillow.
+        if editar and not interaction.response.is_done():
+            await interaction.response.defer()
         if collection_view is None:
             collection_view = CollectionView(self, user_id, [])
         arte_bytes = await self._obter_arte_personalizada(user_id, str(carta["id"]))
