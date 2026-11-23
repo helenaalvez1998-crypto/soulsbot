@@ -161,6 +161,43 @@ $('#save-deck').addEventListener('click', async () => {
   finally { button.textContent = 'Salvar deck no SoulsBot'; renderDeck(); }
 });
 
+
+async function loadPlayers() {
+  if (!currentUser) return;
+  try {
+    await fetch('/api/presence/heartbeat', {method:'POST', credentials:'same-origin'});
+    const response = await fetch('/api/players', {credentials:'same-origin', cache:'no-store'});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Não foi possível carregar jogadores.');
+    const players = (data.players || []).filter(player => !player.is_self);
+    $('#challenge-player').innerHTML = '<option value="">Selecione um jogador</option>' + players.map(player => {
+      const status = player.web_online ? ' · no site' : ` · Discord: ${player.discord_presence}`;
+      return `<option value="${escapeHTML(player.id)}">${escapeHTML(player.name)}${escapeHTML(status)}</option>`;
+    }).join('');
+    $('#players-presence').textContent = players.length ? players.map(player => `${player.name}: ${player.web_online ? 'site online' : `Discord ${player.discord_presence}`}`).join(' · ') : 'Nenhum outro jogador disponível no servidor.';
+  } catch (error) {
+    $('#players-presence').textContent = error.message;
+  }
+}
+
+async function sendChallenge() {
+  const opponent_id = $('#challenge-player').value;
+  const aposta = Number($('#challenge-bet').value);
+  const button = $('#send-challenge');
+  if (!opponent_id) return showNotice('Selecione um jogador para desafiar.', 'error');
+  if (!Number.isInteger(aposta) || aposta < 0 || aposta > 500) return showNotice('A aposta deve ser um número inteiro entre 0 e 500.', 'error');
+  button.disabled = true; button.textContent = 'Enviando...';
+  try {
+    const response = await fetch('/api/duels', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({opponent_id, aposta})});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Não foi possível criar o convite.');
+    showNotice(`Convite #${data.duel_id} publicado no Discord.`, 'success');
+    if (data.discord_message) window.open(data.discord_message, '_blank', 'noopener');
+    await loadDuels();
+  } catch (error) { showNotice(error.message, 'error'); }
+  finally { button.disabled = false; button.textContent = 'Enviar convite'; }
+}
+
 async function loadDuels() {
   const list = $('#duel-list');
   if (!currentUser) { list.innerHTML = '<div class="empty-state">Entre com Discord para consultar seus duelos.</div>'; return; }
@@ -229,6 +266,7 @@ function renderDuel(data) {
 }
 
 $('#refresh-duels')?.addEventListener('click', loadDuels);
+$('#send-challenge')?.addEventListener('click', sendChallenge);
 document.addEventListener('click', event => {
   const button = event.target.closest('[data-open-duel]');
   if (button) openDuel(button.dataset.openDuel);
@@ -271,4 +309,4 @@ $('#logout-button').addEventListener('click', async () => {
   await loadAccount();
 });
 
-loadAccount().then(() => { const requested = new URLSearchParams(window.location.search).get('duel'); if (requested && currentUser && /^\d+$/.test(requested)) openDuel(requested); });
+loadAccount().then(() => { if (currentUser) { loadPlayers(); window.setInterval(loadPlayers, 30000); } const requested = new URLSearchParams(window.location.search).get('duel'); if (requested && currentUser && /^\d+$/.test(requested)) openDuel(requested); });

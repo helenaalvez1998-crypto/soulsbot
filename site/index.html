@@ -47,6 +47,11 @@
     </section>
     <section id="duels" class="page">
       <div class="collection-intro"><div><small class="eyebrow">ARENA OFICIAL</small><h2>Meus duelos</h2><p class="muted">Convites, partidas e resultados da mesma arena usada pelo SoulsBot no Discord.</p></div><button class="primary" id="refresh-duels" type="button">Atualizar duelos</button></div>
+      <div class="challenge-panel">
+        <div><small class="eyebrow">NOVO DESAFIO</small><h3>Desafiar jogador</h3><p class="muted">O convite será publicado no canal oficial do Discord.</p></div>
+        <div class="challenge-form"><select id="challenge-player"><option value="">Carregando jogadores...</option></select><input id="challenge-bet" type="number" min="0" max="500" step="1" value="0" aria-label="Aposta por jogador"><button class="primary" id="send-challenge" type="button">Enviar convite</button></div>
+        <div id="players-presence" class="players-presence" aria-live="polite">Sincronizando presença...</div>
+      </div>
       <div id="duel-list" class="duel-list"><div class="empty-state">Carregando seus duelos...</div></div>
       <div id="duel-room" class="duel-room" hidden></div>
     </section>

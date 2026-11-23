@@ -17,3 +17,7 @@
 .duel-card img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:8px}.duel-card span{font-size:.8rem;color:var(--muted,#aaa)}
 .duel-rounds article{align-items:flex-start;flex-direction:column}.duel-rounds article span{font-weight:600}
 @media(max-width:650px){.duel-item{align-items:flex-start;flex-direction:column}.duel-score{align-items:flex-start;flex-direction:column;gap:4px}.duel-room{padding:14px}}
+
+.challenge-panel{margin:18px 0;padding:20px;border:1px solid var(--line,rgba(255,255,255,.12));border-radius:18px;background:rgba(255,255,255,.025)}
+.challenge-panel h3{margin:5px 0}.challenge-form{display:grid;grid-template-columns:minmax(180px,1fr) 130px auto;gap:10px;margin-top:14px}.challenge-form select,.challenge-form input{min-width:0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#17141d;color:inherit}.players-presence{margin-top:12px;color:var(--muted);font-size:.85rem;line-height:1.6}
+@media(max-width:650px){.challenge-form{grid-template-columns:1fr}.challenge-form .primary{width:100%}}
