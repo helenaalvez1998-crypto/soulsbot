@@ -584,6 +584,12 @@ CREATE TABLE IF NOT EXISTS cartas_duelo_rounds (
     type_bonus_b INTEGER NOT NULL DEFAULT 0,
     skill_bonus_a INTEGER NOT NULL DEFAULT 0,
     skill_bonus_b INTEGER NOT NULL DEFAULT 0,
+    combo_bonus_a INTEGER NOT NULL DEFAULT 0,
+    combo_bonus_b INTEGER NOT NULL DEFAULT 0,
+    combo_name_a TEXT NOT NULL DEFAULT '',
+    combo_name_b TEXT NOT NULL DEFAULT '',
+    skill_text_a TEXT NOT NULL DEFAULT '',
+    skill_text_b TEXT NOT NULL DEFAULT '',
     winner_side TEXT NOT NULL,
     narration TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -719,6 +725,14 @@ MIGRACOES_COLUNAS = {
     },
     "community_posts": {
         "is_hidden": "INTEGER NOT NULL DEFAULT 0",
+    },
+    "cartas_duelo_rounds": {
+        "combo_bonus_a": "INTEGER NOT NULL DEFAULT 0",
+        "combo_bonus_b": "INTEGER NOT NULL DEFAULT 0",
+        "combo_name_a": "TEXT NOT NULL DEFAULT ''",
+        "combo_name_b": "TEXT NOT NULL DEFAULT ''",
+        "skill_text_a": "TEXT NOT NULL DEFAULT ''",
+        "skill_text_b": "TEXT NOT NULL DEFAULT ''",
     },
 }
 
@@ -3749,21 +3763,29 @@ class Database:
             )
             await tx.conn.execute(
                 """INSERT INTO cartas_duelo_rounds(duel_id,round_no,card_a_id,card_b_id,card_a_name,card_b_name,
-                       power_a,power_b,type_bonus_a,type_bonus_b,skill_bonus_a,skill_bonus_b,winner_side,narration)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                       power_a,power_b,type_bonus_a,type_bonus_b,skill_bonus_a,skill_bonus_b,
+                       combo_bonus_a,combo_bonus_b,combo_name_a,combo_name_b,skill_text_a,skill_text_b,winner_side,narration)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (int(duel_id), int(round_no), str(ca["id"]), str(cb["id"]), str(ca["nome"]), str(cb["nome"]),
                  int(result["power_a"]), int(result["power_b"]), int(result["type_bonus_a"]), int(result["type_bonus_b"]),
-                 int(result["skill_bonus_a"]), int(result["skill_bonus_b"]), str(result["winner"]), str(result.get("narration", ""))[:500]),
+                 int(result["skill_bonus_a"]), int(result["skill_bonus_b"]),
+                 int(result.get("combo_bonus_a", 0)), int(result.get("combo_bonus_b", 0)),
+                 str(result.get("combo_name_a", ""))[:80], str(result.get("combo_name_b", ""))[:80],
+                 str(result.get("skill_text_a", ""))[:160], str(result.get("skill_text_b", ""))[:160],
+                 str(result["winner"]), str(result.get("narration", ""))[:500]),
             )
-            if int(round_no) < 5:
+            rounds = await tx._all("SELECT winner_side,power_a,power_b FROM cartas_duelo_rounds WHERE duel_id=? ORDER BY round_no", (int(duel_id),))
+            wins_a = sum(1 for r in rounds if r["winner_side"] == "a")
+            wins_b = sum(1 for r in rounds if r["winner_side"] == "b")
+            from sistemas.cartas import vencedor_matematicamente_garantido
+            vencedor_garantido = vencedor_matematicamente_garantido(wins_a, wins_b, int(round_no), 5)
+            encerrado_antecipadamente = bool(int(round_no) < 5 and vencedor_garantido)
+            if int(round_no) < 5 and not encerrado_antecipadamente:
                 await tx.conn.execute(
                     "UPDATE cartas_duelos SET current_round=?,round_deadline=datetime('now','+30 seconds') WHERE id=?",
                     (int(round_no) + 1, int(duel_id)),
                 )
-                return {"status": "round_ok", "round_no": int(round_no)}
-            rounds = await tx._all("SELECT winner_side,power_a,power_b FROM cartas_duelo_rounds WHERE duel_id=? ORDER BY round_no", (int(duel_id),))
-            wins_a = sum(1 for r in rounds if r["winner_side"] == "a")
-            wins_b = sum(1 for r in rounds if r["winner_side"] == "b")
+                return {"status": "round_ok", "round_no": int(round_no), "wins_a": wins_a, "wins_b": wins_b}
             total_a = sum(int(r["power_a"]) for r in rounds if r["winner_side"] == "a")
             total_b = sum(int(r["power_b"]) for r in rounds if r["winner_side"] == "b")
             lado_vencedor = "a" if wins_a > wins_b else "b" if wins_b > wins_a else "a" if total_a > total_b else "b" if total_b > total_a else "empate"
@@ -3790,13 +3812,18 @@ class Database:
                 (f"duel:{duel_id}:payout", winner_id, payout, int(duel_id),
                  f'{{"pot":{pote},"burned":{burned}}}'),
             )
+            motivo_fim = (
+                f"vitória matematicamente garantida após {int(round_no)} rodadas"
+                if encerrado_antecipadamente else "duelo concluído após cinco rodadas"
+            )
             await tx.conn.execute(
-                "UPDATE cartas_duelos SET status='finished',winner_id=?,payout=?,burned=?,end_reason='duelo concluído' WHERE id=?",
-                (winner_id, payout, burned, int(duel_id)),
+                "UPDATE cartas_duelos SET status='finished',winner_id=?,payout=?,burned=?,end_reason=? WHERE id=?",
+                (winner_id, payout, burned, motivo_fim, int(duel_id)),
             )
             recompensas = await self._coliseu_registrar_participacoes_tx(tx, duel, winner_id)
             return {"status": "vitoria", "winner_id": winner_id, "wins_a": wins_a, "wins_b": wins_b,
                     "total_a": total_a, "total_b": total_b, "pote": pote, "payout": payout, "burned": burned,
+                    "rodadas_jogadas": int(round_no), "encerrado_antecipadamente": encerrado_antecipadamente,
                     "recompensas": recompensas}
 
     async def coliseu_historico_rodadas(self, duel_id: int):

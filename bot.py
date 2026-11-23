@@ -298,7 +298,10 @@ async def _send_message_seguro(self: discord.InteractionResponse, *args: Any, **
 
 
 async def _edit_message_seguro(self: discord.InteractionResponse, *args: Any, **kwargs: Any):
-    if _adiada_automaticamente(self):
+    # Um componente só pode receber uma resposta inicial. Às vezes outro caminho já
+    # reconheceu a interação (defer, auto-defer ou resposta concorrente) sem registrar
+    # o ID em _INTERACOES_ADIADAS. Tentar _orig_edit_message nesse estado gera HTTP 40060.
+    if _adiada_automaticamente(self) or self.is_done():
         delete_after = kwargs.pop("delete_after", None)
         kwargs.pop("suppress_embeds", None)
         id_ = self._parent.id
@@ -315,8 +318,8 @@ async def _edit_message_seguro(self: discord.InteractionResponse, *args: Any, **
 
 
 async def _defer_seguro(self: discord.InteractionResponse, *args: Any, **kwargs: Any):
-    if _adiada_automaticamente(self):
-        return None  # já adiada pela rede de segurança
+    if _adiada_automaticamente(self) or self.is_done():
+        return None  # já reconhecida por outro caminho; não tenta responder duas vezes
     return await _orig_defer(self, *args, **kwargs)
 
 
