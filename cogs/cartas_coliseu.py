@@ -11,6 +11,7 @@ import logging
 import re
 import time
 from pathlib import Path
+from typing import Any
 
 import discord
 from discord.ext import commands, tasks
@@ -1838,13 +1839,32 @@ class ColiseuCartas(commands.Cog):
         conectados.sort(key=lambda m: (prioridade_status.get(m.status, 9), m.display_name.casefold()))
         poder_deck_proprio = poder_total_deck(deck_proprio)
 
+        # Consultas em lote (antes eram 2 por membro conectado): XP/Denários e duelos em andamento.
+        ids_conectados = [int(m.id) for m in conectados]
+        dados_por_id: dict[int, Any] = {}
+        ocupados_ids: set[int] = set()
+        for i in range(0, len(ids_conectados), 400):
+            lote = ids_conectados[i:i + 400]
+            marcas = ",".join("?" * len(lote))
+            for r in await db._all(f"SELECT user_id,xp,denarios FROM users WHERE user_id IN ({marcas})", tuple(lote)):
+                dados_por_id[int(r["user_id"])] = r
+            for r in await db._all(
+                f"SELECT creator_id,opponent_id FROM cartas_duelos WHERE status IN ('invited','active') "
+                f"AND (creator_id IN ({marcas}) OR opponent_id IN ({marcas}))",
+                tuple(lote) + tuple(lote),
+            ):
+                ocupados_ids.add(int(r["creator_id"]))
+                ocupados_ids.add(int(r["opponent_id"]))
+
         candidatos: list[dict] = []
         for member in conectados:
-            dados = await db._one("SELECT xp,denarios FROM users WHERE user_id=?", (int(member.id),))
+            dados = dados_por_id.get(int(member.id))
             if not dados:
                 continue
             nivel_membro = nivel_por_xp(int(dados["xp"] or 0))
             if nivel_membro < NIVEL_MINIMO_DUELO or int(dados["denarios"] or 0) < APOSTA_MINIMA:
+                continue
+            if int(member.id) in ocupados_ids:
                 continue
             deck = await db.coliseu_obter_deck(int(member.id))
             valido, _ = cards_em_deck_validos(deck)
@@ -1852,12 +1872,6 @@ class ColiseuCartas(commands.Cog):
                 continue
             poder_deck_membro = poder_total_deck(deck)
             if abs(poder_deck_proprio - poder_deck_membro) > DIFERENCA_MAXIMA_PODER_DECK:
-                continue
-            ocupado = await db._one(
-                "SELECT id FROM cartas_duelos WHERE status IN ('invited','active') AND (creator_id=? OR opponent_id=?) LIMIT 1",
-                (int(member.id), int(member.id)),
-            )
-            if ocupado:
                 continue
             status_label, status_emoji = rotulos_status.get(member.status, ("Conectado", "🟢"))
             candidatos.append({

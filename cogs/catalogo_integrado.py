@@ -354,8 +354,37 @@ def render_kwargs(text_or_embed, file, view):
 # ------------------------------------------------------------------ grade visual do catálogo
 
 
+_CACHE_GRADES: dict[tuple, bytes] = {}
+_CACHE_GRADES_MAX = 64
+
+
+def _assinatura_grade(rows) -> tuple:
+    """Chave que muda quando nomes, plataformas ou os arquivos de capa mudam."""
+    partes = []
+    for jogo in rows:
+        capa = jogo["capa"]
+        try:
+            mtime = os.stat(capa).st_mtime_ns if capa and os.path.isfile(capa) else 0
+        except OSError:
+            mtime = 0
+        partes.append((capa, mtime, str(jogo["nome"]), str(jogo["plataforma"])))
+    return tuple(partes)
+
+
 def criar_grade_capas(rows):
-    """Monta uma grade 4x2 com capas e nomes para anexar à mensagem do Discord."""
+    """Grade de capas com cache: páginas já vistas voltam instantaneamente."""
+    chave = _assinatura_grade(rows)
+    png = _CACHE_GRADES.get(chave)
+    if png is None:
+        png = _desenhar_grade_capas(rows)
+        if len(_CACHE_GRADES) >= _CACHE_GRADES_MAX:
+            _CACHE_GRADES.pop(next(iter(_CACHE_GRADES)))
+        _CACHE_GRADES[chave] = png
+    return discord.File(BytesIO(png), filename="catalogo.png")
+
+
+def _desenhar_grade_capas(rows) -> bytes:
+    """Monta uma grade 4x2 com capas e nomes (PNG em bytes)."""
     largura_capa, altura_capa = 180, 240
     margem, espacamento, faixa_titulo = 18, 14, 58
     colunas = 5
@@ -407,9 +436,8 @@ def criar_grade_capas(rows):
         draw.text((x + 8, y + altura_capa + 32), plataforma, fill=(185, 190, 198), font=fonte_plataforma)
 
     buffer = BytesIO()
-    img.save(buffer, format="PNG", optimize=True)
-    buffer.seek(0)
-    return discord.File(buffer, filename="catalogo.png")
+    img.save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 # ------------------------------------------------------------------ catálogo (navegação)
