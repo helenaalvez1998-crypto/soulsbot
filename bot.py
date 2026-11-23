@@ -636,15 +636,14 @@ class NaraBot(commands.Bot):
         except RuntimeError:
             raise web.HTTPServiceUnavailable(text="Chave de sessão do site não configurada.")
         state = secrets.token_urlsafe(32)
-        response = web.HTTPFound(
-            f"{DISCORD_OAUTH_AUTHORIZE_URL}?{urlencode({
-                'client_id': client_id,
-                'redirect_uri': redirect_uri,
-                'response_type': 'code',
-                'scope': 'identify',
-                'state': state,
-            })}"
-        )
+        oauth_params = urlencode({
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": "identify",
+            "state": state,
+        })
+        response = web.HTTPFound(f"{DISCORD_OAUTH_AUTHORIZE_URL}?{oauth_params}")
         _cookie_seguro(response, OAUTH_STATE_COOKIE, _assinar_payload(state), max_age=600)
         raise response
 
