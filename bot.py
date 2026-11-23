@@ -8,12 +8,20 @@ import asyncio
 import logging
 import os
 import sys
+import hmac
+import hashlib
+import json
+import secrets
+import time
+from urllib.parse import urlencode
+
 import threading
 import traceback
 from io import BytesIO
 from typing import Any
 
 import discord
+import aiohttp
 from aiohttp import web
 from discord import app_commands
 from discord.ext import commands
@@ -468,6 +476,46 @@ class NaraCommandTree(app_commands.CommandTree):
         )
 
 
+
+DISCORD_OAUTH_AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
+DISCORD_OAUTH_TOKEN_URL = "https://discord.com/api/oauth2/token"
+DISCORD_API_ME_URL = "https://discord.com/api/users/@me"
+OAUTH_STATE_COOKIE = "soulsbot_oauth_state"
+WEB_SESSION_COOKIE = "soulsbot_web_session"
+WEB_SESSION_MAX_AGE = 60 * 60 * 24 * 7
+
+
+def _web_session_secret() -> bytes:
+    """Chave independente para assinar sessão e state; nunca usar o token do bot."""
+    value = os.getenv("SOULSBOT_WEB_SESSION_SECRET", "")
+    if len(value) < 32:
+        raise RuntimeError("SOULSBOT_WEB_SESSION_SECRET ausente ou muito curta (mínimo 32 caracteres).")
+    return value.encode("utf-8")
+
+
+def _assinar_payload(payload: str) -> str:
+    assinatura = hmac.new(_web_session_secret(), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{payload}.{assinatura}"
+
+
+def _validar_payload_assinado(valor: str) -> str | None:
+    try:
+        payload, assinatura = valor.rsplit(".", 1)
+        esperada = hmac.new(_web_session_secret(), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(assinatura, esperada):
+            return None
+        return payload
+    except (ValueError, RuntimeError):
+        return None
+
+
+def _cookie_seguro(response: web.StreamResponse, nome: str, valor: str, *, max_age: int) -> None:
+    response.set_cookie(
+        nome, valor, max_age=max_age, httponly=True, secure=True,
+        samesite="Lax", path="/",
+    )
+
+
 class NaraBot(commands.Bot):
     def __init__(self) -> None:
         intents = discord.Intents.default()
@@ -563,6 +611,10 @@ class NaraBot(commands.Bot):
         app = web.Application()
         app.router.add_get("/", pagina_inicial)
         app.router.add_get("/api/status", status_api)
+        app.router.add_get("/auth/discord/login", self._oauth_login)
+        app.router.add_get("/auth/discord/callback", self._oauth_callback)
+        app.router.add_get("/api/me", self._api_me)
+        app.router.add_post("/auth/logout", self._oauth_logout)
         runner = web.AppRunner(app, access_log=None)
         try:
             await runner.setup()
@@ -573,6 +625,115 @@ class NaraBot(commands.Bot):
         except Exception:
             await runner.cleanup()
             log.exception("Não foi possível iniciar a API HTTP na porta %s; o bot Discord continuará iniciando.", porta)
+
+    async def _oauth_login(self, request: web.Request) -> web.Response:
+        client_id = os.getenv("DISCORD_OAUTH_CLIENT_ID", "").strip()
+        redirect_uri = os.getenv("DISCORD_OAUTH_REDIRECT_URI", "").strip()
+        if not client_id or not redirect_uri:
+            raise web.HTTPServiceUnavailable(text="Login Discord não configurado.")
+        try:
+            _web_session_secret()
+        except RuntimeError:
+            raise web.HTTPServiceUnavailable(text="Chave de sessão do site não configurada.")
+        state = secrets.token_urlsafe(32)
+        response = web.HTTPFound(
+            f"{DISCORD_OAUTH_AUTHORIZE_URL}?{urlencode({
+                'client_id': client_id,
+                'redirect_uri': redirect_uri,
+                'response_type': 'code',
+                'scope': 'identify',
+                'state': state,
+            })}"
+        )
+        _cookie_seguro(response, OAUTH_STATE_COOKIE, _assinar_payload(state), max_age=600)
+        raise response
+
+    async def _oauth_callback(self, request: web.Request) -> web.Response:
+        error = request.query.get("error")
+        if error:
+            raise web.HTTPBadRequest(text="Login Discord cancelado ou recusado.")
+        code_oauth = request.query.get("code", "")
+        state = request.query.get("state", "")
+        state_cookie = request.cookies.get(OAUTH_STATE_COOKIE, "")
+        state_validado = _validar_payload_assinado(state_cookie)
+        if not code_oauth or not state or not state_validado or not hmac.compare_digest(state, state_validado):
+            raise web.HTTPBadRequest(text="Estado OAuth inválido. Inicie o login novamente.")
+
+        client_id = os.getenv("DISCORD_OAUTH_CLIENT_ID", "").strip()
+        client_secret = os.getenv("DISCORD_OAUTH_CLIENT_SECRET", "").strip()
+        redirect_uri = os.getenv("DISCORD_OAUTH_REDIRECT_URI", "").strip()
+        if not all((client_id, client_secret, redirect_uri)):
+            raise web.HTTPServiceUnavailable(text="Credenciais OAuth Discord não configuradas.")
+        try:
+            _web_session_secret()
+        except RuntimeError:
+            raise web.HTTPServiceUnavailable(text="Chave de sessão do site não configurada.")
+
+        timeout = aiohttp.ClientTimeout(total=15)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(
+                DISCORD_OAUTH_TOKEN_URL,
+                data={
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "grant_type": "authorization_code",
+                    "code": code_oauth,
+                    "redirect_uri": redirect_uri,
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            ) as token_response:
+                if token_response.status != 200:
+                    log.warning("Discord OAuth token exchange recusado: HTTP %s.", token_response.status)
+                    raise web.HTTPUnauthorized(text="Não foi possível validar o login com Discord.")
+                token_data = await token_response.json()
+
+            access_token = token_data.get("access_token")
+            if not access_token:
+                raise web.HTTPUnauthorized(text="Discord não retornou um token de acesso válido.")
+
+            async with session.get(
+                DISCORD_API_ME_URL,
+                headers={"Authorization": f"Bearer {access_token}"},
+            ) as user_response:
+                if user_response.status != 200:
+                    log.warning("Discord OAuth user lookup recusado: HTTP %s.", user_response.status)
+                    raise web.HTTPUnauthorized(text="Não foi possível identificar sua conta Discord.")
+                discord_user = await user_response.json()
+
+        user_id = str(discord_user.get("id", ""))
+        if not user_id.isdigit():
+            raise web.HTTPUnauthorized(text="Identidade Discord inválida.")
+
+        # A sessão contém apenas o ID autenticado e expiração; nenhum token OAuth é armazenado.
+        expires_at = int(time.time()) + WEB_SESSION_MAX_AGE
+        session_payload = f"{user_id}:{expires_at}"
+        response = web.HTTPFound("/")
+        _cookie_seguro(response, WEB_SESSION_COOKIE, _assinar_payload(session_payload), max_age=WEB_SESSION_MAX_AGE)
+        response.del_cookie(OAUTH_STATE_COOKIE, path="/")
+        return response
+
+    async def _api_me(self, request: web.Request) -> web.Response:
+        raw_session = request.cookies.get(WEB_SESSION_COOKIE, "")
+        payload = _validar_payload_assinado(raw_session)
+        if not payload:
+            return web.json_response({"authenticated": False}, status=401)
+        try:
+            user_id, expires_raw = payload.split(":", 1)
+            expires_at = int(expires_raw)
+        except (ValueError, TypeError):
+            return web.json_response({"authenticated": False}, status=401)
+        if not user_id.isdigit() or expires_at < int(time.time()):
+            return web.json_response({"authenticated": False}, status=401)
+        return web.json_response({
+            "authenticated": True,
+            "user": {"id": user_id},
+        })
+
+    async def _oauth_logout(self, request: web.Request) -> web.Response:
+        response = web.json_response({"ok": True})
+        response.del_cookie(WEB_SESSION_COOKIE, path="/")
+        response.del_cookie(OAUTH_STATE_COOKIE, path="/")
+        return response
 
     async def on_interaction(self, interaction: discord.Interaction) -> None:
         # Só botões/selects: em slash commands o defer() decide se a resposta é efêmera,
