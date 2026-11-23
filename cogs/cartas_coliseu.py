@@ -31,6 +31,7 @@ from sistemas.arte_cartas import (
     render_duel_board_bytes,
     render_arena_dashboard_bytes,
     render_duel_locked_card_bytes,
+    render_duel_reveal_gif_bytes,
     render_pacote,
     render_previa_template,
     salvar_moldura_personalizada,
@@ -86,6 +87,24 @@ def _descricao_habilidade(carta: dict) -> str:
     from sistemas.cartas import HABILIDADES
     habilidade = HABILIDADES.get(str(carta.get("habilidade")), {})
     return f"**{habilidade.get('nome', 'Sem habilidade')}** — {habilidade.get('texto', '')}"
+
+
+def _previsao_habilidade(carta: dict, round_no: int, resultado_anterior: str | None, tipo_anterior: str | None) -> str:
+    """Mostra o que já é previsível antes da escolha; efeitos dependentes do rival não são adivinhados."""
+    from sistemas.cartas import bonus_habilidade
+    bonus = bonus_habilidade(
+        carta, int(round_no), resultado_anterior, False,
+        tipo_anterior=tipo_anterior,
+    )
+    if bonus > 0:
+        return f"✅ **Ativa agora: +{bonus} poder**"
+    depende_do_rival = {
+        "contragolpe", "drenagem", "cacador_arcano", "quebra_ritmo",
+        "decreto_soberano", "olho_tempestade", "instinto", "fome_abismo",
+    }
+    if str(carta.get("habilidade", "")) in depende_do_rival:
+        return "◇ **Efeito depende da carta adversária**"
+    return "○ Condição ainda não ativada"
 
 
 class BotaoDueloColiseu(discord.ui.DynamicItem[discord.ui.Button], template=r"coliseu_cartas:(?P<acao>aceitar|recusar|cancelar|jogar|revanche|atualizar):(?P<duelo>[0-9]+)"):
@@ -944,7 +963,7 @@ class BotaoEscolherCartaDuelo(discord.ui.Button):
         self.card_id = str(card["id"])
         self.card = dict(card)
         super().__init__(
-            label=f"{index + 1}. {str(card.get('nome', 'Carta'))}"[:80],
+            label=f"{index + 1}. {int(card.get('poder', 0) or 0)}P · {str(card.get('nome', 'Carta'))}"[:80],
             emoji=EMOJIS_TIPO.get(str(card.get("tipo")), "🃏"),
             style=self.ESTILOS_RARIDADE.get(str(card.get("raridade")), discord.ButtonStyle.secondary),
             row=index // 3,
@@ -988,7 +1007,9 @@ class BotaoEscolherCartaDuelo(discord.ui.Button):
             return
         if resultado["status"] == "pronto":
             await view.cog.resolver_rodada(resultado)
-            await view.cog.atualizar_mensagem_duelo(view.duel_id, interaction.guild)
+            await view.cog.atualizar_mensagem_duelo(
+                view.duel_id, interaction.guild, revelar_ultima_rodada=True,
+            )
             painel, arquivo = await view.cog.preparar_ficha_visual_duelo(view.duel_id, interaction.guild)
             await interaction.edit_original_response(
                 content="A rodada foi resolvida. O tabuleiro visual atualizado está abaixo.",
@@ -2131,8 +2152,10 @@ class ColiseuCartas(commands.Cog):
         view = DesafioColiseuView(self, int(user_id), candidatos, len(conectados))
         await interaction.edit_original_response(embed=view.embed(), view=view)
 
-    async def preparar_ficha_visual_duelo(self, duel_id: int, guild: discord.Guild | None = None):
-        """Monta a ficha e o tabuleiro gráfico atual de uma partida específica."""
+    async def preparar_ficha_visual_duelo(
+        self, duel_id: int, guild: discord.Guild | None = None, *, revelar_ultima_rodada: bool = False,
+    ):
+        """Monta o tabuleiro; após uma jogada pode animar a revelação recém-resolvida."""
         duel = await self.bot.db.coliseu_obter_duelo(int(duel_id))
         if not duel:
             embed = discord.Embed(title="Duelo indisponível", color=discord.Color.dark_grey())
@@ -2154,10 +2177,18 @@ class ColiseuCartas(commands.Cog):
         embed = await self.embed_duelo(int(duel_id), guild, compacto=True)
         filename = f"arena-duelo-{int(duel_id)}.png"
         try:
-            imagem = await asyncio.to_thread(
-                render_duel_board_bytes, dict(duel), rounds, deck_a, deck_b,
-                nome_a, nome_b, picks, TEMPO_RODADA_SEGUNDOS,
-            )
+            if revelar_ultima_rodada and rounds:
+                rodada = int(rounds[-1].get("round_no", 1) or 1)
+                imagem = await asyncio.to_thread(
+                    render_duel_reveal_gif_bytes, dict(duel), rounds, deck_a, deck_b,
+                    nome_a, nome_b, picks, TEMPO_RODADA_SEGUNDOS,
+                )
+                filename = f"arena-duelo-{int(duel_id)}-revelacao-{rodada}.gif"
+            else:
+                imagem = await asyncio.to_thread(
+                    render_duel_board_bytes, dict(duel), rounds, deck_a, deck_b,
+                    nome_a, nome_b, picks, TEMPO_RODADA_SEGUNDOS,
+                )
             embed.set_image(url=f"attachment://{filename}")
             return embed, discord.File(imagem, filename=filename)
         except Exception:
@@ -2166,7 +2197,17 @@ class ColiseuCartas(commands.Cog):
             return await self.embed_duelo(int(duel_id), guild, compacto=False), None
 
     async def abrir_painel_duelos(self, interaction: discord.Interaction, user_id: int):
-        """Abre a central com partidas ativas, placar geral e fichas recentes."""
+        """Abre a central com partidas ativas, placar geral e fichas recentes.
+
+        A composição do dashboard pode levar mais que o prazo inicial do Discord.
+        Reconhece o clique antes do trabalho e sempre edita a resposta original, mesmo
+        quando o auto-defer global já tiver reconhecido a interação.
+        """
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.defer()
+            except discord.InteractionResponded:
+                pass
         db = self.bot.db
         uid = int(user_id)
         rows = await db.coliseu_listar_duelos_usuario(uid, limite=25)
@@ -2262,7 +2303,7 @@ class ColiseuCartas(commands.Cog):
         filename = f"arena-pessoal-{uid}.png"
         embed = view.embed()
         embed.set_image(url=f"attachment://{filename}")
-        await interaction.response.edit_message(
+        await interaction.edit_original_response(
             embed=embed, attachments=[discord.File(dashboard, filename=filename)], view=view,
         )
 
@@ -2842,25 +2883,78 @@ class ColiseuCartas(commands.Cog):
             cards = await self.bot.db.coliseu_cartas_disponiveis(duel_id, uid)
             if not cards:
                 return await interaction.response.send_message("Você já utilizou suas cinco cartas ou não há escolhas disponíveis.", ephemeral=True)
+            historico = [dict(r) for r in await self.bot.db.coliseu_historico_rodadas(duel_id)]
+            deck_proprio = await self.bot.db.coliseu_deck_da_partida(duel_id, uid)
+            mapa_proprio = {str(c.get("id")): c for c in deck_proprio}
+            lado = "a" if uid == creator_id else "b"
+            campo_id = "card_a_id" if lado == "a" else "card_b_id"
+            tipos_usados = [
+                str(mapa_proprio.get(str(r[campo_id]), {}).get("tipo", ""))
+                for r in historico
+                if mapa_proprio.get(str(r[campo_id]), {}).get("tipo")
+            ]
+            combo_ja_ativado = any(int(r.get(f"combo_bonus_{lado}", 0) or 0) > 0 for r in historico)
+            tipos_distintos = set(tipos_usados)
+            if combo_ja_ativado:
+                progresso_combo = "✅ **Tríade Elemental já ativada** nesta partida."
+            elif len(tipos_distintos) == 2:
+                faltante = next((tipo for tipo in ("Destreza", "Força", "Magia") if tipo not in tipos_distintos), None)
+                progresso_combo = (
+                    f"✨ **Tríade pronta:** usar {EMOJIS_TIPO.get(faltante, '✦')} **{faltante}** nesta rodada concede +2 de poder."
+                    if faltante else ""
+                )
+            elif len(tipos_distintos) == 1:
+                faltantes = [tipo for tipo in ("Destreza", "Força", "Magia") if tipo not in tipos_distintos]
+                progresso_combo = f"Tríade Elemental: você já usou {next(iter(tipos_distintos))}; faltam {', '.join(faltantes)}."
+            elif len(tipos_distintos) >= 3:
+                progresso_combo = "Tríade Elemental: os três tipos já foram usados nesta partida; não há nova ativação disponível."
+            else:
+                progresso_combo = "Tríade Elemental: complete os três tipos diferentes para ganhar +2 uma vez por duelo."
+            wins_a = sum(str(r["winner_side"]) == "a" for r in historico)
+            wins_b = sum(str(r["winner_side"]) == "b" for r in historico)
+            vitorias_proprias, vitorias_rival = (wins_a, wins_b) if lado == "a" else (wins_b, wins_a)
+            resultado_anterior_proprio = None
+            if historico:
+                ultimo_vencedor = str(historico[-1]["winner_side"])
+                resultado_anterior_proprio = (
+                    "empatou" if ultimo_vencedor == "empate"
+                    else "venceu" if ultimo_vencedor == lado else "perdeu"
+                )
+            tipo_anterior_proprio = tipos_usados[-1] if tipos_usados else None
+            linha_historico = " → ".join(
+                f"{EMOJIS_TIPO.get(tipo, '✦')} {tipo}" for tipo in tipos_usados
+            ) or "Nenhuma carta utilizada ainda"
             embed = discord.Embed(
                 title=f"⚔️ ESCOLHA SUA CARTA · RODADA {duel['current_round']}/5",
                 description=(
-                    "Sua mão está ilustrada abaixo. Escolha o botão com o mesmo número da carta.\n"
-                    "A seleção é secreta, imediata e não pode ser trocada."
+                    f"**Placar:** você {vitorias_proprias} × {vitorias_rival} adversário\n"
+                    f"**Sua sequência:** {linha_historico}\n"
+                    f"{progresso_combo}\n\n"
+                    "Escolha uma carta pelos botões numerados abaixo. A seleção é secreta, imediata e não pode ser trocada."
                 ),
                 color=config.COR_OURO,
             )
             for indice, carta in enumerate(cards, 1):
                 embed.add_field(
                     name=f"{indice} · {carta.get('nome', 'Carta')}",
-                    value=f"{carta.get('raridade', 'Comum')} · Poder {carta.get('poder', 0)} · {carta.get('tipo', 'Magia')}",
+                    value=(
+                        f"{carta.get('raridade', 'Comum')} · **{carta.get('poder', 0)} poder**\n"
+                        f"{EMOJIS_TIPO.get(str(carta.get('tipo')), '✦')} {carta.get('tipo', 'Magia')}\n"
+                        f"{_descricao_habilidade(carta)}\n"
+                        f"{_previsao_habilidade(carta, int(duel['current_round']), resultado_anterior_proprio, tipo_anterior_proprio)}"
+                    )[:1024],
                     inline=True,
                 )
+            embed.add_field(
+                name="Ciclo de tipos",
+                value="🌀 Destreza vence ⚔️ Força · ⚔️ Força vence 🔮 Magia · 🔮 Magia vence 🌀 Destreza",
+                inline=False,
+            )
             nome_arquivo = f"mao-duelo-{duel_id}-{duel['current_round']}.png"
             preview = await asyncio.to_thread(render_duel_hand_bytes, cards, duel_id, int(duel["current_round"]))
             arquivo = discord.File(preview, filename=nome_arquivo)
             embed.set_image(url=f"attachment://{nome_arquivo}")
-            embed.set_footer(text=f"Duelo #{duel_id} · {len(cards)} carta(s) restantes · botões abaixo escolhem diretamente")
+            embed.set_footer(text=f"Duelo #{duel_id} · {len(cards)} carta(s) restantes · bônus de tipo +3 · Tríade Elemental +2 uma vez por duelo")
             return await interaction.response.send_message(
                 embed=embed,
                 file=arquivo,
@@ -2891,7 +2985,7 @@ class ColiseuCartas(commands.Cog):
         duel = payload["duel"]
         a, b = int(duel["creator_id"]), int(duel["opponent_id"])
         card_a, card_b = payload["cards"][a], payload["cards"][b]
-        historico = await self.bot.db.coliseu_historico_rodadas(int(duel["id"]))
+        historico = [dict(r) for r in await self.bot.db.coliseu_historico_rodadas(int(duel["id"]))]
         previous_a = previous_b = None
         if historico:
             winner = str(historico[-1]["winner_side"])
@@ -2901,20 +2995,45 @@ class ColiseuCartas(commands.Cog):
                 previous_a, previous_b = "perdeu", "venceu"
             elif winner == "empate":
                 previous_a = previous_b = "empatou"
-        tipo_anterior_a = tipo_anterior_b = None
-        if historico:
-            deck_a = await self.bot.db.coliseu_deck_da_partida(int(duel["id"]), a)
-            deck_b = await self.bot.db.coliseu_deck_da_partida(int(duel["id"]), b)
-            mapa_a = {str(c["id"]): c for c in deck_a}
-            mapa_b = {str(c["id"]): c for c in deck_b}
-            carta_anterior_a = mapa_a.get(str(historico[-1]["card_a_id"]))
-            carta_anterior_b = mapa_b.get(str(historico[-1]["card_b_id"]))
-            tipo_anterior_a = carta_anterior_a.get("tipo") if carta_anterior_a else None
-            tipo_anterior_b = carta_anterior_b.get("tipo") if carta_anterior_b else None
+        deck_a = await self.bot.db.coliseu_deck_da_partida(int(duel["id"]), a)
+        deck_b = await self.bot.db.coliseu_deck_da_partida(int(duel["id"]), b)
+        mapa_a = {str(c["id"]): c for c in deck_a}
+        mapa_b = {str(c["id"]): c for c in deck_b}
+        tipos_anteriores_a = [
+            str(mapa_a[str(r["card_a_id"])]["tipo"])
+            for r in historico if str(r["card_a_id"]) in mapa_a
+        ]
+        tipos_anteriores_b = [
+            str(mapa_b[str(r["card_b_id"])]["tipo"])
+            for r in historico if str(r["card_b_id"]) in mapa_b
+        ]
+        tipo_anterior_a = tipos_anteriores_a[-1] if tipos_anteriores_a else None
+        tipo_anterior_b = tipos_anteriores_b[-1] if tipos_anteriores_b else None
+        wins_a_antes = sum(str(r["winner_side"]) == "a" for r in historico)
+        wins_b_antes = sum(str(r["winner_side"]) == "b" for r in historico)
         result = resolver_rodada(
             card_a, card_b, int(payload["round_no"]), previous_a, previous_b,
             tipo_anterior_a, tipo_anterior_b,
+            tipos_anteriores_a=tipos_anteriores_a,
+            tipos_anteriores_b=tipos_anteriores_b,
+            combo_ja_usado_a=any(int(r.get("combo_bonus_a", 0) or 0) > 0 for r in historico),
+            combo_ja_usado_b=any(int(r.get("combo_bonus_b", 0) or 0) > 0 for r in historico),
         )
+        wins_a_depois = wins_a_antes + (1 if result["winner"] == "a" else 0)
+        wins_b_depois = wins_b_antes + (1 if result["winner"] == "b" else 0)
+        rodadas_restantes = max(0, 5 - int(payload["round_no"]))
+        if wins_a_depois > wins_b_depois and wins_a_antes <= wins_b_antes:
+            result["match_note"] = "VIRADA: o Duelista A assumiu a liderança."
+        elif wins_b_depois > wins_a_depois and wins_b_antes <= wins_a_antes:
+            result["match_note"] = "VIRADA: o Duelista B assumiu a liderança."
+        elif wins_a_depois == wins_b_depois and wins_a_depois > 0:
+            result["match_note"] = "PLACAR EMPATADO: o próximo ponto pode mudar tudo."
+        if wins_a_depois > wins_b_depois + rodadas_restantes:
+            result["match_note"] = "VITÓRIA GARANTIDA: o Duelista A não pode mais ser alcançado."
+        elif wins_b_depois > wins_a_depois + rodadas_restantes:
+            result["match_note"] = "VITÓRIA GARANTIDA: o Duelista B não pode mais ser alcançado."
+        elif int(payload["round_no"]) == 5:
+            result["match_note"] = "RODADA FINAL: o confronto foi decidido." if not result.get("match_note") else result["match_note"]
         narration = narrar_rodada(int(payload["round_no"]), card_a, card_b, result)
         result.update({"card_a": card_a, "card_b": card_b, "narration": narration})
         final = await self.bot.db.coliseu_resolver_rodada(int(duel["id"]), int(payload["round_no"]), result)
@@ -2922,6 +3041,8 @@ class ColiseuCartas(commands.Cog):
             return f"Rodada {payload['round_no']} resolvida. A próxima escolha já está disponível no painel público."
         if final["status"] == "vitoria":
             base = f"Duelo encerrado. Vencedor: <@{final['winner_id']}> · prêmio: {final['payout']} Denários · {final['burned']} Denários foram removidos do jogo."
+            if final.get("encerrado_antecipadamente"):
+                base += f" A vitória ficou matematicamente garantida após {final.get('rodadas_jogadas', payload['round_no'])} rodadas; as rodadas restantes foram dispensadas."
         elif final["status"] == "empate":
             base = "O duelo terminou empatado. As duas apostas foram devolvidas integralmente."
         else:
@@ -3042,10 +3163,18 @@ class ColiseuCartas(commands.Cog):
                 extra_a.append(f"tipo +{row['type_bonus_a']}")
             if int(row["skill_bonus_a"]):
                 extra_a.append(f"habilidade +{row['skill_bonus_a']}")
+            combo_a = int(row["combo_bonus_a"] or 0) if "combo_bonus_a" in row.keys() else 0
+            if combo_a:
+                nome_combo = str(row["combo_name_a"] or "Tríade Elemental") if "combo_name_a" in row.keys() else "Tríade Elemental"
+                extra_a.append(f"{nome_combo} +{combo_a}")
             if int(row["type_bonus_b"]):
                 extra_b.append(f"tipo +{row['type_bonus_b']}")
             if int(row["skill_bonus_b"]):
                 extra_b.append(f"habilidade +{row['skill_bonus_b']}")
+            combo_b = int(row["combo_bonus_b"] or 0) if "combo_bonus_b" in row.keys() else 0
+            if combo_b:
+                nome_combo = str(row["combo_name_b"] or "Tríade Elemental") if "combo_name_b" in row.keys() else "Tríade Elemental"
+                extra_b.append(f"{nome_combo} +{combo_b}")
             embed.add_field(
                 name=f"RODADA {int(row['round_no'])} · {vencedor}",
                 value=(
@@ -3075,15 +3204,35 @@ class ColiseuCartas(commands.Cog):
                 vencedor_id = int(duel["winner_id"])
                 vencedor_nome = nome_a if vencedor_id == a else nome_b
                 lucro_vencedor = int(duel["payout"]) - int(duel["aposta"])
+                rodadas_jogadas = len(rounds)
                 resultado_texto = (
                     f"🏆 **{vencedor_nome} venceu a partida.**\n"
+                    f"Placar: **{wins_a}–{wins_b}** · **{rodadas_jogadas}/5 rodadas**\n"
                     f"Prêmio creditado: **{int(duel['payout']):,} Denários** · "
                     f"lucro líquido do vencedor: **+{lucro_vencedor:,}**\n"
                     f"Removidos da economia: **{int(duel['burned']):,} Denários**"
                 )
+                if rodadas_jogadas < 5:
+                    resultado_texto += "\nA partida terminou antes: a vitória já estava matematicamente garantida."
             else:
                 resultado_texto = "⚖️ **Empate.** As duas apostas foram devolvidas integralmente."
             embed.add_field(name="🏁 Resultado final", value=resultado_texto, inline=False)
+            if rounds:
+                melhor = max(
+                    [(int(r["power_a"]), nome_a, str(r["card_a_name"])) for r in rounds]
+                    + [(int(r["power_b"]), nome_b, str(r["card_b_name"])) for r in rounds],
+                    key=lambda item: item[0],
+                )
+                combos_a = sum(int(r["combo_bonus_a"] or 0) > 0 for r in rounds)
+                combos_b = sum(int(r["combo_bonus_b"] or 0) > 0 for r in rounds)
+                embed.add_field(
+                    name="⭐ Destaques do confronto",
+                    value=(
+                        f"**Maior poder em uma rodada:** {melhor[0]} · **{melhor[2]}** ({melhor[1]})\n"
+                        f"**Tríades Elementais:** {combos_a + combos_b} · Duelista A {combos_a} / Duelista B {combos_b}"
+                    ),
+                    inline=False,
+                )
 
             rivalidade = await self.bot.db.coliseu_rivalidade(a, b, limite=5)
             embed.add_field(
@@ -3140,7 +3289,9 @@ class ColiseuCartas(commands.Cog):
                 return discord.utils.escape_markdown(membro.display_name)
         return f"Jogador {user_id}"
 
-    async def atualizar_mensagem_duelo(self, duel_id: int, guild: discord.Guild | None = None):
+    async def atualizar_mensagem_duelo(
+        self, duel_id: int, guild: discord.Guild | None = None, *, revelar_ultima_rodada: bool = False,
+    ):
         duel = await self.bot.db.coliseu_obter_duelo(duel_id)
         if not duel or not duel["message_id"]:
             return
@@ -3152,7 +3303,10 @@ class ColiseuCartas(commands.Cog):
                 return
         try:
             message = await channel.fetch_message(int(duel["message_id"]))
-            embed, arquivo = await self.preparar_ficha_visual_duelo(duel_id, guild or getattr(channel, "guild", None))
+            embed, arquivo = await self.preparar_ficha_visual_duelo(
+                duel_id, guild or getattr(channel, "guild", None),
+                revelar_ultima_rodada=revelar_ultima_rodada,
+            )
             if duel["status"] == "active":
                 view = BatalhaDueloView(duel_id)
             elif duel["status"] == "finished":
