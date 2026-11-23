@@ -1309,10 +1309,10 @@ class TemplateRemoverSelect(discord.ui.Select):
     def __init__(self, view: "TemplatesCartasAdminView"):
         self.painel = view
         super().__init__(
-            placeholder="Restaurar o template padrão do projeto...",
+            placeholder="Remover um template armazenado no Discord...",
             min_values=1, max_values=1, row=2,
             options=[
-                discord.SelectOption(label=raridade, value=raridade, description=f"Restaurar o template padrão de {raridade}")
+                discord.SelectOption(label=raridade, value=raridade, description=f"Remover o template Discord de {raridade}")
                 for raridade in templates_cartas.RARIDADES_TEMPLATE
             ],
         )
@@ -1323,8 +1323,8 @@ class TemplateRemoverSelect(discord.ui.Select):
         embed = await self.painel.cog.embed_painel_templates()
         await interaction.response.edit_message(embed=embed, view=self.painel)
         mensagem = (
-            f"A substituição personalizada de **{raridade}** foi removida. O template padrão incluso no projeto voltou a ser usado."
-            if removido else f"**{raridade}** já está usando o template padrão do projeto."
+            f"O template Discord de **{raridade}** foi removido. Essa raridade ficará sem template externo até um novo envio."
+            if removido else f"**{raridade}** não tinha template Discord cadastrado."
         )
         await interaction.followup.send(mensagem, ephemeral=True)
 
@@ -1379,10 +1379,24 @@ class ColiseuCartas(commands.Cog):
     async def cog_load(self):
         self.bot.add_dynamic_items(BotaoDueloColiseu, AtelieReviewButton)
         self.monitorar_prazos.start()
+        self._task_sync_templates = asyncio.create_task(self._sincronizar_templates_armazenados())
+
+    async def _sincronizar_templates_armazenados(self):
+        try:
+            await self.bot.wait_until_ready()
+            resultados = await templates_cartas.sincronizar_templates_discord(self.bot)
+            log.info("Templates Discord: %s", " | ".join(f"{r}={s}" for r, s in resultados.items()))
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Falha ao sincronizar templates armazenados no Discord")
 
     async def cog_unload(self):
         self.bot.remove_dynamic_items(BotaoDueloColiseu, AtelieReviewButton)
         self.monitorar_prazos.cancel()
+        tarefa = getattr(self, "_task_sync_templates", None)
+        if tarefa and not tarefa.done():
+            tarefa.cancel()
 
     @tasks.loop(seconds=5)
     async def monitorar_prazos(self):
@@ -1537,23 +1551,19 @@ class ColiseuCartas(commands.Cog):
         linhas = []
         for raridade, configurado in status.items():
             origem = templates_cartas.origem_template(raridade)
-            if origem == "personalizado":
-                estado = "🟢 Template personalizado"
-            elif origem == "padrão":
-                estado = "🔷 Template padrão do projeto"
-            elif origem and origem.startswith("padrão ("):
-                estado = "🟡 Template padrão ativo (upload antigo inválido ignorado)"
-            elif origem == "inválido":
-                estado = "🔴 Template inválido e sem padrão disponível"
+            if origem == "Discord (cache local ativo)":
+                estado = "🟢 Discord ativo · cache local"
+            elif origem == "Discord (sincronização pendente)":
+                estado = "🟡 Cadastrado no Discord · cache pendente"
             else:
-                estado = "⚪ Sem template (layout antigo)"
+                estado = "⚪ Não enviado ao Discord"
             linhas.append(f"**{raridade}:** {estado}")
         embed = discord.Embed(
             title="🃏 Templates completos das cartas",
             description=(
-                "Os cinco templates oficiais já vêm incluídos no projeto e são usados **somente nas cartas com arte enviada pelo membro**. "
-                "A arte entra por trás do template, pela janela transparente, e o bot escreve os dados nos slots do guia.\n"
-                "Cartas sem arte enviada continuam sendo desenhadas pelo bot. Você pode enviar um PNG para substituir temporariamente o padrão.\n\n"
+                "Os templates completos são armazenados em mensagens privadas da Nara no Discord e mantidos em cache local regenerável. "
+                "O projeto não usa mais molduras embutidas como fallback. Os templates são aplicados **somente nas cartas com arte enviada pelo membro**. "
+                "Cartas sem arte enviada continuam sendo desenhadas pelo bot.\n\n"
                 + "\n".join(linhas)
                 + "\n\n**Arquivo aceito:** PNG RGBA de carta completa, 840 × 1240 px, sem textos. "
                 "A janela transparente deve coincidir com o guia oficial (56,256 → 784,846)."
@@ -1594,8 +1604,8 @@ class ColiseuCartas(commands.Cog):
                 "• A única janela transparente deve coincidir com `(56,256) → (784,846)` (**728 × 590 px**). "
                 "Fora dela, o template deve ser opaco. Se usar magenta, ele deve ocupar exatamente essa janela.\n"
                 "• Limite: **8 MB**. A sessão expira em 10 minutos.\n\n"
-                "Depois de validar, salvo o template e envio duas prévias: a carta de exemplo e outra com os "
-                "slots contornados, para conferir se os textos caíram nas placas."
+                "Depois de validar, publico uma cópia normalizada na própria DM para servir como armazenamento oficial no Discord. "
+                "Em seguida envio duas prévias: a carta de exemplo e outra com os slots contornados."
             )
         except discord.Forbidden:
             self._pending_template_uploads.pop(int(interaction.user.id), None)
@@ -1632,13 +1642,29 @@ class ColiseuCartas(commands.Cog):
             return
         try:
             bruto = await anexo.read(use_cached=True)
-            caminho, janela = await asyncio.to_thread(templates_cartas.salvar_template, raridade, bruto)
+            png_normalizado, janela = await asyncio.to_thread(templates_cartas.preparar_template_discord, bruto)
+            slug = templates_cartas.RARIDADES_TEMPLATE[raridade]
+            mensagem_armazenamento = await message.channel.send(
+                content=f"Armazenamento oficial do template **{raridade}** · não apague esta mensagem.",
+                file=discord.File(io.BytesIO(png_normalizado), filename=f"template_{slug}.png"),
+            )
+            if not mensagem_armazenamento.attachments:
+                raise RuntimeError("Discord não retornou o anexo armazenado")
+            anexo_armazenado = mensagem_armazenamento.attachments[0]
+            await asyncio.to_thread(
+                templates_cartas.registrar_template_discord,
+                raridade,
+                png_normalizado,
+                channel_id=mensagem_armazenamento.channel.id,
+                message_id=mensagem_armazenamento.id,
+                attachment_id=anexo_armazenado.id,
+            )
         except ValueError as exc:  # inclui TemplateInvalido
             await message.reply(f"❌ **Não aceitei o template:** {exc}\nA sessão continua aberta; envie outro arquivo dentro do prazo.")
             return
-        except (discord.HTTPException, OSError) as exc:
-            await message.reply("Não consegui baixar ou salvar o arquivo. Tente enviar novamente.")
-            log.warning("Falha no upload de template %s: %s", raridade, exc)
+        except (discord.HTTPException, OSError, RuntimeError) as exc:
+            await message.reply("Não consegui publicar ou registrar o template no armazenamento do Discord. O template não foi ativado; tente novamente.")
+            log.warning("Falha no armazenamento Discord do template %s: %s", raridade, exc)
             return
 
         self._pending_template_uploads.pop(int(message.author.id), None)
@@ -1646,7 +1672,7 @@ class ColiseuCartas(commands.Cog):
         resposta = (
             f"✅ **Template {raridade} salvo e ativado.**\n"
             f"Janela da arte detectada: `{x1},{y1} → {x2},{y2}` ({x2 - x1} × {y2 - y1}). "
-            "Vale para as próximas cartas com arte enviada."
+            "A mensagem de armazenamento no Discord é a fonte oficial; o arquivo local é apenas cache."
         )
         try:
             previa = await asyncio.to_thread(render_previa_template, raridade)
