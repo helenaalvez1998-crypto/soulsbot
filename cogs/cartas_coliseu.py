@@ -1771,7 +1771,7 @@ class ColiseuCartas(commands.Cog):
             await interaction.edit_original_response(
                 content=None,
                 embed=embed,
-                attachments=[deck_image] if deck_image else [],
+                attachments=[],
                 view=view,
             )
         else:
