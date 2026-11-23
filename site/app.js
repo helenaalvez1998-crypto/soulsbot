@@ -5,6 +5,7 @@ let savedDeck = [];
 let selectedDeck = [];
 let currentDuelId = null;
 let duelRefreshHandle = null;
+let duelSocket = null;
 
 const text = (value, fallback = '—') => value === null || value === undefined || value === '' ? fallback : String(value);
 const number = (value) => new Intl.NumberFormat('pt-BR').format(Number(value || 0));
@@ -211,8 +212,33 @@ async function loadDuels() {
   } catch (error) { list.innerHTML = `<div class="empty-state">${escapeHTML(error.message)}</div>`; }
 }
 
+function connectDuelLive(duelId) {
+  if (duelSocket) { try { duelSocket.close(); } catch (_) {} duelSocket = null; }
+  if (duelRefreshHandle) { clearInterval(duelRefreshHandle); duelRefreshHandle = null; }
+  const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  duelSocket = new WebSocket(`${scheme}//${window.location.host}/ws/duels/${encodeURIComponent(duelId)}`);
+  duelSocket.addEventListener('message', (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      if (payload.duel_id === Number(currentDuelId) && payload.type !== 'connected') refreshCurrentDuel();
+    } catch (_) {}
+  });
+  // Fallback para redes/proxies que não mantenham WebSocket aberto.
+  duelRefreshHandle = window.setInterval(() => refreshCurrentDuel(), 10000);
+}
+
+async function refreshCurrentDuel() {
+  if (!currentDuelId || $('#duel-room').hidden) return;
+  try {
+    const response = await fetch(`/api/duels/${currentDuelId}`, {credentials:'same-origin', cache:'no-store'});
+    const data = await response.json();
+    if (response.ok) renderDuel(data);
+  } catch (_) { /* A próxima tentativa automática fará a recuperação. */ }
+}
+
 async function openDuel(duelId) {
   currentDuelId = Number(duelId);
+  connectDuelLive(currentDuelId);
   showPage('duels');
   const room = $('#duel-room');
   room.hidden = false;
@@ -248,7 +274,7 @@ function renderDuel(data) {
     ${duel.status === 'active' ? (score.own_choice_submitted ? '<div class="notice">Sua escolha foi registrada. Aguardando o adversário.</div>' : `<p>Escolha uma carta ainda não utilizada. Sua escolha fica oculta até o adversário confirmar.</p><div class="duel-cards">${cards.map(card => `<button class="duel-card" data-play-card="${escapeHTML(card.id)}"><img src="${escapeHTML(card.image_url || `/api/cards/${encodeURIComponent(card.id)}/image`)}" alt=""><b>${escapeHTML(card.nome)}</b><span>${number(card.poder)} poder · ${escapeHTML(card.tipo)}</span></button>`).join('')}</div>`) : ''}
     ${duel.status === 'finished' ? `<div class="notice success">Partida encerrada. ${duel.winner_id ? `Vencedor: ${duel.winner_id}. Prêmio: ${number(duel.payout)} Denários.` : 'Empate.'}</div>` : ''}
     <div class="duel-rounds">${rounds.map(round => `<article><b>Rodada ${number(round.round_no)}</b><span>${escapeHTML(round.card_a_name)} (${number(round.power_a)}) × ${escapeHTML(round.card_b_name)} (${number(round.power_b)})</span><small>${escapeHTML(round.narration || '')}</small></article>`).join('')}</div>`;
-  $('#close-duel').addEventListener('click', () => { room.hidden = true; currentDuelId = null; loadDuels(); });
+  $('#close-duel').addEventListener('click', () => { room.hidden = true; currentDuelId = null; if (duelSocket) duelSocket.close(); duelSocket = null; if (duelRefreshHandle) clearInterval(duelRefreshHandle); duelRefreshHandle = null; loadDuels(); });
   $('#accept-duel')?.addEventListener('click', async () => {
     const response = await fetch(`/api/duels/${duel.id}/accept`, {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:'{}'});
     const result = await response.json();
