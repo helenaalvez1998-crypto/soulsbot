@@ -14,6 +14,7 @@ from io import BytesIO
 from typing import Any
 
 import discord
+from aiohttp import web
 from discord import app_commands
 from discord.ext import commands
 
@@ -486,6 +487,7 @@ class NaraBot(commands.Bot):
         self._slash_sync_done = False
         self._tarefas_auto_defer: set[asyncio.Task] = set()
         self._tarefa_lag: asyncio.Task | None = None
+        self._web_runner: web.AppRunner | None = None
 
     def _handle_asyncio_exception(self, loop: asyncio.AbstractEventLoop, context: dict[str, Any]) -> None:
         exception = context.get("exception")
@@ -502,6 +504,8 @@ class NaraBot(commands.Bot):
 
         await self.db.connect()
         log.info("SQLite conectado: %s", config.DB_PATH)
+
+        await self._iniciar_api_http()
 
         for extension in EXTENSOES:
             try:
@@ -529,6 +533,46 @@ class NaraBot(commands.Bot):
             log.warning("GUILD_ID vazio: /nara e /adm serão sincronizados globalmente; a propagação do Discord pode levar algum tempo.")
         if not any((os.getenv("GEMINI_API_KEY"), os.getenv("GEMINI_BACKUP_API_KEY"), os.getenv("GEMINI_THIRD_API_KEY"))):
             log.warning("Nenhuma chave Gemini configurada: a Nara continuará com funções locais, mas sem geração de IA.")
+
+    async def _iniciar_api_http(self) -> None:
+        """Inicia endpoints públicos mínimos para health-check da hospedagem."""
+        porta_raw = os.getenv("PORT", "8080")
+        try:
+            porta = int(porta_raw)
+            if not 1 <= porta <= 65535:
+                raise ValueError("porta fora do intervalo permitido")
+        except (TypeError, ValueError):
+            log.error("API HTTP não iniciada: valor inválido para PORT (%r).", porta_raw)
+            return
+
+        async def pagina_inicial(_request: web.Request) -> web.Response:
+            return web.json_response({
+                "service": "soulsbot",
+                "status": "online",
+                "health": "/api/status",
+            })
+
+        async def status_api(_request: web.Request) -> web.Response:
+            return web.json_response({
+                "service": "soulsbot-api",
+                "status": "online",
+                "discord_connected": self.is_ready(),
+                "database": "connected",
+            })
+
+        app = web.Application()
+        app.router.add_get("/", pagina_inicial)
+        app.router.add_get("/api/status", status_api)
+        runner = web.AppRunner(app, access_log=None)
+        try:
+            await runner.setup()
+            site = web.TCPSite(runner, host="0.0.0.0", port=porta)
+            await site.start()
+            self._web_runner = runner
+            log.info("API HTTP iniciada em 0.0.0.0:%s | health-check=/api/status", porta)
+        except Exception:
+            await runner.cleanup()
+            log.exception("Não foi possível iniciar a API HTTP na porta %s; o bot Discord continuará iniciando.", porta)
 
     async def on_interaction(self, interaction: discord.Interaction) -> None:
         # Só botões/selects: em slash commands o defer() decide se a resposta é efêmera,
@@ -610,6 +654,10 @@ class NaraBot(commands.Bot):
         try:
             await super().close()
         finally:
+            if self._web_runner is not None:
+                await self._web_runner.cleanup()
+                self._web_runner = None
+                log.info("Servidor HTTP encerrado.")
             await self.db.close()
             log.info("Conexão SQLite encerrada.")
 
