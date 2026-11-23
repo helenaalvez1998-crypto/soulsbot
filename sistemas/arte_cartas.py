@@ -1239,3 +1239,405 @@ def render_deck_preview_bytes(
     canvas.save(output, format="PNG", optimize=False)
     output.seek(0)
     return output
+
+
+def _painel_arena_base(width: int, height: int, subtitle: str = "") -> tuple[Image.Image, ImageDraw.ImageDraw]:
+    """Fundo gráfico compartilhado pelas telas da Arena; sem depender de emojis do Discord."""
+    image = _gradient(width, height, (13, 20, 31), (5, 8, 14)).convert("RGB")
+    draw = ImageDraw.Draw(image, "RGBA")
+    # Moldura externa e linhas de arena discretas.
+    draw.rounded_rectangle((18, 18, width - 19, height - 19), radius=28,
+                           outline=(193, 151, 78, 150), width=2)
+    draw.rounded_rectangle((27, 27, width - 28, height - 28), radius=23,
+                           outline=(222, 198, 150, 35), width=1)
+    for x in range(60, width - 40, 100):
+        draw.line((x, 40, x, height - 40), fill=(150, 173, 194, 13), width=1)
+    draw.text((58, 42), "SOULSBOT  /  COLOSSEUM", font=_font(17, True), fill=(216, 182, 112, 255))
+    if subtitle:
+        draw.text((60, 67), subtitle.upper(), font=_font(10, True), fill=(133, 153, 174, 245))
+    return image, draw
+
+
+def _painel_cartao(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int],
+                    fill=(16, 25, 38, 238), outline=(170, 139, 89, 120), radius: int = 18):
+    draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=2)
+
+
+def _texto_ajustado(draw: ImageDraw.ImageDraw, text: str, max_width: int,
+                    font_size: int = 18, bold: bool = True, max_chars: int = 42) -> str:
+    value = str(text or "—").replace("\n", " ").strip()
+    font = _font(font_size, bold)
+    while value and (len(value) > max_chars or draw.textbbox((0, 0), value, font=font)[2] > max_width):
+        value = value[:-2].rstrip() + "…"
+        if len(value) <= 2:
+            break
+    return value or "—"
+
+
+def _card_back(size: tuple[int, int], number: int, accent=(198, 157, 85)) -> Image.Image:
+    width, height = size
+    image = _gradient(width, height, (25, 34, 49), (8, 12, 20)).convert("RGBA")
+    draw = ImageDraw.Draw(image, "RGBA")
+    draw.rounded_rectangle((3, 3, width - 4, height - 4), radius=max(8, width // 14),
+                           outline=(*accent, 230), width=max(2, width // 75))
+    draw.rounded_rectangle((width * .12, height * .12, width * .88, height * .88),
+                           radius=max(6, width // 18), outline=(*accent, 105), width=2)
+    cx, cy = width // 2, height // 2
+    r = min(width, height) * .23
+    draw.polygon([(cx, cy-r), (cx+r*.68, cy), (cx, cy+r), (cx-r*.68, cy)],
+                 outline=(*accent, 210), fill=(48, 39, 29, 130))
+    _text_center(draw, (cx, cy - 7), f"{number}", _font(max(15, width // 5), True), (245, 228, 190, 255))
+    _text_center(draw, (cx, cy + r + 16), "SOULS", _font(max(7, width // 18), True), (183, 164, 131, 220))
+    return image
+
+
+def render_duel_hand_bytes(cards: list[dict[str, Any]], duel_id: int, round_no: int) -> io.BytesIO:
+    """Mão de escolha visual: cinco cartas em linha, numeradas para os botões de seleção rápida."""
+    count = min(5, len(cards))
+    card_width, card_height, gap = 250, 369, 18
+    margin = 34
+    header_height = 88
+    width = margin * 2 + count * card_width + max(0, count - 1) * gap
+    width = max(760, width)
+    height = header_height + card_height + 54
+    canvas = _gradient(width, height, (17, 26, 41), (5, 8, 15)).convert("RGB")
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    draw.rounded_rectangle((12, 12, width - 13, height - 13), radius=24,
+                           outline=(203, 164, 96, 185), width=2)
+    draw.text((margin, 24), f"RODADA {int(round_no)}  /  05", font=_font(25, True),
+              fill=(247, 230, 194, 255))
+    draw.text((margin, 58), f"DUELO #{int(duel_id)}  ·  ESCOLHA UMA CARTA", font=_font(12, True),
+              fill=(153, 171, 190, 255))
+    start_x = (width - (count * card_width + max(0, count - 1) * gap)) // 2
+    for index, card in enumerate(cards[:5]):
+        x = start_x + index * (card_width + gap)
+        art = _draw_card(card).resize((card_width, card_height), Image.Resampling.LANCZOS).convert("RGBA")
+        # Sombra externa e índice fixo que corresponde ao botão sob a imagem.
+        shadow = Image.new("RGBA", (card_width + 16, card_height + 16), (0, 0, 0, 0))
+        ImageDraw.Draw(shadow).rounded_rectangle((5, 5, card_width + 10, card_height + 10),
+                                                  radius=17, fill=(0, 0, 0, 125))
+        canvas.paste(shadow, (x - 8, header_height - 3), shadow)
+        canvas.paste(art, (x, header_height), art)
+        draw = ImageDraw.Draw(canvas, "RGBA")
+        rarity = str(card.get("raridade", "Comum"))
+        base, accent = CORES_RARIDADE.get(rarity, CORES_RARIDADE["Comum"])
+        bx, by = x + 31, header_height + 31
+        draw.ellipse((bx - 23, by - 23, bx + 23, by + 23), fill=(*base, 250), outline=(*accent, 255), width=3)
+        _text_center(draw, (bx, by - 1), str(index + 1), _font(23, True), (255, 247, 222, 255))
+    draw.text((margin, height - 36), "TOQUE NO BOTÃO COM O MESMO NÚMERO DA CARTA", font=_font(12, True),
+              fill=(214, 194, 157, 245))
+    output = io.BytesIO()
+    canvas.save(output, format="PNG", optimize=False)
+    output.seek(0)
+    return output
+
+
+def render_duel_board_bytes(
+    duel: dict[str, Any],
+    rounds: list[dict[str, Any]],
+    deck_a: list[dict[str, Any]],
+    deck_b: list[dict[str, Any]],
+    nome_a: str,
+    nome_b: str,
+    picks_count: int = 0,
+    tempo_rodada: int = 30,
+) -> io.BytesIO:
+    """Tabuleiro completo de uma partida: confronto, trilha, cartas reveladas e resultado."""
+    width, height = 1600, 1080
+    duel_id = int(duel.get("id", 0) or 0)
+    status = str(duel.get("status", "active"))
+    current_round = max(1, min(5, int(duel.get("current_round", 1) or 1)))
+    rounds_by_no = {int(row.get("round_no", 0)): row for row in rounds}
+    map_a = {str(c.get("id")): c for c in deck_a}
+    map_b = {str(c.get("id")): c for c in deck_b}
+    power_a = sum(int(c.get("poder", 0) or 0) for c in deck_a)
+    power_b = sum(int(c.get("poder", 0) or 0) for c in deck_b)
+    wins_a = sum(str(r.get("winner_side")) == "a" for r in rounds)
+    wins_b = sum(str(r.get("winner_side")) == "b" for r in rounds)
+    draws = sum(str(r.get("winner_side")) == "empate" for r in rounds)
+    aposta = int(duel.get("aposta", 0) or 0)
+    pote = aposta * 2
+
+    image, draw = _painel_arena_base(width, height, f"DUEL #{duel_id:04d}  ·  MATCH BOARD")
+    status_labels = {
+        "invited": ("CONVITE PENDENTE", (205, 160, 79)),
+        "active": ("EM ANDAMENTO", (75, 183, 148)),
+        "finished": ("PARTIDA CONCLUÍDA", (214, 177, 99)),
+        "cancelled": ("PARTIDA ENCERRADA", (133, 148, 164)),
+        "expired": ("CONVITE EXPIRADO", (133, 148, 164)),
+    }
+    status_label, status_color = status_labels.get(status, (status.upper(), (133, 148, 164)))
+    pill_w = draw.textbbox((0, 0), status_label, font=_font(13, True))[2] + 34
+    draw.rounded_rectangle((width - 70 - pill_w, 38, width - 70, 72), radius=16,
+                           fill=(*status_color, 45), outline=(*status_color, 210), width=2)
+    draw.text((width - 53 - pill_w, 48), status_label, font=_font(13, True), fill=(*status_color, 255))
+
+    # Painéis de duelistas e placar central.
+    panel_y, panel_h = 126, 205
+    _painel_cartao(draw, (58, panel_y, 615, panel_y + panel_h), fill=(15, 27, 42, 245), outline=(70, 154, 132, 180))
+    _painel_cartao(draw, (985, panel_y, 1542, panel_y + panel_h), fill=(35, 22, 29, 245), outline=(179, 91, 91, 180))
+    winner_id = duel.get("winner_id")
+    winner_side = None
+    if status == "finished" and winner_id is not None:
+        winner_side = "a" if int(winner_id) == int(duel.get("creator_id", 0)) else "b"
+    if winner_side == "a":
+        draw.rounded_rectangle((420, panel_y + 18, 590, panel_y + 49), radius=12,
+                               fill=(83, 190, 141, 43), outline=(111, 222, 169, 210), width=2)
+        _text_center(draw, (505, panel_y + 33), "CAMPEÃO", _font(11, True), (137, 232, 181, 255))
+    elif winner_side == "b":
+        draw.rounded_rectangle((1347, panel_y + 18, 1517, panel_y + 49), radius=12,
+                               fill=(202, 102, 93, 43), outline=(235, 145, 133, 210), width=2)
+        _text_center(draw, (1432, panel_y + 33), "CAMPEÃO", _font(11, True), (245, 164, 151, 255))
+    draw.text((88, panel_y + 26), "DUELISTA A", font=_font(13, True), fill=(106, 215, 177, 255))
+    draw.text((88, panel_y + 57), _texto_ajustado(draw, nome_a, 420, 30, True, 26), font=_font(30, True), fill=(246, 242, 232, 255))
+    draw.text((88, panel_y + 112), f"PODER DO DECK  {power_a}", font=_font(16, True), fill=(158, 185, 196, 255))
+    draw.text((1015, panel_y + 26), "DUELISTA B", font=_font(13, True), fill=(231, 133, 126, 255))
+    draw.text((1015, panel_y + 57), _texto_ajustado(draw, nome_b, 420, 30, True, 26), font=_font(30, True), fill=(246, 242, 232, 255))
+    draw.text((1015, panel_y + 112), f"PODER DO DECK  {power_b}", font=_font(16, True), fill=(196, 160, 164, 255))
+    # Ícones circulares para dar identidade a cada lado.
+    draw.ellipse((520, panel_y + 52, 584, panel_y + 116), fill=(27, 79, 68, 255), outline=(111, 218, 176, 230), width=3)
+    _text_center(draw, (552, panel_y + 83), "A", _font(30, True), (238, 255, 247, 255))
+    draw.ellipse((1446, panel_y + 52, 1510, panel_y + 116), fill=(91, 42, 48, 255), outline=(235, 142, 135, 230), width=3)
+    _text_center(draw, (1478, panel_y + 83), "B", _font(30, True), (255, 240, 237, 255))
+
+    _painel_cartao(draw, (650, panel_y + 7, 950, panel_y + panel_h - 7), fill=(20, 26, 37, 250), outline=(193, 151, 78, 170))
+    _text_center(draw, (800, panel_y + 39), "PLACAR", _font(12, True), (182, 164, 132, 255))
+    _text_center(draw, (800, panel_y + 99), f"{wins_a}  :  {wins_b}", _font(43, True), (248, 233, 199, 255))
+    _text_center(draw, (800, panel_y + 141), f"{draws} EMPATE(S)", _font(11, True), (159, 169, 181, 255))
+    _text_center(draw, (800, panel_y + 171), f"POTE  {pote:,} DENÁRIOS", _font(12, True), (221, 184, 107, 255))
+
+    # Trilha das cinco rodadas.
+    track_y = 365
+    draw.text((66, track_y - 26), "TRILHA DA PARTIDA", font=_font(15, True), fill=(221, 198, 153, 255))
+    track_x, track_w, track_h, track_gap = 66, 1468, 64, 14
+    seg_w = (track_w - 4 * track_gap) // 5
+    for index in range(5):
+        number = index + 1
+        row = rounds_by_no.get(number)
+        x = track_x + index * (seg_w + track_gap)
+        if row:
+            winner = str(row.get("winner_side", "empate"))
+            accent = (77, 190, 146) if winner == "a" else (215, 111, 105) if winner == "b" else (174, 177, 185)
+            label = "VITÓRIA A" if winner == "a" else "VITÓRIA B" if winner == "b" else "EMPATE"
+        elif status == "active" and number == current_round:
+            accent = (224, 181, 91)
+            label = f"{int(picks_count)}/2 ESCOLHAS"
+        elif status == "invited":
+            accent = (128, 142, 160)
+            label = "AGUARDANDO"
+        else:
+            accent = (78, 91, 108)
+            label = "NÃO JOGADA"
+        draw.rounded_rectangle((x, track_y, x + seg_w, track_y + track_h), radius=14,
+                               fill=(*accent, 27), outline=(*accent, 180), width=2)
+        draw.text((x + 15, track_y + 10), f"RODADA {number}", font=_font(11, True), fill=(211, 218, 223, 255))
+        draw.text((x + 15, track_y + 31), label, font=_font(12, True), fill=(*accent, 255))
+
+    # Cinco vitrines de rodada com miniaturas reais das cartas usadas.
+    start_y = 470
+    slot_gap = 14
+    slot_w = (width - 2 * 58 - 4 * slot_gap) // 5
+    slot_h = 482
+    for index in range(5):
+        number = index + 1
+        row = rounds_by_no.get(number)
+        x = 58 + index * (slot_w + slot_gap)
+        _painel_cartao(draw, (x, start_y, x + slot_w, start_y + slot_h),
+                       fill=(12, 19, 29, 242), outline=(104, 119, 136, 100), radius=16)
+        draw.text((x + 16, start_y + 15), f"RODADA {number:02d}", font=_font(13, True), fill=(222, 197, 150, 255))
+        if row:
+            card_a = map_a.get(str(row.get("card_a_id", ""))) or {
+                "id": row.get("card_a_id", f"a{number}"), "nome": row.get("card_a_name", "Carta A"),
+                "categoria": "Magia", "raridade": "Comum", "tipo": "Magia", "poder": row.get("power_a", 0), "custo": 0,
+            }
+            card_b = map_b.get(str(row.get("card_b_id", ""))) or {
+                "id": row.get("card_b_id", f"b{number}"), "nome": row.get("card_b_name", "Carta B"),
+                "categoria": "Magia", "raridade": "Comum", "tipo": "Magia", "poder": row.get("power_b", 0), "custo": 0,
+            }
+            mini_w, mini_h = 112, 166
+            mini_y = start_y + 51
+            xa, xb = x + 15, x + slot_w - 15 - mini_w
+            art_a = _draw_card(card_a).resize((mini_w, mini_h), Image.Resampling.LANCZOS)
+            art_b = _draw_card(card_b).resize((mini_w, mini_h), Image.Resampling.LANCZOS)
+            image.paste(art_a, (xa, mini_y))
+            image.paste(art_b, (xb, mini_y))
+            draw = ImageDraw.Draw(image, "RGBA")
+            _text_center(draw, (x + slot_w // 2, mini_y + 78), "VS", _font(15, True), (235, 216, 172, 255))
+            # Nomes e poderes dos dois lados.
+            draw.text((x + 12, mini_y + mini_h + 12), _texto_ajustado(draw, row.get("card_a_name", card_a.get("nome")), slot_w // 2 - 17, 11, True, 18),
+                      font=_font(11, True), fill=(139, 218, 185, 255))
+            draw.text((x + 12, mini_y + mini_h + 31), f"PODER {int(row.get('power_a', 0) or 0)}", font=_font(10, True), fill=(181, 193, 202, 255))
+            draw.text((x + slot_w // 2 + 4, mini_y + mini_h + 12), _texto_ajustado(draw, row.get("card_b_name", card_b.get("nome")), slot_w // 2 - 17, 11, True, 18),
+                      font=_font(11, True), fill=(231, 154, 149, 255))
+            draw.text((x + slot_w // 2 + 4, mini_y + mini_h + 31), f"PODER {int(row.get('power_b', 0) or 0)}", font=_font(10, True), fill=(181, 193, 202, 255))
+            winner = str(row.get("winner_side", "empate"))
+            result_label = "EMPATE" if winner == "empate" else "PONTO PARA A" if winner == "a" else "PONTO PARA B"
+            result_color = (177, 180, 188) if winner == "empate" else (87, 202, 153) if winner == "a" else (222, 122, 116)
+            draw.rounded_rectangle((x + 13, start_y + 330, x + slot_w - 13, start_y + 370), radius=10,
+                                   fill=(*result_color, 31), outline=(*result_color, 150), width=1)
+            _text_center(draw, (x + slot_w // 2, start_y + 350), result_label, _font(11, True), (*result_color, 255))
+            narration = str(row.get("narration", ""))
+            for line_no, line in enumerate(_wrap(draw, narration, _font(10), slot_w - 30)[:3]):
+                _text_center(draw, (x + slot_w // 2, start_y + 405 + line_no * 16), line, _font(10), (165, 176, 188, 240))
+        else:
+            accent = (217, 178, 104) if status == "active" and number == current_round else (84, 102, 121)
+            mini_w, mini_h = 104, 154
+            mini_y = start_y + 81
+            backs = [_card_back((mini_w, mini_h), number, accent), _card_back((mini_w, mini_h), number, accent)]
+            image.paste(backs[0], (x + 18, mini_y), backs[0])
+            image.paste(backs[1], (x + slot_w - 18 - mini_w, mini_y), backs[1])
+            draw = ImageDraw.Draw(image, "RGBA")
+            _text_center(draw, (x + slot_w // 2, mini_y + 76), "VS", _font(14, True), (216, 196, 156, 245))
+            if status == "active" and number == current_round:
+                label = f"{int(picks_count)}/2 ESCOLHAS TRAVADAS"
+            elif status == "invited":
+                label = "AGUARDANDO ACEITE"
+            else:
+                label = "AGUARDANDO RODADA"
+            for line_no, line in enumerate(_wrap(draw, label, _font(12, True), slot_w - 26)[:2]):
+                _text_center(draw, (x + slot_w // 2, start_y + 304 + line_no * 19), line, _font(12, True), (*accent, 255))
+            _text_center(draw, (x + slot_w // 2, start_y + 382), "CARTAS OCULTAS", _font(10, True), (127, 145, 163, 230))
+
+    # Faixa de desfecho: o resultado de cada duelo fica explícito e não se mistura ao histórico.
+    footer_y = height - 69
+    if status == "finished":
+        winner_id = duel.get("winner_id")
+        if winner_id is None:
+            outcome = f"EMPATE  ·  {nome_a} {wins_a} × {wins_b} {nome_b}  ·  APOSTAS DEVOLVIDAS"
+            outcome_color = (177, 182, 191)
+        elif int(winner_id) == int(duel.get("creator_id", 0)):
+            lucro = int(duel.get("payout", 0) or 0) - aposta
+            outcome = (
+                f"VENCEDOR: {nome_a}  ·  PRÊMIO {int(duel.get('payout', 0) or 0):,}  ·  "
+                f"LUCRO +{lucro:,}  ·  {int(duel.get('burned', 0) or 0):,} REMOVIDOS"
+            )
+            outcome_color = (102, 218, 164)
+        else:
+            lucro = int(duel.get("payout", 0) or 0) - aposta
+            outcome = (
+                f"VENCEDOR: {nome_b}  ·  PRÊMIO {int(duel.get('payout', 0) or 0):,}  ·  "
+                f"LUCRO +{lucro:,}  ·  {int(duel.get('burned', 0) or 0):,} REMOVIDOS"
+            )
+            outcome_color = (237, 153, 130)
+    elif status == "active":
+        outcome = f"RODADA {current_round}/5  ·  {int(picks_count)}/2 ESCOLHAS RECEBIDAS  ·  {int(tempo_rodada)} SEGUNDOS POR ESCOLHA"
+        outcome_color = (222, 184, 108)
+    elif status == "invited":
+        outcome = f"CONVITE ABERTO  ·  {aposta:,} DENÁRIOS POR JOGADOR  ·  POTE {pote:,}"
+        outcome_color = (222, 184, 108)
+    elif status == "expired":
+        outcome = "CONVITE EXPIRADO  ·  NENHUMA APOSTA FOI DEBITADA"
+        outcome_color = (158, 168, 181)
+    else:
+        outcome = "PARTIDA ENCERRADA  ·  CONFIRA O HISTÓRICO DESTA FICHA"
+        outcome_color = (158, 168, 181)
+    _text_center(draw, (width // 2, footer_y), outcome, _font(16, True), (*outcome_color, 255))
+
+    output = io.BytesIO()
+    image.save(output, format="PNG", optimize=False)
+    output.seek(0)
+    return output
+
+
+def render_arena_dashboard_bytes(display_name: str, stats: dict[str, Any], resumos: list[dict[str, Any]]) -> io.BytesIO:
+    """Painel gráfico pessoal com estatísticas, partidas em andamento e resultados individuais."""
+    width, height = 1500, 940
+    image, draw = _painel_arena_base(width, height, "PERSONAL DUEL DASHBOARD")
+    draw.text((60, 111), _texto_ajustado(draw, display_name, 650, 32, True, 32),
+              font=_font(32, True), fill=(245, 239, 224, 255))
+    draw.text((62, 153), "SEU DESEMPENHO NO COLISEU", font=_font(13, True), fill=(149, 166, 184, 255))
+
+    total = int(stats.get("partidas", 0) or 0)
+    wins = int(stats.get("vitorias", 0) or 0)
+    losses = int(stats.get("derrotas", 0) or 0)
+    draws = int(stats.get("empates", 0) or 0)
+    balance = int(stats.get("saldo_liquido", 0) or 0)
+    win_rate = (wins / total * 100) if total else 0
+    metrics = [
+        ("VITÓRIAS", wins, (91, 202, 152)),
+        ("DERROTAS", losses, (220, 119, 112)),
+        ("EMPATES", draws, (171, 178, 190)),
+        ("PARTIDAS", total, (214, 182, 117)),
+        ("APROVEITAMENTO", f"{win_rate:.0f}%", (117, 174, 219)),
+    ]
+    metric_y, metric_h, metric_gap = 205, 112, 14
+    metric_w = (width - 120 - 4 * metric_gap) // 5
+    for index, (label, value, accent) in enumerate(metrics):
+        x = 60 + index * (metric_w + metric_gap)
+        _painel_cartao(draw, (x, metric_y, x + metric_w, metric_y + metric_h),
+                       fill=(17, 26, 39, 245), outline=(*accent, 130), radius=16)
+        draw.text((x + 20, metric_y + 17), label, font=_font(11, True), fill=(161, 174, 188, 255))
+        draw.text((x + 20, metric_y + 45), str(value), font=_font(31, True), fill=(*accent, 255))
+
+    _painel_cartao(draw, (60, 345, width - 60, 480), fill=(17, 25, 38, 245), outline=(204, 166, 96, 125))
+    draw.text((86, 365), "SALDO LÍQUIDO DAS PARTIDAS", font=_font(13, True), fill=(174, 184, 193, 255))
+    balance_color = (100, 218, 161) if balance >= 0 else (232, 123, 116)
+    draw.text((86, 397), f"{balance:+,} DENÁRIOS", font=_font(33, True), fill=(*balance_color, 255))
+    draw.text((790, 404), "O resultado financeiro é calculado por partida e permanece salvo no histórico.",
+              font=_font(14), fill=(162, 175, 188, 255))
+
+    ativos = [x for x in resumos if x.get("duel", {}).get("status") in {"invited", "active"}]
+    concluidos = [x for x in resumos if x.get("duel", {}).get("status") in {"finished", "cancelled", "expired"}]
+    section_y = 520
+    draw.text((65, section_y), "PARTIDAS ATIVAS", font=_font(17, True), fill=(221, 196, 147, 255))
+    draw.text((width - 90, section_y + 4), f"{len(ativos)} EM ABERTO", font=_font(11, True), fill=(140, 161, 178, 255), anchor="ra")
+    row_y = section_y + 39
+    if not ativos:
+        _painel_cartao(draw, (60, row_y, width - 60, row_y + 64), fill=(12, 20, 30, 220), outline=(88, 107, 127, 95), radius=12)
+        draw.text((84, row_y + 21), "Nenhum confronto em andamento. Inicie um novo desafio para entrar na arena.",
+                  font=_font(14), fill=(153, 168, 182, 255))
+        row_y += 78
+    else:
+        for resumo in ativos[:3]:
+            d = resumo.get("duel", {})
+            _painel_cartao(draw, (60, row_y, width - 60, row_y + 61), fill=(12, 20, 31, 238), outline=(87, 139, 132, 115), radius=12)
+            rival = str(resumo.get("label", "Confronto")).split("·", 1)[-1].strip()
+            title = f"#{int(d.get('id', 0)):04d}   VS   {rival}"
+            description = str(resumo.get("active_line", "Partida ativa")).replace("**", "").replace("`", "").replace("*", "")
+            draw.text((83, row_y + 9), _texto_ajustado(draw, title, 950, 14, True, 70), font=_font(14, True), fill=(230, 235, 232, 255))
+            draw.text((83, row_y + 34), _texto_ajustado(draw, description, 1200, 11, False, 145), font=_font(11), fill=(150, 173, 184, 255))
+            row_y += 69
+
+    recent_y = max(row_y + 9, 785)
+    draw.text((65, recent_y), "RESULTADOS RECENTES", font=_font(17, True), fill=(221, 196, 147, 255))
+    recent_y += 36
+    if not concluidos:
+        draw.text((83, recent_y + 8), "As fichas individuais aparecerão aqui após a conclusão dos duelos.",
+                  font=_font(13), fill=(153, 168, 182, 255))
+    else:
+        recent = concluidos[:3]
+        col_gap = 13
+        col_w = (width - 120 - 2 * col_gap) // 3
+        for index, resumo in enumerate(recent):
+            x = 60 + index * (col_w + col_gap)
+            _painel_cartao(draw, (x, recent_y, x + col_w, recent_y + 82), fill=(14, 22, 33, 245), outline=(133, 116, 87, 110), radius=12)
+            result = str(resumo.get("result_line", "Partida concluída")).replace("**", "").replace("`", "").replace("*", "")
+            draw.text((x + 16, recent_y + 13), _texto_ajustado(draw, result, col_w - 32, 12, True, 56),
+                      font=_font(12, True), fill=(229, 224, 210, 255))
+            draw.text((x + 16, recent_y + 47), str(resumo.get("description", "Ficha individual"))[:64],
+                      font=_font(10), fill=(157, 171, 184, 255))
+
+    output = io.BytesIO()
+    image.save(output, format="PNG", optimize=False)
+    output.seek(0)
+    return output
+
+
+def render_duel_locked_card_bytes(card: dict[str, Any], duel_id: int, round_no: int) -> io.BytesIO:
+    """Confirma visualmente a carta travada sem revelar a escolha ao adversário."""
+    card_image = _draw_card(card).convert("RGBA")
+    width, height = card_image.size
+    overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay, "RGBA")
+    # Faixa opaca e selo de bloqueio: mantém a arte reconhecível apenas para o dono.
+    draw.rectangle((0, int(height * .39), width, int(height * .61)), fill=(6, 11, 18, 225))
+    draw.line((0, int(height * .39), width, int(height * .39)), fill=(224, 184, 107, 230), width=3)
+    draw.line((0, int(height * .61), width, int(height * .61)), fill=(224, 184, 107, 230), width=3)
+    _text_center(draw, (width // 2, int(height * .455)), "CARTA TRAVADA", _font(29, True), (249, 226, 180, 255))
+    _text_center(draw, (width // 2, int(height * .52)), f"DUELO #{int(duel_id)}  ·  RODADA {int(round_no)}/5",
+                 _font(14, True), (189, 204, 219, 255))
+    card_image.alpha_composite(overlay)
+    output = io.BytesIO()
+    card_image.convert("RGB").save(output, format="PNG", optimize=False)
+    output.seek(0)
+    return output
