@@ -18,6 +18,7 @@ from urllib.parse import urlencode
 import threading
 import traceback
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 
 import discord
@@ -593,12 +594,30 @@ class NaraBot(commands.Bot):
             log.error("API HTTP não iniciada: valor inválido para PORT (%r).", porta_raw)
             return
 
+        site_dir = Path(__file__).resolve().parent / "site"
+
         async def pagina_inicial(_request: web.Request) -> web.Response:
-            return web.json_response({
-                "service": "soulsbot",
-                "status": "online",
-                "health": "/api/status",
-            })
+            index_file = site_dir / "index.html"
+            if not index_file.is_file():
+                return web.json_response({
+                    "service": "soulsbot",
+                    "status": "online",
+                    "health": "/api/status",
+                    "site": "frontend não instalado",
+                })
+            return web.FileResponse(index_file)
+
+        async def estilo_site(_request: web.Request) -> web.Response:
+            arquivo = site_dir / "style.css"
+            if not arquivo.is_file():
+                raise web.HTTPNotFound(text="CSS do site não encontrado.")
+            return web.FileResponse(arquivo)
+
+        async def script_site(_request: web.Request) -> web.Response:
+            arquivo = site_dir / "app.js"
+            if not arquivo.is_file():
+                raise web.HTTPNotFound(text="JavaScript do site não encontrado.")
+            return web.FileResponse(arquivo)
 
         async def status_api(_request: web.Request) -> web.Response:
             return web.json_response({
@@ -610,6 +629,8 @@ class NaraBot(commands.Bot):
 
         app = web.Application()
         app.router.add_get("/", pagina_inicial)
+        app.router.add_get("/style.css", estilo_site)
+        app.router.add_get("/app.js", script_site)
         app.router.add_get("/api/status", status_api)
         app.router.add_get("/auth/discord/login", self._oauth_login)
         app.router.add_get("/auth/discord/callback", self._oauth_callback)
