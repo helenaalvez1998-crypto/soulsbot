@@ -70,10 +70,25 @@ def extrair_identidade(texto: str) -> str:
     return match.group(0).strip() if match else ""
 
 
+_CACHE_PROMPTS: dict[str, tuple[int, str]] = {}
+
+
+def _ler_texto_cacheado(caminho: Path) -> str:
+    """Lê o arquivo só quando ele muda no disco (compara mtime); edições continuam valendo na hora."""
+    chave = str(caminho)
+    mtime = caminho.stat().st_mtime_ns
+    em_cache = _CACHE_PROMPTS.get(chave)
+    if em_cache and em_cache[0] == mtime:
+        return em_cache[1]
+    texto = caminho.read_text(encoding="utf-8").strip()
+    _CACHE_PROMPTS[chave] = (mtime, texto)
+    return texto
+
+
 def _ler_prompt_personalidade(caminho: Path) -> str:
     """Lê um arquivo de personalidade sem impedir a inicialização se ele estiver ausente."""
     try:
-        return caminho.read_text(encoding="utf-8").strip()
+        return _ler_texto_cacheado(caminho)
     except (OSError, UnicodeError):
         return ""
 
@@ -91,7 +106,7 @@ def carregar_filtro_runtime() -> str:
 def carregar_personalidade_base() -> str:
     """Carrega o prompt completo de identidade, personalidade, opiniões e relações."""
     try:
-        return PROMPT_PERSONA_PATH.read_text(encoding="utf-8").strip()
+        return _ler_texto_cacheado(PROMPT_PERSONA_PATH)
     except (OSError, UnicodeError):
         return ""
 
@@ -99,7 +114,7 @@ def carregar_personalidade_base() -> str:
 def carregar_filtro_runtime() -> str:
     """Carrega o filtro de redação, aplicado depois de todos os outros contextos."""
     try:
-        return PROMPT_PERSONALIDADE_PATH.read_text(encoding="utf-8").strip()
+        return _ler_texto_cacheado(PROMPT_PERSONALIDADE_PATH)
     except (OSError, UnicodeError):
         return ""
 
@@ -146,7 +161,7 @@ def carregar_prompt() -> str:
     else:
         partes.append(PROMPT_MINIMO)
     try:
-        regras_rota = PROMPT_PATH.read_text(encoding="utf-8").strip()
+        regras_rota = _ler_texto_cacheado(PROMPT_PATH)
         if regras_rota:
             partes.append("ESCOPO DESTA ROTA: CONVERSA TEXTUAL\n" + regras_rota)
     except (OSError, UnicodeError):

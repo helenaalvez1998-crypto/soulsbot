@@ -758,6 +758,12 @@ class Database:
         # SQLite :memory: usa uma única conexão compartilhada. Serializar transações
         # evita que duas corrotinas intercalem BEGIN/COMMIT na mesma conexão.
         self._memory_lock = asyncio.Lock()
+        # Conexão de escrita persistente (arquivo): evita abrir/configurar uma conexão
+        # SQLite nova a cada transação. O SQLite só permite um escritor por vez, então
+        # serializar com um lock não reduz o paralelismo real.
+        self._writer: aiosqlite.Connection | None = None
+        self._writer_lock = asyncio.Lock()
+        self._writer_owner: asyncio.Task | None = None
         # Cache em memória da tabela kv (configurações por servidor). GuildConfig.get() é
         # chamado a cada mensagem e a cada botão; sem cache, cada chamada entra na fila
         # da única conexão SQLite e atrasa as respostas das interações.
@@ -822,35 +828,62 @@ class Database:
         if self.conn is None:
             raise RuntimeError("Database.connect() precisa ser chamado antes de transaction().")
         memory_db = self.path == ":memory:"
+        tarefa = asyncio.current_task()
+        if tarefa is not None and self._writer_owner is tarefa:
+            # Antes isso falhava após 10s com "database is locked"; agora falha na hora.
+            raise RuntimeError("transaction() aninhada: já existe uma transação aberta nesta tarefa.")
         if memory_db:
-            # Não abrir uma segunda conexão para :memory_: ela apontaria para outro
-            # banco. O lock impede BEGIN/COMMIT concorrentes na conexão compartilhada.
             await self._memory_lock.acquire()
-            conn = self.conn
-            owned = False
         else:
-            conn = await aiosqlite.connect(self.path, timeout=10)
-            conn.row_factory = aiosqlite.Row
-            await conn.execute("PRAGMA foreign_keys = ON")
-            await conn.execute("PRAGMA busy_timeout = 10000")
-            owned = True
+            await asyncio.wait_for(self._writer_lock.acquire(), timeout=30)
+        self._writer_owner = tarefa
+        conn = None
         try:
-            if conn is None:
-                raise RuntimeError("Database.connect() precisa ser chamado antes de transaction().")
+            if memory_db:
+                # Não abrir uma segunda conexão para :memory: ela apontaria para outro banco.
+                conn = self.conn
+            else:
+                if self._writer is None:
+                    self._writer = await self._abrir_writer()
+                conn = self._writer
             await conn.execute("BEGIN IMMEDIATE")
-            yield DatabaseSession(conn)
-            await conn.commit()
-        except BaseException:
-            if conn is not None:
-                await conn.rollback()
-            raise
+            try:
+                yield DatabaseSession(conn)
+                await conn.commit()
+            except BaseException:
+                try:
+                    await conn.rollback()
+                except Exception:
+                    # Conexão em estado ruim: descarta para que a próxima transação reabra.
+                    if not memory_db:
+                        self._writer = None
+                        try:
+                            await conn.close()
+                        except Exception:
+                            pass
+                raise
         finally:
-            if owned:
-                await conn.close()
+            self._writer_owner = None
             if memory_db:
                 self._memory_lock.release()
+            else:
+                self._writer_lock.release()
+
+    async def _abrir_writer(self) -> aiosqlite.Connection:
+        conn = await aiosqlite.connect(self.path, timeout=10)
+        conn.row_factory = aiosqlite.Row
+        await conn.execute("PRAGMA foreign_keys = ON")
+        await conn.execute("PRAGMA busy_timeout = 10000")
+        await conn.execute("PRAGMA synchronous = NORMAL")
+        await conn.execute("PRAGMA temp_store = MEMORY")
+        return conn
 
     async def close(self):
+        if self._writer is not None:
+            try:
+                await self._writer.close()
+            finally:
+                self._writer = None
         if self.conn is not None:
             await self.conn.close()
             self.conn = None
@@ -2354,10 +2387,15 @@ class Database:
         self, guild_id: int, user_id: int, content_hash: str, limite_diario: int = 20
     ) -> bool:
         """Registra uma mensagem elegível sem duplicar texto recente nem exceder a cota diária."""
+        import time as _time
         async with self.transaction() as tx:
-            await tx.conn.execute(
-                "DELETE FROM xp_message_awards WHERE created_at < datetime('now','-30 days')"
-            )
+            # A limpeza de registros antigos não precisa rodar a cada mensagem.
+            agora = _time.monotonic()
+            if agora - getattr(self, "_xp_purga_em", 0.0) > 3600:
+                await tx.conn.execute(
+                    "DELETE FROM xp_message_awards WHERE created_at < datetime('now','-30 days')"
+                )
+                self._xp_purga_em = agora
             duplicada = await tx._one(
                 """SELECT 1 FROM xp_message_awards
                    WHERE guild_id=? AND user_id=? AND content_hash=?
@@ -3746,6 +3784,14 @@ class Database:
 
     async def coliseu_expirar_prazos(self):
         """Convites vencidos e partidas inativas devolvem integralmente as duas apostas."""
+        # Roda a cada 5s: só abre transação de escrita se houver algo vencido.
+        pendente = await self._one(
+            """SELECT 1 FROM cartas_duelos
+               WHERE (status='invited' AND expires_at<=CURRENT_TIMESTAMP)
+                  OR (status='active' AND round_deadline<=CURRENT_TIMESTAMP) LIMIT 1"""
+        )
+        if not pendente:
+            return []
         async with self.transaction() as tx:
             vencidos = await tx._all("SELECT * FROM cartas_duelos WHERE status='invited' AND expires_at<=CURRENT_TIMESTAMP")
             expirados = await tx._all("SELECT * FROM cartas_duelos WHERE status='active' AND round_deadline<=CURRENT_TIMESTAMP")
