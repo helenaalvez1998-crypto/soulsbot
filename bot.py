@@ -301,6 +301,12 @@ async def _edit_message_seguro(self: discord.InteractionResponse, *args: Any, **
     if _adiada_automaticamente(self):
         delete_after = kwargs.pop("delete_after", None)
         kwargs.pop("suppress_embeds", None)
+        id_ = self._parent.id
+        if id_ in _VIEW_CARREGANDO:
+            # A mensagem está com botões bloqueados ("Carregando…"). Se o callback não
+            # informou uma view, reenvia a view real (já restaurada) para liberar os botões.
+            kwargs.setdefault("view", _VIEW_CARREGANDO[id_])
+            _CARREGANDO_EDITADO.add(id_)
         msg = await self._parent.edit_original_response(*args, **kwargs)
         if delete_after:
             await msg.delete(delay=delete_after)
@@ -330,6 +336,74 @@ async def _auto_defer(interaction: discord.Interaction) -> None:
         log.info("Clique adiado automaticamente (callback passou de %.1fs sem responder).", AUTO_DEFER_APOS)
     except (discord.HTTPException, discord.InteractionResponded):
         _INTERACOES_ADIADAS.discard(interaction.id)
+
+
+# --- Indicador de "Carregando…" -------------------------------------------------
+# Se o callback de um botão/select demora mais de CARREGANDO_APOS segundos, a mensagem
+# é editada na hora: todos os botões ficam desativados e o botão clicado mostra
+# "⏳ Carregando…". Assim ninguém clica várias vezes achando que travou. Quando o
+# callback termina, a view volta ao normal (ou é substituída pela nova tela).
+CARREGANDO_APOS = 0.8
+_VIEW_CARREGANDO: dict[int, discord.ui.View] = {}
+_CARREGANDO_EDITADO: set[int] = set()
+
+
+async def _mostrar_carregando(view: discord.ui.View, item: Any, interaction: discord.Interaction) -> None:
+    await asyncio.sleep(CARREGANDO_APOS)
+    if interaction.response.is_done() or interaction.message is None:
+        return
+    estado = [(c, getattr(c, "disabled", None), getattr(c, "label", None), getattr(c, "emoji", None)) for c in view.children]
+    try:
+        for c in view.children:
+            if hasattr(c, "disabled"):
+                c.disabled = True
+        if isinstance(item, discord.ui.Button):
+            item.label = "⏳ Carregando…"
+            item.emoji = None
+        # Registra antes de enviar: se o callback responder durante o envio, o redirecionamento já funciona.
+        _INTERACOES_ADIADAS.add(interaction.id)
+        _VIEW_CARREGANDO[interaction.id] = view
+        asyncio.get_running_loop().call_later(1000, _limpar_carregando, interaction.id)
+        try:
+            await _orig_edit_message(interaction.response, view=view)
+        except (discord.HTTPException, discord.InteractionResponded):
+            _INTERACOES_ADIADAS.discard(interaction.id)
+            _VIEW_CARREGANDO.pop(interaction.id, None)
+    finally:
+        # O payload já foi serializado: devolve o estado real aos objetos da view.
+        for c, disabled, label, emoji in estado:
+            if disabled is not None:
+                c.disabled = disabled
+            if isinstance(c, discord.ui.Button):
+                c.label, c.emoji = label, emoji
+
+
+def _limpar_carregando(id_: int) -> None:
+    _VIEW_CARREGANDO.pop(id_, None)
+    _CARREGANDO_EDITADO.discard(id_)
+    _INTERACOES_ADIADAS.discard(id_)
+
+
+_orig_scheduled_task = discord.ui.View._scheduled_task
+
+
+async def _scheduled_task_com_carregando(self: discord.ui.View, item: Any, interaction: discord.Interaction):
+    aviso = asyncio.create_task(_mostrar_carregando(self, item, interaction))
+    try:
+        return await _orig_scheduled_task(self, item, interaction)
+    finally:
+        aviso.cancel()
+        id_ = interaction.id
+        if id_ in _VIEW_CARREGANDO and id_ not in _CARREGANDO_EDITADO and not self.is_finished():
+            # O callback terminou sem trocar a tela (ex.: só mandou um aviso): libera os botões.
+            try:
+                await interaction.edit_original_response(view=self)
+            except (discord.HTTPException, discord.InteractionResponded):
+                log.debug("Não consegui restaurar os botões após o carregamento.", exc_info=True)
+        _limpar_carregando(id_)
+
+
+discord.ui.View._scheduled_task = _scheduled_task_com_carregando  # type: ignore[method-assign]
 
 
 class NaraCommandTree(app_commands.CommandTree):
