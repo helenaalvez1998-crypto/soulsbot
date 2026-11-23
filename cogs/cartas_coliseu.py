@@ -55,8 +55,10 @@ from sistemas.cartas import (
 log = logging.getLogger("cogs.cartas_coliseu")
 
 # Limites conservadores de lançamento; configuráveis no código em uma futura tela admin.
-NIVEL_MINIMO_DUELO = 5
-APOSTA_MINIMA = 10
+# Duelos abertos a todos: sem nível mínimo, sem saldo mínimo (aposta 0 = duelo amistoso)
+# e sem limite de diferença de poder entre os decks.
+NIVEL_MINIMO_DUELO = 1
+APOSTA_MINIMA = 0
 APOSTA_MAXIMA = 500
 LIMITE_DUELOS_DIA = 5
 LIMITE_DUELOS_PAR_DIA = 2
@@ -65,7 +67,7 @@ LIMITE_PACOTES_DIA = 3
 COOLDOWN_DESAFIO_SEGUNDOS = 60
 TEMPO_CONVITE_SEGUNDOS = 120
 TEMPO_RODADA_SEGUNDOS = 40  # cinco escolhas simultâneas cabem em cerca de 2–4 minutos
-DIFERENCA_MAXIMA_PODER_DECK = 4
+DIFERENCA_MAXIMA_PODER_DECK = 999  # praticamente sem limite; o poder é apenas informativo
 
 
 def _formatar_carta(carta: dict) -> str:
@@ -906,7 +908,7 @@ class DeckBuilderView(discord.ui.View):
         else:
             embed.description = (
                 "Escolha cinco cartas, uma por vez. O deck aceita até 12 pontos de custo e no máximo uma Lendária. Cartas Primordiais são únicas e não podem ser transferidas ou consumidas.\n"
-                f"Para duelar com apostas, os dois decks precisam ter poder total com diferença máxima de {DIFERENCA_MAXIMA_PODER_DECK}."
+                "Qualquer jogador com deck válido pode duelar com você, sem limite de nível ou de poder."
             )
         embed.set_footer(text=f"{len(self.selecionadas)}/5 cartas · Página {self.page + 1}/{self.pages}")
         if len(self.selecionadas) == 5:
@@ -1068,9 +1070,8 @@ class DesafioColiseuView(discord.ui.View):
             if self.total_conectados:
                 embed.description = (
                     f"Há **{self.total_conectados}** membro(s) conectado(s), mas ninguém atende aos requisitos do Coliseu agora.\n\n"
-                    f"Para aparecer na lista, a pessoa precisa ter nível {NIVEL_MINIMO_DUELO}, saldo mínimo de {APOSTA_MINIMA} Denários, "
-                    f"um deck válido de cinco cartas com diferença máxima de {DIFERENCA_MAXIMA_PODER_DECK} pontos em relação ao seu, "
-                    "e não pode estar em outro duelo."
+                    "Para aparecer na lista, a pessoa precisa ter um deck válido de cinco cartas salvo "
+                    "e não pode estar em outro duelo ou convite pendente."
                 )
             else:
                 embed.description = (
@@ -1103,8 +1104,8 @@ class DesafioColiseuModal(discord.ui.Modal, title="Definir aposta do duelo"):
         self.creator_id = int(creator_id)
         self.target_id = int(target_id)
         self.aposta = discord.ui.TextInput(
-            label=f"Aposta por pessoa ({APOSTA_MINIMA}–{APOSTA_MAXIMA} Denários)",
-            placeholder="Ex.: 50", min_length=1, max_length=4, default=str(APOSTA_MINIMA),
+            label=f"Aposta por pessoa (0–{APOSTA_MAXIMA} Denários)",
+            placeholder="0 = duelo amistoso, sem aposta", min_length=1, max_length=4, default=str(APOSTA_MINIMA),
         )
         self.add_item(self.aposta)
 
@@ -1126,7 +1127,7 @@ class DesafioColiseuModal(discord.ui.Modal, title="Definir aposta do duelo"):
         except ValueError:
             return await interaction.response.send_message("Informe a aposta usando apenas números.", ephemeral=True)
         if not APOSTA_MINIMA <= aposta <= APOSTA_MAXIMA:
-            return await interaction.response.send_message(f"A aposta precisa ficar entre {APOSTA_MINIMA} e {APOSTA_MAXIMA} Denários.", ephemeral=True)
+            return await interaction.response.send_message(f"A aposta precisa ficar entre 0 e {APOSTA_MAXIMA} Denários.", ephemeral=True)
 
         await interaction.response.defer(ephemeral=True, thinking=True)
         resultado = await self.cog.bot.db.coliseu_criar_convite(
@@ -1149,14 +1150,14 @@ class DesafioColiseuModal(discord.ui.Modal, title="Definir aposta do duelo"):
                 f"**Aposta por jogador:** {aposta} Denários\n"
                 f"**Pote total:** {aposta * 2} Denários\n"
                 f"**Poder dos decks:** {resultado['deck_power'][self.creator_id]} × {resultado['deck_power'][alvo.id]} "
-                f"(diferença {resultado['power_gap']}/{DIFERENCA_MAXIMA_PODER_DECK})\n"
+                f"(diferença {resultado['power_gap']})\n"
                 "As duas apostas só serão travadas quando o convite for aceito.\n"
                 f"Cada rodada tem {TEMPO_RODADA_SEGUNDOS} segundos para escolha; o duelo costuma levar 2–4 minutos com respostas rápidas.\n"
                 "O convite expira em dois minutos."
             ),
             color=config.COR_OURO,
         )
-        embed.set_footer(text=f"Coliseu de Cartas • Duelo #{duel_id} • Nível mínimo 5")
+        embed.set_footer(text=f"Coliseu de Cartas • Duelo #{duel_id}")
         try:
             message = await interaction.channel.send(
                 content=alvo.mention,
@@ -1750,7 +1751,7 @@ class ColiseuCartas(commands.Cog):
                 f"**Deck:** {len(deck)}/5 cartas · custo {sum(int(c['custo']) for c in deck) if deck else 0}/12 · "
                 f"poder-base {poder_total_deck(deck) if deck else 0}\n\n"
                 f"**Pacote Fogueira:** 3 cartas por {PRECO_PACOTE_FOGUEIRA} Denários · 70% Comum, 22% Rara, 7% Épica e 1% Lendária por carta.\n"
-                f"**Duelos:** apostas de {APOSTA_MINIMA} a {APOSTA_MAXIMA} Denários por jogador, cinco rodadas e até {TEMPO_RODADA_SEGUNDOS}s por escolha."
+                f"**Duelos:** apostas de 0 (amistoso) a {APOSTA_MAXIMA} Denários por jogador, cinco rodadas e até {TEMPO_RODADA_SEGUNDOS}s por escolha."
             ),
             color=config.COR_OURO,
         )
@@ -1859,11 +1860,7 @@ class ColiseuCartas(commands.Cog):
         candidatos: list[dict] = []
         for member in conectados:
             dados = dados_por_id.get(int(member.id))
-            if not dados:
-                continue
-            nivel_membro = nivel_por_xp(int(dados["xp"] or 0))
-            if nivel_membro < NIVEL_MINIMO_DUELO or int(dados["denarios"] or 0) < APOSTA_MINIMA:
-                continue
+            nivel_membro = nivel_por_xp(int(dados["xp"] or 0) if dados else 0)
             if int(member.id) in ocupados_ids:
                 continue
             deck = await db.coliseu_obter_deck(int(member.id))
@@ -1871,8 +1868,6 @@ class ColiseuCartas(commands.Cog):
             if not valido:
                 continue
             poder_deck_membro = poder_total_deck(deck)
-            if abs(poder_deck_proprio - poder_deck_membro) > DIFERENCA_MAXIMA_PODER_DECK:
-                continue
             status_label, status_emoji = rotulos_status.get(member.status, ("Conectado", "🟢"))
             candidatos.append({
                 "member": member,
