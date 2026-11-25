@@ -734,6 +734,12 @@ class NaraBot(commands.Bot):
                 raise web.HTTPNotFound(text="JavaScript do site não encontrado.")
             return web.FileResponse(arquivo)
 
+        async def elden_ui_css(_request: web.Request) -> web.Response:
+            arquivo = site_dir / "elden-ui.css"
+            if not arquivo.is_file():
+                raise web.HTTPNotFound(text="Sistema visual V49 não encontrado.")
+            return web.FileResponse(arquivo)
+
         async def status_api(_request: web.Request) -> web.Response:
             return web.json_response({
                 "service": "NaraBot-api",
@@ -745,6 +751,7 @@ class NaraBot(commands.Bot):
         app = web.Application(client_max_size=42 * 1024 * 1024)
         app.router.add_get("/", pagina_inicial)
         app.router.add_get("/style.css", estilo_site)
+        app.router.add_get("/elden-ui.css", elden_ui_css)
         app.router.add_get("/app.js", script_site)
         app.router.add_get("/api/status", status_api)
         app.router.add_get("/auth/discord/login", self._oauth_login)
@@ -977,6 +984,26 @@ class NaraBot(commands.Bot):
         players.sort(key=lambda item: (not item["web_online"], item["discord_presence"] == "offline", item["name"].casefold()))
         return web.json_response({"players": players, "server": guild.name})
 
+    async def _gwent_generated_card_payload(self, user_id: int, card_id: str, exemplar: dict):
+        """Resolve uma carta procedural apenas para o proprietário autenticado."""
+        import json
+        row = await self.db._one(
+            "SELECT definition_json,status,art_path FROM cartas_geradas WHERE owner_id=? AND card_id=?",
+            (int(user_id), str(card_id)),
+        )
+        if not row or str(row["status"] or "") != "published":
+            return None
+        try:
+            definition = json.loads(row["definition_json"] or "{}")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
+        from sistemas.gwent import preparar_carta_pessoal
+        card = preparar_carta_pessoal(definition, exemplar, owner_id=int(user_id))
+        if card is None:
+            return None
+        card["image_url"] = f"/api/gwent/atelier/art/{quote(card_id, safe='')}"
+        return card
+
     async def _api_gwent_deck(self, request: web.Request) -> web.Response:
         user_id = self._api_user_id(request)
         if user_id is None:
@@ -984,7 +1011,7 @@ class NaraBot(commands.Bot):
         await self._gwent_prepare_user(user_id)
         import json
         row = await self.db._one(
-            "SELECT card_ids_json, exemplar_ids_json, faction, leader_id FROM cartas_gwent_decks WHERE user_id=?",
+            "SELECT card_ids_json, exemplar_ids_json, faction, leader_id, relic_id FROM cartas_gwent_decks WHERE user_id=?",
             (user_id,),
         )
         ids = json.loads(row["card_ids_json"]) if row else []
@@ -1007,6 +1034,11 @@ class NaraBot(commands.Bot):
             if not record:
                 continue
             game_name = game_by_id.get(str(card_id), "")
+            if record and str(card_id).startswith("transmutacao_"):
+                personal = await self._gwent_generated_card_payload(user_id, str(card_id), record)
+                if personal:
+                    cards.append(personal)
+                continue
             card = get_carta(str(card_id))
             if card is None and str(card_id).startswith("jogo_") and game_name:
                 try:
@@ -1059,9 +1091,11 @@ class NaraBot(commands.Bot):
                                           "Véu Carmesim": "Sangue, sacrifício e rituais de heresia.",
                                           "Lua Negra": "Magia lunar, cosmos e segredos arcanos."}[name]}
                          for kind, name in FACTIONS.items()],
-            "rules": {"cards": 12, "opening_hand": 10, "reserve": 2, "unique": True}})
+            "relic_id": str(row["relic_id"] or "") if row else "",
+            "rules": {"cards": 12, "opening_hand": 10, "reserve": 2, "unique": True, "relics_per_match": 1}})
 
     async def _api_gwent_deck_save(self, request: web.Request) -> web.Response:
+        import json
         user_id = self._api_user_id(request)
         if user_id is None:
             return web.json_response({"error": "Autenticação necessária."}, status=401)
@@ -1078,6 +1112,7 @@ class NaraBot(commands.Bot):
                 entries = [(str(card_id), 0) for card_id in body.get("card_ids", [])]
             faction = str(body.get("faction", "Ordem Áurea"))
             leader_id = str(body.get("leader_id", "comandante_fornalha"))
+            relic_id = str(body.get("relic_id", ""))
         except Exception:
             return web.json_response({"error": "JSON inválido ou exemplar inválido."}, status=400)
         ids = [entry[0] for entry in entries]
@@ -1090,6 +1125,9 @@ class NaraBot(commands.Bot):
             return web.json_response({"error": "Facção inválida."}, status=400)
         if leader_id not in LEADERS or LEADERS[leader_id]["faction"] != faction:
             return web.json_response({"error": "O líder selecionado não pertence à facção escolhida."}, status=400)
+        valid_relics = {"", "reliquia_grande_runa_godrick", "reliquia_runa_nao_nascidos", "reliquia_runa_morte", "reliquia_noite_chama", "reliquia_lamina_negra", "reliquia_algemas_margit"}
+        if relic_id not in valid_relics:
+            return web.json_response({"error": "Relíquia inválida."}, status=400)
         exemplars = await self.db.coliseu_listar_exemplares(user_id)
         by_exemplar = {int(e["id"]): e for e in exemplars}
         resolved = []
@@ -1106,9 +1144,26 @@ class NaraBot(commands.Bot):
         from sistemas.cartas import get_carta
         unit_count = 0
         special_count = 0
-        for card_id in ids:
+        for card_id, exemplar_id in entries:
             card = get_carta(card_id)
-            if card is None and card_id.startswith("jogo_"):
+            if card is None and card_id.startswith("transmutacao_"):
+                generated = await self.db._one(
+                    "SELECT definition_json,status FROM cartas_geradas WHERE owner_id=? AND card_id=?",
+                    (int(user_id), card_id),
+                )
+                if not generated or str(generated["status"] or "") != "published":
+                    return web.json_response({"error": f"Carta pessoal indisponível: {card_id}."}, status=403)
+                try:
+                    definition = json.loads(generated["definition_json"] or "{}")
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    return web.json_response({"error": f"Definição inválida: {card_id}."}, status=409)
+                if (definition.get("card_id") != card_id or definition.get("owner_scoped") is not True
+                        or definition.get("origem_tipo") != "transmutacao"
+                        or definition.get("is_sacrificable") is not False
+                        or definition.get("categoria") != "Unidade"):
+                    return web.json_response({"error": f"Carta pessoal inválida: {card_id}."}, status=409)
+                unit_count += 1
+            elif card is None and card_id.startswith("jogo_"):
                 unit_count += 1
             elif card is None:
                 return web.json_response({"error": f"Carta inválida no deck: {card_id}."}, status=400)
@@ -1121,14 +1176,14 @@ class NaraBot(commands.Bot):
         import json
         async with self.db.transaction() as tx:
             await tx.conn.execute(
-                """INSERT INTO cartas_gwent_decks(user_id,card_ids_json,exemplar_ids_json,faction,leader_id)
-                   VALUES (?,?,?,?,?)
+                """INSERT INTO cartas_gwent_decks(user_id,card_ids_json,exemplar_ids_json,faction,leader_id,relic_id)
+                   VALUES (?,?,?,?,?,?)
                    ON CONFLICT(user_id) DO UPDATE SET card_ids_json=excluded.card_ids_json,
                    exemplar_ids_json=excluded.exemplar_ids_json, faction=excluded.faction,
-                   leader_id=excluded.leader_id, updated_at=CURRENT_TIMESTAMP""",
-                (user_id, json.dumps(ids), json.dumps(resolved), faction, leader_id))
+                   leader_id=excluded.leader_id, relic_id=excluded.relic_id, updated_at=CURRENT_TIMESTAMP""",
+                (user_id, json.dumps(ids), json.dumps(resolved), faction, leader_id, relic_id))
         return web.json_response({"ok": True, "card_ids": ids, "exemplar_ids": resolved,
-                                  "faction": faction, "leader_id": leader_id})
+                                  "faction": faction, "leader_id": leader_id, "relic_id": relic_id})
 
     async def _gwent_deck_snapshots(self, user_id: int):
         import json
@@ -1154,6 +1209,12 @@ class NaraBot(commands.Bot):
                 record = max(candidates, key=lambda e: (order.get(str(e["rarity"]), 0), int(e["power"]), -int(e["id"]))) if candidates else None
             if record is None:
                 return None
+            if str(card_id).startswith("transmutacao_"):
+                personal = await self._gwent_generated_card_payload(user_id, str(card_id), record)
+                if not personal:
+                    return None
+                cards.append(personal)
+                continue
             card = get_carta(card_id)
             if card is None and card_id.startswith("jogo_") and game_by_id.get(card_id):
                 try:
@@ -1214,13 +1275,14 @@ class NaraBot(commands.Bot):
         configs = {}
         for participant_id in (user_id, opponent_id):
             saved = await self.db._one(
-                "SELECT faction,leader_id FROM cartas_gwent_decks WHERE user_id=?",
+                "SELECT faction,leader_id,relic_id FROM cartas_gwent_decks WHERE user_id=?",
                 (participant_id,),
             )
             if saved:
                 configs[str(participant_id)] = {
                     "faction": canonical_faction(str(saved["faction"] or "")) or "",
                     "leader_id": str(saved["leader_id"] or ""),
+                    "relic_id": str(saved["relic_id"] or ""),
                 }
 
         # A partida só começa depois da aceitação. O snapshot impede que alterações
@@ -1278,11 +1340,12 @@ class NaraBot(commands.Bot):
         from sistemas.gwent import AI_PLAYER_ID, DEFAULT_LEADERS, aplicar_jogada, novo_estado, canonical_faction
 
         saved = await self.db._one(
-            "SELECT faction,leader_id FROM cartas_gwent_decks WHERE user_id=?", (user_id,)
+            "SELECT faction,leader_id,relic_id FROM cartas_gwent_decks WHERE user_id=?", (user_id,)
         )
         human_config = {
             "faction": canonical_faction(str(saved["faction"] or "")) if saved else "",
             "leader_id": str(saved["leader_id"] or "") if saved else "",
+            "relic_id": str(saved["relic_id"] or "") if saved else "",
         }
         faction = human_config["faction"]
         ai_config = {
@@ -1752,6 +1815,18 @@ class NaraBot(commands.Bot):
             cards = []
             for record in exemplar_rows:
                 card_id = str(record["card_id"])
+                if card_id.startswith("transmutacao_"):
+                    personal = await self._gwent_generated_card_payload(user_id, card_id, record)
+                    if personal:
+                        personal["exemplares"] = 1
+                        personal["source"] = str(record["source"] or "transmutacao")
+                        personal["max_power"] = int(personal["poder"])
+                        personal["image_url"] = (
+                            f"/api/gwent/cards/{quote(card_id, safe='')}/image"
+                            f"?exemplar_id={int(record['id'])}&v=transmutacao-v36"
+                        )
+                        cards.append(personal)
+                    continue
                 card = get_carta(card_id)
                 if card is None and card_id.startswith("jogo_") and game_by_id.get(card_id):
                     try:
@@ -2160,6 +2235,36 @@ class NaraBot(commands.Bot):
         card_id = str(request.match_info.get("card_id", "")).strip()
         if not card_id or len(card_id) > 120:
             raise web.HTTPNotFound(text="Carta não encontrada.")
+
+        if card_id.startswith("transmutacao_"):
+            generated = await self.db._one(
+                "SELECT art_path,art_status,status FROM cartas_geradas WHERE card_id=?",
+                (card_id,),
+            )
+            if not generated or generated["status"] != "published" or generated["art_status"] != "validated":
+                raise web.HTTPNotFound(text="Carta pessoal não encontrada.")
+            from config import get_data_dir
+            art_path = Path(str(generated["art_path"] or "")).resolve()
+            root = (Path(get_data_dir()) / "cartas_geradas").resolve()
+            try:
+                art_path.relative_to(root)
+            except ValueError:
+                raise web.HTTPNotFound(text="Arte pessoal indisponível.")
+            if not art_path.is_file() or art_path.suffix.casefold() != ".png":
+                raise web.HTTPNotFound(text="Arte pessoal indisponível.")
+            digest = await asyncio.to_thread(lambda: hashlib.sha256(art_path.read_bytes()).hexdigest())
+            expected = await self.db._one(
+                "SELECT content_hash FROM cartas_geradas_artes WHERE generated_card_id=? AND status='validated'",
+                (card_id,),
+            )
+            if not expected or not secrets.compare_digest(digest, str(expected["content_hash"] or "")):
+                raise web.HTTPUnprocessableEntity(text="Integridade da arte pessoal inválida.")
+            headers = {"Content-Disposition": "inline", "Cache-Control": "private, max-age=86400",
+                       "ETag": f'"{digest}"', "X-Content-Type-Options": "nosniff", "Vary": "Cookie"}
+            incoming = request.headers.get("If-None-Match", "")
+            if any(token.strip() in ("*", headers["ETag"], f"W/{headers['ETag']}") for token in incoming.split(",")):
+                return web.Response(status=304, headers=headers)
+            return web.FileResponse(art_path, headers={**headers, "Content-Type": "image/png"})
 
         cache_control = "private, max-age=86400, stale-while-revalidate=604800"
 

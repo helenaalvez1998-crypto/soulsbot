@@ -659,6 +659,32 @@ CREATE TABLE IF NOT EXISTS cartas_fragmentos (
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
+-- Inventário dedicado ao Laboratório; saldo separado de Almas e Fragmentos da Forja.
+CREATE TABLE IF NOT EXISTS cartas_materiais_transmutacao (
+    user_id INTEGER NOT NULL,
+    material_key TEXT NOT NULL,
+    quantidade INTEGER NOT NULL DEFAULT 0 CHECK (quantidade >= 0),
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(user_id, material_key),
+    FOREIGN KEY(user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_transmutacao_materiais_owner
+    ON cartas_materiais_transmutacao(user_id, material_key);
+CREATE TABLE IF NOT EXISTS cartas_receitas_ocultas_descobertas (
+    user_id INTEGER NOT NULL, recipe_id TEXT NOT NULL, signature TEXT NOT NULL,
+    discovered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(user_id, recipe_id),
+    FOREIGN KEY(user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_receitas_ocultas_owner
+    ON cartas_receitas_ocultas_descobertas(user_id, discovered_at DESC);
+CREATE TABLE IF NOT EXISTS cartas_geracao_balanceamento (
+    id INTEGER PRIMARY KEY CHECK (id=1),
+    total_sem_habilidade INTEGER NOT NULL DEFAULT 0 CHECK (total_sem_habilidade >= 0),
+    total_com_habilidade INTEGER NOT NULL DEFAULT 0 CHECK (total_com_habilidade >= 0),
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+INSERT OR IGNORE INTO cartas_geracao_balanceamento(id) VALUES (1);
 CREATE TABLE IF NOT EXISTS cartas_movimentacoes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -677,6 +703,80 @@ CREATE TABLE IF NOT EXISTS cartas_movimentacoes (
 );
 CREATE INDEX IF NOT EXISTS idx_cartas_mov_user_time
     ON cartas_movimentacoes(user_id, created_at DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS cartas_convergencias (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    resultado_exemplar_id INTEGER NOT NULL,
+    receita TEXT NOT NULL DEFAULT 'convergencia_comum',
+    sacrificios_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY(resultado_exemplar_id) REFERENCES cartas_exemplares(id) ON DELETE CASCADE
+);
+
+-- Laboratório de Transmutação: registros pessoais, sem catálogo compartilhado.
+CREATE TABLE IF NOT EXISTS cartas_geradas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    card_id TEXT NOT NULL UNIQUE,
+    owner_id INTEGER NOT NULL,
+    exemplar_id INTEGER UNIQUE,
+    name TEXT NOT NULL,
+    rarity TEXT NOT NULL,
+    faction TEXT NOT NULL,
+    power INTEGER NOT NULL,
+    definition_json TEXT NOT NULL,
+    art_path TEXT NOT NULL DEFAULT '',
+    art_status TEXT NOT NULL DEFAULT 'pending',
+    status TEXT NOT NULL DEFAULT 'generated',
+    generator_version TEXT NOT NULL DEFAULT 'v1',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(owner_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY(exemplar_id) REFERENCES cartas_exemplares(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_cartas_geradas_owner
+    ON cartas_geradas(owner_id, created_at DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS cartas_transmutacoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tx_key TEXT NOT NULL UNIQUE,
+    owner_id INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    ingredient_ids_json TEXT NOT NULL DEFAULT '[]',
+    ingredient_snapshot_json TEXT NOT NULL DEFAULT '[]',
+    probability REAL NOT NULL DEFAULT 0,
+    roll REAL,
+    seed_hash TEXT NOT NULL DEFAULT '',
+    generated_card_id TEXT,
+    failure_reason TEXT NOT NULL DEFAULT '',
+    generator_version TEXT NOT NULL DEFAULT 'v1',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TEXT,
+    FOREIGN KEY(owner_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY(generated_card_id) REFERENCES cartas_geradas(card_id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS cartas_geradas_habilidades (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    generated_card_id TEXT NOT NULL,
+    ability_id TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY(generated_card_id) REFERENCES cartas_geradas(card_id) ON DELETE CASCADE,
+    UNIQUE(generated_card_id, ability_id)
+);
+
+CREATE TABLE IF NOT EXISTS cartas_geradas_artes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    generated_card_id TEXT NOT NULL UNIQUE,
+    storage_path TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    width INTEGER NOT NULL DEFAULT 0,
+    height INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(generated_card_id) REFERENCES cartas_geradas(card_id) ON DELETE CASCADE
+);
 
 """
 
@@ -738,10 +838,16 @@ MIGRACOES_COLUNAS = {
     "community_posts": {
         "is_hidden": "INTEGER NOT NULL DEFAULT 0",
     },
+    "cartas_exemplares": {
+        "origin_type": "TEXT NOT NULL DEFAULT 'catalogo'",
+        "origin_card_id": "TEXT NOT NULL DEFAULT ''",
+        "is_sacrificable": "INTEGER NOT NULL DEFAULT 1",
+    },
     "cartas_gwent_decks": {
         "faction": "TEXT NOT NULL DEFAULT ''",
         "leader_id": "TEXT NOT NULL DEFAULT ''",
         "exemplar_ids_json": "TEXT NOT NULL DEFAULT '[]'",
+        "relic_id": "TEXT NOT NULL DEFAULT ''",
     },
     "cartas_gwent_rankings": {
         "xp": "INTEGER NOT NULL DEFAULT 0",
@@ -757,6 +863,26 @@ MIGRACOES_COLUNAS = {
         "origin": "TEXT NOT NULL DEFAULT ''",
     },
 }
+
+TRIGGERS_POS_MIGRACAO = """
+CREATE TRIGGER IF NOT EXISTS trg_cartas_geradas_insert_protected
+BEFORE INSERT ON cartas_exemplares
+WHEN (NEW.origin_type='transmutacao' OR NEW.source='transmutacao')
+ AND (NEW.origin_type<>'transmutacao' OR NEW.source<>'transmutacao' OR NEW.is_sacrificable<>0)
+BEGIN
+    SELECT RAISE(ABORT, 'carta pessoal transmutada deve ser permanente e nao sacrificavel');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_cartas_geradas_update_protected
+BEFORE UPDATE OF origin_type,source,is_sacrificable ON cartas_exemplares
+WHEN (OLD.origin_type='transmutacao' OR OLD.source='transmutacao')
+ AND (NEW.origin_type<>'transmutacao' OR NEW.source<>'transmutacao' OR NEW.is_sacrificable<>0)
+ OR (NEW.origin_type='transmutacao' OR NEW.source='transmutacao')
+ AND (NEW.origin_type<>'transmutacao' OR NEW.source<>'transmutacao' OR NEW.is_sacrificable<>0)
+BEGIN
+    SELECT RAISE(ABORT, 'protecao permanente de carta transmutada');
+END;
+"""
 
 # Índices que precisam das colunas acima; criados depois das migrações.
 # Garante no máximo UM pedido ativo por jogo: repetir a pesquisa reaproveita o registro.
@@ -838,6 +964,14 @@ class Database:
             for coluna, ddl in colunas.items():
                 if coluna not in existentes:
                     await self.conn.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {ddl}")
+        # Preserva a regra de origem: qualquer exemplar já marcado como transmutado
+        # fica protegido, inclusive em bancos migrados de versões futuras/experimentais.
+        await self.conn.execute(
+            """UPDATE cartas_exemplares
+               SET origin_type='transmutacao', is_sacrificable=0
+               WHERE source='transmutacao'"""
+        )
+        await self.conn.executescript(TRIGGERS_POS_MIGRACAO)
         # Os registros antigos de zerados foram lançados automaticamente; preserva-os
         # como aprovados e marca a data histórica para o limite diário.
         await self.conn.execute(
@@ -1658,11 +1792,13 @@ class Database:
                         if not exemplar_ids and str(reward["card_id"]) in card_ids:
                             return {"erro": "Esse modelo está em um deck legado. Atualize/remova a carta do deck antes de apagar o registro."}
                     exemplar = await tx._one(
-                        "SELECT id,rarity,power FROM cartas_exemplares WHERE id=? AND user_id=?",
+                        "SELECT id,rarity,power,is_sacrificable,origin_type FROM cartas_exemplares WHERE id=? AND user_id=?",
                         (exemplar_id, user_id),
                     )
                     if not exemplar:
                         return {"erro": "O exemplar da recompensa não está mais no inventário. Peça à moderação para revisar a remoção."}
+                    if int(exemplar["is_sacrificable"] or 0) != 1 or str(exemplar["origin_type"] or "") == "transmutacao":
+                        return {"erro": "Cartas pessoais geradas pelo Laboratório são permanentes e não podem ser removidas por sacrifício."}
                     if (str(exemplar["rarity"]) != str(reward["rarity"])
                             or int(exemplar["power"] or 0) != int(reward["power"] or 0)):
                         return {"erro": "A carta desse zerado já foi evoluída ou lapidada. A remoção automática foi bloqueada para não apagar progresso nem consumir recursos indevidamente; peça à moderação para revisar."}
@@ -3032,18 +3168,121 @@ class Database:
             (int(user_id), limite),
         )
 
+    async def coliseu_listar_cartas_geradas(self, user_id: int, limite: int = 100):
+        """Lista somente cartas procedurais pertencentes ao jogador autenticado."""
+        limite = max(1, min(int(limite), 200))
+        return await self._all(
+            """SELECT g.card_id,g.name,g.rarity,g.faction,g.power,g.definition_json,
+                      g.art_path,g.art_status,g.status,g.generator_version,g.created_at,
+                      g.exemplar_id,e.id AS owned_exemplar_id,e.source,e.is_sacrificable
+               FROM cartas_geradas g
+               LEFT JOIN cartas_exemplares e ON e.id=g.exemplar_id AND e.user_id=g.owner_id
+               WHERE g.owner_id=?
+               ORDER BY g.created_at DESC,g.id DESC LIMIT ?""",
+            (int(user_id), limite),
+        )
+
+    async def coliseu_executar_transmutacao(
+        self, user_id: int, exemplar_ids, *, catalyst_active: bool = False,
+        catalyst_key: str | None = None, tx_key: str | None = None,
+    ):
+        """Ponto de entrada do serviço transacional do Laboratório."""
+        from sistemas.transmutacao import executar_transmutacao
+        return await executar_transmutacao(
+            self, user_id, exemplar_ids,
+            catalyst_active=catalyst_active, catalyst_key=catalyst_key, tx_key=tx_key,
+        )
+
+    async def coliseu_listar_balanceamento_transmutacao(self):
+        """Retorna contagem cumulativa global das unidades publicadas pelo Laboratório."""
+        return await self._one(
+            """SELECT total_sem_habilidade,total_com_habilidade,updated_at
+               FROM cartas_geracao_balanceamento WHERE id=1"""
+        )
+
+    async def coliseu_registrar_descoberta_receita(self, user_id: int, recipe_id: str, signature: str):
+        """Registra descoberta individual, idempotente e vinculada ao jogador."""
+        import re
+        if not re.fullmatch(r"[a-z0-9_]{3,80}", str(recipe_id)) or not re.fullmatch(r"[a-f0-9]{64}", str(signature)):
+            return {"status": "dados_invalidos"}
+        async with self.transaction() as tx:
+            cur = await tx.conn.execute(
+                "INSERT OR IGNORE INTO cartas_receitas_ocultas_descobertas(user_id,recipe_id,signature) VALUES(?,?,?)",
+                (int(user_id), str(recipe_id), str(signature)))
+            return {"status": "descoberta_registrada" if cur.rowcount else "ja_descoberta"}
+
+    async def coliseu_listar_receitas_ocultas(self, user_id: int):
+        return await self._all(
+            "SELECT recipe_id,signature,discovered_at FROM cartas_receitas_ocultas_descobertas WHERE user_id=? ORDER BY discovered_at DESC",
+            (int(user_id),))
+
+    async def coliseu_listar_materiais_transmutacao(self, user_id: int):
+        """Lista apenas o inventário de materiais do proprietário."""
+        return await self._all(
+            """SELECT material_key,quantidade,updated_at
+               FROM cartas_materiais_transmutacao
+               WHERE user_id=? ORDER BY material_key""",
+            (int(user_id),),
+        )
+
+    async def coliseu_obter_carta_gerada(self, user_id: int, card_id: str):
+        """Busca uma carta procedural sempre condicionando pelo proprietário."""
+        return await self._one(
+            """SELECT g.card_id,g.owner_id,g.name,g.rarity,g.faction,g.power,
+                      g.definition_json,g.art_path,g.art_status,g.status,
+                      g.generator_version,g.created_at,g.exemplar_id
+               FROM cartas_geradas g
+               WHERE g.owner_id=? AND g.card_id=?""",
+            (int(user_id), str(card_id)),
+        )
+
+    async def coliseu_registrar_arte_carta_gerada(
+        self, user_id: int, card_id: str, storage_path: str,
+        content_hash: str, width: int, height: int, *, replace_existing: bool = False,
+    ):
+        """Registra arte validada da carta pessoal; substituição exige ação explícita do criador."""
+        import re
+        if not re.fullmatch(r"[a-f0-9]{64}", str(content_hash)):
+            return {"status": "hash_invalido"}
+        if int(width) < 240 or int(height) < 360 or int(width) > 1200 or int(height) > 1800:
+            return {"status": "dimensoes_invalidas"}
+        async with self.transaction() as tx:
+            row = await tx._one(
+                "SELECT card_id,owner_id,art_path,art_status FROM cartas_geradas WHERE owner_id=? AND card_id=?",
+                (int(user_id), str(card_id)),
+            )
+            if not row:
+                return {"status": "carta_nao_encontrada"}
+            if str(row["art_status"] or "") in {"validated", "stored"} and str(row["art_path"] or "") != str(storage_path) and not replace_existing:
+                return {"status": "arte_ja_registrada"}
+            await tx.conn.execute(
+                """INSERT INTO cartas_geradas_artes
+                   (generated_card_id,storage_path,content_hash,width,height,status)
+                   VALUES (?,?,?,?,?,'validated')
+                   ON CONFLICT(generated_card_id) DO UPDATE SET
+                     storage_path=excluded.storage_path,content_hash=excluded.content_hash,
+                     width=excluded.width,height=excluded.height,status='validated'""",
+                (str(card_id), str(storage_path), str(content_hash), int(width), int(height)),
+            )
+            await tx.conn.execute(
+                """UPDATE cartas_geradas
+                   SET art_path=?,art_status='validated',updated_at=CURRENT_TIMESTAMP
+                   WHERE owner_id=? AND card_id=?""",
+                (str(storage_path), int(user_id), str(card_id)),
+            )
+            return {"status": "arte_registrada", "card_id": str(card_id)}
+
     async def coliseu_listar_exemplares(self, user_id: int, card_id: str | None = None):
         if card_id:
             return await self._all(
-                """SELECT id,card_id,rarity,power,source,obtained_at FROM cartas_exemplares
+                """SELECT id,user_id,card_id,rarity,power,source,origin_type,origin_card_id,is_sacrificable,obtained_at FROM cartas_exemplares
                    WHERE user_id=? AND card_id=? ORDER BY id""", (int(user_id), str(card_id)))
         return await self._all(
-            """SELECT id,card_id,rarity,power,source,obtained_at FROM cartas_exemplares
+            """SELECT id,user_id,card_id,rarity,power,source,origin_type,origin_card_id,is_sacrificable,obtained_at FROM cartas_exemplares
                WHERE user_id=? ORDER BY obtained_at,id""", (int(user_id),))
 
     async def coliseu_evoluir_exemplar(self, user_id: int, exemplar_id: int):
         """Evolui exemplar consumindo fragmentos; Primordiais e Singulares são finais."""
-        import secrets
         from sistemas.cartas import RARIDADES, BONUS_EVOLUCAO_FRAGMENTOS, get_carta, carta_de_jogo_por_id, faixa_poder_exemplar
         custos = BONUS_EVOLUCAO_FRAGMENTOS
         async with self.transaction() as tx:
@@ -3058,13 +3297,8 @@ class Database:
             proxima = RARIDADES[RARIDADES.index(raridade) + 1]
             if proxima in ("Primordial", "Singular"):
                 return {"status": "limite_raridade"}
-            ja_tem_destino = await tx._one(
-                "SELECT id FROM cartas_exemplares WHERE user_id=? AND card_id=? AND rarity=? AND id<>? LIMIT 1",
-                (int(user_id), str(row["card_id"]), proxima, int(exemplar_id)),
-            )
-            if ja_tem_destino:
-                return {"status": "destino_ja_possuido", "rarity": proxima,
-                        "exemplar_id": int(ja_tem_destino["id"])}
+            # Cada exemplar evolui de forma independente. Ter outra cópia da mesma
+            # carta na raridade de destino não bloqueia a ascensão deste exemplar.
             custo = custos[raridade]
             carta_modelo = get_carta(str(row["card_id"]))
             if carta_modelo is None:
@@ -3087,8 +3321,10 @@ class Database:
             if not saldo or int(saldo["quantidade"] or 0) < custo:
                 return {"status": "fragmentos_insuficientes", "necessarios": custo,
                         "saldo": int(saldo["quantidade"] or 0) if saldo else 0}
-            # Só debita depois de validar propriedade, modelo, categoria, faixa e saldo.
-            novo_poder = min(maximo, max(minimo, int(row["power"]) + 1 + secrets.randbelow(2)))
+            # Ascensão não concede poder aleatório. Preserva o poder já lapidado;
+            # se estiver abaixo do piso da nova raridade, ajusta apenas até esse piso.
+            # O novo teto fica disponível para futuras lapidações.
+            novo_poder = min(maximo, max(minimo, int(row["power"])))
             await tx.conn.execute(
                 "UPDATE cartas_fragmentos SET quantidade=quantidade-?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?",
                 (custo, int(user_id)))
@@ -3101,7 +3337,334 @@ class Database:
                  int(row["power"]), novo_poder, "fragmentos", custo, "colecao"),
             )
             return {"status": "ok", "exemplar_id": int(exemplar_id), "rarity": proxima,
-                    "power": novo_poder, "fragmentos_gastos": custo}
+                    "power": novo_poder, "max_power": maximo,
+                    "fragmentos_gastos": custo, "power_changed": novo_poder != int(row["power"])}
+
+
+    async def coliseu_convergir_exemplares(self, user_id: int, exemplar_ids: list[int]):
+        """Convergência determinística: três exemplares do mesmo modelo/raridade
+        são sacrificados para criar um exemplar do mesmo modelo na raridade seguinte.
+        O histórico dos sacrifícios é preservado, sem transferir poder gratuitamente.
+        """
+        import json
+        from sistemas.cartas import RARIDADES, get_carta, carta_de_jogo_por_id, faixa_poder_exemplar
+        ids = list(dict.fromkeys(int(x) for x in exemplar_ids))
+        if len(ids) != 3:
+            return {"status": "quantidade_invalida", "necessarios": 3}
+        async with self.transaction() as tx:
+            placeholders = ",".join("?" for _ in ids)
+            rows = await tx._all(
+                f"SELECT * FROM cartas_exemplares WHERE user_id=? AND id IN ({placeholders}) ORDER BY id",
+                (int(user_id), *ids))
+            if len(rows) != 3:
+                return {"status": "exemplar_nao_encontrado"}
+            if any(int(r["is_sacrificable"] or 0) != 1 or str(r["origin_type"] or "") == "transmutacao" for r in rows):
+                return {"status": "carta_pessoal_protegida"}
+            # Segurança no servidor: nenhum exemplar equipado em deck pode ser sacrificado.
+            deck = await tx._one(
+                "SELECT exemplar_ids_json FROM cartas_gwent_decks WHERE user_id=?",
+                (int(user_id),),
+            )
+            if deck:
+                try:
+                    equipados = {int(x) for x in json.loads(deck["exemplar_ids_json"] or "[]")}
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    return {"status": "deck_indisponivel"}
+                bloqueados = sorted(set(ids) & equipados)
+                if bloqueados:
+                    return {"status": "exemplar_equipado", "exemplares": bloqueados}
+            card_ids = {str(r["card_id"]) for r in rows}
+            raridades = {str(r["rarity"]) for r in rows}
+            if len(card_ids) != 1 or len(raridades) != 1:
+                return {"status": "receita_incompativel", "motivo": "Use três exemplares do mesmo modelo e raridade."}
+            raridade = str(rows[0]["rarity"])
+            if raridade in ("Primordial", "Singular") or raridade not in RARIDADES:
+                return {"status": "ritual_especial_necessario"}
+            proxima = RARIDADES[RARIDADES.index(raridade) + 1]
+            if proxima in ("Primordial", "Singular"):
+                return {"status": "ritual_especial_necessario"}
+            card_id = str(rows[0]["card_id"])
+            modelo = get_carta(card_id)
+            if modelo is None:
+                legado = await tx._one(
+                    "SELECT game_name FROM cartas_colecao WHERE user_id=? AND card_id=?",
+                    (int(user_id), card_id))
+                if legado and legado["game_name"]:
+                    try:
+                        modelo = carta_de_jogo_por_id(card_id, str(legado["game_name"]))
+                    except ValueError:
+                        modelo = None
+            if modelo is None:
+                return {"status": "carta_indisponivel"}
+            if str(modelo.categoria).casefold() == "especial":
+                return {"status": "carta_especial_nao_funde"}
+            minimo, maximo = faixa_poder_exemplar(modelo, proxima)
+            poder_novo = minimo
+            sacrificios = [{"exemplar_id": int(r["id"]), "card_id": card_id,
+                            "rarity": str(r["rarity"]), "power": int(r["power"]),
+                            "source": str(r["source"])} for r in rows]
+            await tx.conn.execute(
+                f"DELETE FROM cartas_exemplares WHERE user_id=? AND id IN ({placeholders})",
+                (int(user_id), *ids))
+            cur = await tx.conn.execute(
+                """INSERT INTO cartas_exemplares(user_id,card_id,rarity,power,source)
+                   VALUES (?,?,?,?,?)""",
+                (int(user_id), card_id, proxima, poder_novo, "convergencia"))
+            novo_id = int(cur.lastrowid)
+            await tx.conn.execute(
+                """INSERT INTO cartas_convergencias(user_id,resultado_exemplar_id,receita,sacrificios_json)
+                   VALUES (?,?,?,?)""",
+                (int(user_id), novo_id, "convergencia_comum", json.dumps(sacrificios, ensure_ascii=False)))
+            await tx.conn.execute(
+                """INSERT INTO cartas_movimentacoes(user_id,action,card_id,exemplar_id,
+                   rarity_before,rarity_after,power_before,power_after,resource,amount,source)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (int(user_id), "convergencia", card_id, novo_id, raridade, proxima,
+                 sum(x["power"] for x in sacrificios), poder_novo, "exemplares", 3, "forja"))
+            return {"status": "ok", "exemplar_id": novo_id, "card_id": card_id,
+                    "rarity": proxima, "power": poder_novo, "max_power": maximo,
+                    "sacrificados": ids, "memoria_preservada": True}
+
+    async def coliseu_listar_receitas_linhagem(self, user_id: int):
+        """Retorna receitas e disponibilidade real de ingredientes do jogador."""
+        from sistemas.linhagens import RECEITAS_LINHAGEM
+        from sistemas.cartas import get_carta
+        exemplares = await self.coliseu_listar_exemplares(user_id)
+        saida = []
+        for receita in RECEITAS_LINHAGEM.values():
+            slots = []
+            for ingrediente in receita["ingredientes"]:
+                candidatos = [dict(x) for x in exemplares
+                              if str(x["card_id"]) == ingrediente["card_id"]
+                              and str(x["rarity"]) == ingrediente["rarity"]]
+                card = get_carta(ingrediente["card_id"])
+                slots.append({
+                    "card_id": ingrediente["card_id"],
+                    "name": card.nome if card else ingrediente["card_id"],
+                    "rarity": ingrediente["rarity"],
+                    "available": len(candidatos),
+                    "exemplars": candidatos,
+                })
+            resultado = get_carta(receita["resultado"]["card_id"])
+            saida.append({
+                "id": receita["id"], "name": receita["nome"], "lore": receita["lore"],
+                "ingredients": slots, "result": {
+                    "card_id": receita["resultado"]["card_id"],
+                    "name": resultado.nome if resultado else receita["resultado"]["card_id"],
+                    "rarity": receita["resultado"]["rarity"],
+                },
+                "fragmentos": int(receita["fragmentos"]),
+                "ready": all(x["available"] > 0 for x in slots),
+            })
+        return saida
+
+    async def coliseu_executar_receita_linhagem(self, user_id: int, recipe_id: str, exemplar_ids: list[int]):
+        """Executa uma receita fixa em transação; valida propriedade, deck e saldo no servidor."""
+        import json
+        from sistemas.linhagens import RECEITAS_LINHAGEM
+        from sistemas.cartas import get_carta, faixa_poder_exemplar
+        receita = RECEITAS_LINHAGEM.get(str(recipe_id))
+        if not receita:
+            return {"status": "receita_invalida"}
+        ids = [int(x) for x in exemplar_ids]
+        if len(ids) != 3 or len(set(ids)) != 3:
+            return {"status": "quantidade_invalida", "necessarios": 3}
+        async with self.transaction() as tx:
+            marks = ",".join("?" for _ in ids)
+            rows = await tx._all(
+                f"SELECT * FROM cartas_exemplares WHERE user_id=? AND id IN ({marks}) ORDER BY id",
+                (int(user_id), *ids))
+            if len(rows) != 3:
+                return {"status": "exemplar_nao_encontrado"}
+            if any(int(r["is_sacrificable"] or 0) != 1 or str(r["origin_type"] or "") == "transmutacao" for r in rows):
+                return {"status": "carta_pessoal_protegida"}
+            by_card = {(str(r["card_id"]), str(r["rarity"])): [] for r in rows}
+            for r in rows:
+                by_card.setdefault((str(r["card_id"]), str(r["rarity"])), []).append(r)
+            for need in receita["ingredientes"]:
+                key = (need["card_id"], need["rarity"])
+                if not by_card.get(key):
+                    return {"status": "receita_incompativel", "motivo": "Os três exemplares não correspondem aos ingredientes desta receita."}
+                by_card[key].pop()
+            deck = await tx._one(
+                "SELECT exemplar_ids_json FROM cartas_gwent_decks WHERE user_id=?",
+                (int(user_id),))
+            if deck:
+                try:
+                    equipped = {int(x) for x in json.loads(deck["exemplar_ids_json"] or "[]")}
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    return {"status": "deck_indisponivel"}
+                blocked = sorted(set(ids) & equipped)
+                if blocked:
+                    return {"status": "exemplar_equipado", "exemplares": blocked}
+            custo = int(receita["fragmentos"])
+            saldo = await tx._one("SELECT quantidade FROM cartas_fragmentos WHERE user_id=?", (int(user_id),))
+            atual = int(saldo["quantidade"] or 0) if saldo else 0
+            if atual < custo:
+                return {"status": "fragmentos_insuficientes", "necessarios": custo, "saldo": atual}
+            resultado = receita["resultado"]
+            modelo = get_carta(resultado["card_id"])
+            if modelo is None or str(modelo.categoria).casefold() == "especial":
+                return {"status": "resultado_indisponivel"}
+            minimo, maximo = faixa_poder_exemplar(modelo, resultado["rarity"])
+            sacrificios = [{
+                "exemplar_id": int(r["id"]), "card_id": str(r["card_id"]),
+                "rarity": str(r["rarity"]), "power": int(r["power"]),
+                "source": str(r["source"]),
+            } for r in rows]
+            await tx.conn.execute(
+                f"DELETE FROM cartas_exemplares WHERE user_id=? AND id IN ({marks})",
+                (int(user_id), *ids))
+            await tx.conn.execute(
+                "UPDATE cartas_fragmentos SET quantidade=quantidade-?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?",
+                (custo, int(user_id)))
+            cur = await tx.conn.execute(
+                """INSERT INTO cartas_exemplares(user_id,card_id,rarity,power,source)
+                   VALUES (?,?,?,?,?)""",
+                (int(user_id), resultado["card_id"], resultado["rarity"], minimo, "linhagem"))
+            novo_id = int(cur.lastrowid)
+            await tx.conn.execute(
+                """INSERT INTO cartas_convergencias(user_id,resultado_exemplar_id,receita,sacrificios_json)
+                   VALUES (?,?,?,?)""",
+                (int(user_id), novo_id, str(recipe_id), json.dumps(sacrificios, ensure_ascii=False)))
+            await tx.conn.execute(
+                """INSERT INTO cartas_movimentacoes(user_id,action,card_id,exemplar_id,
+                   rarity_before,rarity_after,power_before,power_after,resource,amount,source)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (int(user_id), "linhagem", resultado["card_id"], novo_id, "Múltipla",
+                 resultado["rarity"], sum(x["power"] for x in sacrificios), minimo,
+                 "fragmentos", custo, str(recipe_id)))
+            return {
+                "status": "ok", "recipe_id": str(recipe_id), "exemplar_id": novo_id,
+                "card_id": resultado["card_id"], "rarity": resultado["rarity"],
+                "power": minimo, "max_power": maximo, "fragmentos_gastos": custo,
+                "sacrificados": ids,
+            }
+
+    async def coliseu_listar_rituais_ancestrais(self, user_id: int):
+        """Lista ritual e exemplares elegíveis disponíveis na coleção do jogador."""
+        from sistemas.rituais_ancestrais import RITUAIS_ANCESTRAIS
+        from sistemas.cartas import get_carta
+        exemplares = await self.coliseu_listar_exemplares(user_id)
+        saida = []
+        for ritual in RITUAIS_ANCESTRAIS.values():
+            slots = []
+            for ingrediente in ritual["ingredientes"]:
+                candidatos = [dict(x) for x in exemplares
+                              if str(x["card_id"]) == ingrediente["card_id"]
+                              and str(x["rarity"]) == ingrediente["rarity"]]
+                card = get_carta(ingrediente["card_id"])
+                slots.append({
+                    "card_id": ingrediente["card_id"],
+                    "name": card.nome if card else ingrediente["card_id"],
+                    "rarity": ingrediente["rarity"],
+                    "available": len(candidatos),
+                    "exemplars": [{"id": int(x["id"]), "power": int(x["power"])} for x in candidatos],
+                })
+            resultado = ritual["resultado"]
+            modelo = get_carta(resultado["card_id"])
+            saida.append({
+                "id": ritual["id"], "name": ritual["nome"], "lore": ritual["lore"],
+                "ingredients": slots,
+                "result": {"card_id": resultado["card_id"],
+                           "name": modelo.nome if modelo else resultado["card_id"],
+                           "rarity": resultado["rarity"]},
+                "fragmentos": int(ritual["fragmentos"]),
+                "ready": all(x["available"] > 0 for x in slots),
+            })
+        return saida
+
+    async def coliseu_executar_ritual_ancestral(self, user_id: int, recipe_id: str, exemplar_ids: list[int]):
+        """Executa uma receita fixa em transação; valida propriedade, deck e saldo no servidor."""
+        import json
+        from sistemas.rituais_ancestrais import RITUAIS_ANCESTRAIS
+        from sistemas.cartas import get_carta, faixa_poder_exemplar
+        receita = RITUAIS_ANCESTRAIS.get(str(recipe_id))
+        if not receita:
+            return {"status": "receita_invalida"}
+        ids = [int(x) for x in exemplar_ids]
+        if len(ids) != 3 or len(set(ids)) != 3:
+            return {"status": "quantidade_invalida", "necessarios": 3}
+        async with self.transaction() as tx:
+            marks = ",".join("?" for _ in ids)
+            rows = await tx._all(
+                f"SELECT * FROM cartas_exemplares WHERE user_id=? AND id IN ({marks}) ORDER BY id",
+                (int(user_id), *ids))
+            if len(rows) != 3:
+                return {"status": "exemplar_nao_encontrado"}
+            if any(int(r["is_sacrificable"] or 0) != 1 or str(r["origin_type"] or "") == "transmutacao" for r in rows):
+                return {"status": "carta_pessoal_protegida"}
+            by_card = {(str(r["card_id"]), str(r["rarity"])): [] for r in rows}
+            for r in rows:
+                by_card.setdefault((str(r["card_id"]), str(r["rarity"])), []).append(r)
+            for need in receita["ingredientes"]:
+                key = (need["card_id"], need["rarity"])
+                if not by_card.get(key):
+                    return {"status": "receita_incompativel", "motivo": "Os três exemplares não correspondem aos ingredientes desta receita."}
+                by_card[key].pop()
+            deck = await tx._one(
+                "SELECT exemplar_ids_json FROM cartas_gwent_decks WHERE user_id=?",
+                (int(user_id),))
+            if deck:
+                try:
+                    equipped = {int(x) for x in json.loads(deck["exemplar_ids_json"] or "[]")}
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    return {"status": "deck_indisponivel"}
+                blocked = sorted(set(ids) & equipped)
+                if blocked:
+                    return {"status": "exemplar_equipado", "exemplares": blocked}
+            custo = int(receita["fragmentos"])
+            saldo = await tx._one("SELECT quantidade FROM cartas_fragmentos WHERE user_id=?", (int(user_id),))
+            atual = int(saldo["quantidade"] or 0) if saldo else 0
+            if atual < custo:
+                return {"status": "fragmentos_insuficientes", "necessarios": custo, "saldo": atual}
+            resultado = receita["resultado"]
+            modelo = get_carta(resultado["card_id"])
+            if modelo is None or str(modelo.categoria).casefold() == "especial":
+                return {"status": "resultado_indisponivel"}
+            minimo, maximo = faixa_poder_exemplar(modelo, resultado["rarity"])
+            sacrificios = [{
+                "exemplar_id": int(r["id"]), "card_id": str(r["card_id"]),
+                "rarity": str(r["rarity"]), "power": int(r["power"]),
+                "source": str(r["source"]),
+            } for r in rows]
+            await tx.conn.execute(
+                f"DELETE FROM cartas_exemplares WHERE user_id=? AND id IN ({marks})",
+                (int(user_id), *ids))
+            await tx.conn.execute(
+                "UPDATE cartas_fragmentos SET quantidade=quantidade-?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?",
+                (custo, int(user_id)))
+            cur = await tx.conn.execute(
+                """INSERT INTO cartas_exemplares(user_id,card_id,rarity,power,source)
+                   VALUES (?,?,?,?,?)""",
+                (int(user_id), resultado["card_id"], resultado["rarity"], minimo, "ritual_ancestral"))
+            novo_id = int(cur.lastrowid)
+            await tx.conn.execute(
+                """INSERT INTO cartas_convergencias(user_id,resultado_exemplar_id,receita,sacrificios_json)
+                   VALUES (?,?,?,?)""",
+                (int(user_id), novo_id, "ritual:" + str(recipe_id), json.dumps(sacrificios, ensure_ascii=False)))
+            await tx.conn.execute(
+                """INSERT INTO cartas_movimentacoes(user_id,action,card_id,exemplar_id,
+                   rarity_before,rarity_after,power_before,power_after,resource,amount,source)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (int(user_id), "ritual_ancestral", resultado["card_id"], novo_id, "Múltipla",
+                 resultado["rarity"], sum(x["power"] for x in sacrificios), minimo,
+                 "fragmentos", custo, str(recipe_id)))
+            return {
+                "status": "ok", "recipe_id": str(recipe_id), "exemplar_id": novo_id,
+                "card_id": resultado["card_id"], "rarity": resultado["rarity"],
+                "power": minimo, "max_power": maximo, "fragmentos_gastos": custo,
+                "sacrificados": ids,
+            }
+
+    async def coliseu_listar_convergencias(self, user_id: int, limit: int = 20):
+        rows = await self._all(
+            """SELECT c.*, e.card_id, e.rarity, e.power
+               FROM cartas_convergencias c
+               LEFT JOIN cartas_exemplares e ON e.id=c.resultado_exemplar_id
+               WHERE c.user_id=? ORDER BY c.id DESC LIMIT ?""",
+            (int(user_id), max(1, min(int(limit), 100))))
+        return [dict(r) for r in rows]
 
     # ---------- Ateliê de artes do Coliseu ----------
     # ---------- Ateliê web: submissão comunitária e arte oficial por modelo ----------

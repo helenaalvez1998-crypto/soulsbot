@@ -6,6 +6,7 @@ coleção, drops e recursos; Mercado, deckbuilding e partidas competitivas acont
 from __future__ import annotations
 
 import os
+import json
 
 import discord
 from discord import app_commands
@@ -28,6 +29,207 @@ def _nome_carta(card_id: str, game_name: str = "") -> str:
             pass
     return str(card_id).replace("_", " ").strip().title() or "Carta desconhecida"
 
+class ConfirmarConvergenciaView(discord.ui.View):
+    def __init__(self, bot, user_id, exemplar_ids, resumo):
+        super().__init__(timeout=120)
+        self.bot, self.user_id = bot, int(user_id)
+        self.exemplar_ids, self.resumo = list(exemplar_ids), resumo
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("Este ritual pertence a outro jogador.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Confirmar sacrifício", emoji="🔥", style=discord.ButtonStyle.danger)
+    async def confirmar(self, interaction, button):
+        resultado = await self.bot.db.coliseu_convergir_exemplares(self.user_id, self.exemplar_ids)
+        status = resultado.get("status")
+        if status == "ok":
+            embed = discord.Embed(
+                title="🔥 Convergência concluída",
+                description=(f"{self.resumo}\\n\\n**Novo exemplar:** #{resultado['exemplar_id']}"
+                             f"\\n**Raridade:** {resultado['rarity']} · **Poder:** {resultado['power']}"
+                             "\\n\\nMemória dos três sacrifícios registrada. Poder não foi transferido."),
+                color=COR_COLISEU)
+            return await interaction.response.edit_message(embed=embed, view=None)
+        mensagens = {
+            "exemplar_equipado": "Um dos exemplares está equipado no deck. Retire-o antes do ritual.",
+            "ritual_especial_necessario": "Esta evolução exige um Ritual Ancestral.",
+            "receita_incompativel": "Receita inválida. Use três exemplares do mesmo modelo e raridade.",
+            "exemplar_nao_encontrado": "Um dos exemplares não está mais disponível.",
+            "deck_indisponivel": "Não foi possível validar o deck. Nenhum exemplar foi consumido.",
+        }
+        await interaction.response.edit_message(content="⛔ " + mensagens.get(status, "Ritual não concluído."), embed=None, view=None)
+
+    @discord.ui.button(label="Cancelar", emoji="↩️", style=discord.ButtonStyle.secondary)
+    async def cancelar(self, interaction, button):
+        await interaction.response.edit_message(content="Ritual cancelado. Nenhum exemplar foi consumido.", embed=None, view=None)
+
+
+class SelecaoConvergencia(discord.ui.Select):
+    def __init__(self, bot, user_id, rows):
+        self.bot, self.user_id = bot, int(user_id)
+        self.rows_by_id = {int(r["id"]): dict(r) for r in rows}
+        options = [discord.SelectOption(
+            label=f"{_nome_carta(r['card_id'])} · {r['rarity']}"[:100],
+            value=str(r["id"]),
+            description=f"Exemplar #{r['id']} · Poder {r['power']}"[:100])
+            for r in rows[:25]]
+        super().__init__(placeholder="Selecione exatamente 3 exemplares", min_values=3, max_values=3, options=options)
+
+    async def callback(self, interaction):
+        escolhidos = [self.rows_by_id[int(x)] for x in self.values]
+        if len({r["card_id"] for r in escolhidos}) != 1 or len({r["rarity"] for r in escolhidos}) != 1:
+            return await interaction.response.send_message("Selecione três exemplares do mesmo modelo e raridade.", ephemeral=True)
+        from sistemas.cartas import RARIDADES
+        raridade = str(escolhidos[0]["rarity"])
+        if raridade not in RARIDADES or RARIDADES.index(raridade)+1 >= len(RARIDADES):
+            return await interaction.response.send_message("Esta raridade exige um Ritual Ancestral.", ephemeral=True)
+        proxima = RARIDADES[RARIDADES.index(raridade)+1]
+        if proxima in ("Primordial", "Singular"):
+            return await interaction.response.send_message("A próxima raridade exige um Ritual Ancestral.", ephemeral=True)
+        nome = _nome_carta(escolhidos[0]["card_id"])
+        resumo = f"**{nome}** · {raridade} → {proxima}\\nSacrificar: " + ", ".join(
+            f"#{r['id']} (Poder {r['power']})" for r in escolhidos)
+        embed = discord.Embed(
+            title="⚠️ Prévia do Ritual de Convergência",
+            description=(resumo + "\\n\\n**Resultado:** 1 exemplar na raridade seguinte, com poder mínimo."
+                         "\\n**Custo:** 3 exemplares. Operação irreversível."
+                         "\\nPoder e lapidação dos sacrificados não são transferidos."),
+            color=0xA33B32)
+        await interaction.response.send_message(
+            embed=embed, view=ConfirmarConvergenciaView(self.bot, self.user_id, [int(x) for x in self.values], resumo),
+            ephemeral=True)
+
+
+class ConvergenciaView(discord.ui.View):
+    def __init__(self, bot, user_id, rows):
+        super().__init__(timeout=180)
+        self.add_item(SelecaoConvergencia(bot, user_id, rows))
+
+
+
+
+
+
+class SelecaoForja(discord.ui.Select):
+    def __init__(self, view, rows):
+        self.parent_view = view
+        self.rows_by_id = {int(r["id"]): dict(r) for r in rows}
+        options = []
+        for r in rows:
+            nome = _nome_carta(r["card_id"])
+            options.append(discord.SelectOption(
+                label=f"{nome} · {r['rarity']}"[:100],
+                value=str(r["id"]),
+                description=f"Exemplar #{r['id']} · Poder {r['power']}"[:100],
+            ))
+        super().__init__(placeholder="Escolha um exemplar para aprimorar", min_values=1, max_values=1, options=options, row=1)
+
+    async def callback(self, interaction):
+        row = self.rows_by_id[int(self.values[0])]
+        self.parent_view.selected = row
+        from sistemas.cartas import CUSTO_APRIMORAMENTO_ALMAS, BONUS_EVOLUCAO_FRAGMENTOS, get_carta, faixa_poder_exemplar
+        card = get_carta(str(row["card_id"]))
+        if card is None or str(card.categoria).casefold() == "especial":
+            return await interaction.response.send_message("Esta carta não pode ser aprimorada na Forja.", ephemeral=True)
+        rarity, power = str(row["rarity"]), int(row["power"] or 0)
+        _, maximum = faixa_poder_exemplar(card, rarity)
+        lap_cost = CUSTO_APRIMORAMENTO_ALMAS.get(rarity)
+        evo_cost = BONUS_EVOLUCAO_FRAGMENTOS.get(rarity)
+        from sistemas.cartas import RARIDADES
+        next_rarity = RARIDADES[RARIDADES.index(rarity)+1] if rarity in RARIDADES and RARIDADES.index(rarity)+1 < len(RARIDADES) else None
+        if next_rarity in ("Primordial", "Singular"):
+            next_rarity = None
+        embed = discord.Embed(
+            title=f"⚒️ Forja · {_nome_carta(row['card_id'])}",
+            description=(f"**Exemplar:** #{row['id']}\n**Raridade:** {rarity}"
+                         f"\n**Poder:** {power}/{maximum}"
+                         f"\n\n**Lapidação:** {('+' + str(1) + ' poder por ' + str(lap_cost) + ' Almas') if lap_cost is not None and power < maximum else 'Indisponível (limite atingido)'}"
+                         f"\n**Ascensão:** {(rarity + ' → ' + next_rarity + ' por ' + str(evo_cost) + ' Fragmentos') if next_rarity and evo_cost is not None else 'Indisponível nesta raridade'}"
+                         "\n\nCada operação afeta somente este exemplar."),
+            color=COR_COLISEU)
+        self.parent_view.lapidar.disabled = lap_cost is None or power >= maximum
+        self.parent_view.ascender.disabled = evo_cost is None or next_rarity is None
+        await interaction.response.edit_message(embed=embed, view=self.parent_view)
+
+
+class ForjaView(discord.ui.View):
+    def __init__(self, bot, user_id, rows):
+        super().__init__(timeout=180)
+        self.bot, self.user_id = bot, int(user_id)
+        self.rows = [dict(r) for r in rows]
+        self.page = 0
+        self.page_size = 25
+        self.selected = None
+        self.selector = SelecaoForja(self, self.rows[:self.page_size])
+        self.add_item(self.selector)
+        self.anterior.disabled = True
+        self.proxima.disabled = len(self.rows) <= self.page_size
+
+    async def _change_page(self, interaction, delta):
+        total_pages = max(1, (len(self.rows) + self.page_size - 1) // self.page_size)
+        self.page = max(0, min(total_pages - 1, self.page + delta))
+        self.selected = None
+        self.lapidar.disabled = True
+        self.ascender.disabled = True
+        if self.selector is not None:
+            self.remove_item(self.selector)
+        start = self.page * self.page_size
+        self.selector = SelecaoForja(self, self.rows[start:start + self.page_size])
+        self.add_item(self.selector)
+        self.anterior.disabled = self.page == 0
+        self.proxima.disabled = self.page >= total_pages - 1
+        await interaction.response.edit_message(
+            content=f"Página **{self.page + 1}/{total_pages}** · {len(self.rows)} exemplares",
+            view=self)
+
+    @discord.ui.button(label="Anterior", emoji="◀️", style=discord.ButtonStyle.secondary, row=0)
+    async def anterior(self, interaction, button):
+        await self._change_page(interaction, -1)
+
+    @discord.ui.button(label="Próxima", emoji="▶️", style=discord.ButtonStyle.secondary, row=0)
+    async def proxima(self, interaction, button):
+        await self._change_page(interaction, 1)
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("Esta Forja pertence a outro jogador.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Lapidar +1", emoji="✦", style=discord.ButtonStyle.primary, row=2, disabled=True)
+    async def lapidar(self, interaction, button):
+        if not self.selected:
+            return await interaction.response.send_message("Selecione um exemplar primeiro.", ephemeral=True)
+        result = await self.bot.db.coliseu_aprimorar_exemplar(self.user_id, int(self.selected["id"]))
+        if result.get("status") == "ok":
+            await interaction.response.edit_message(content=(f"✦ Lapidação concluída no exemplar **#{result['exemplar_id']}**. "
+                f"Poder: **{result['power']}/{result['max_power']}** · Almas gastas: **{result['almas_gastas']}**."), embed=None, view=None)
+        else:
+            messages = {"almas_insuficientes": f"Almas insuficientes: precisa de {result.get('necessarias', '?')}; saldo {result.get('saldo', 0)}.",
+                        "limite_poder_modelo": "Este exemplar já atingiu o poder máximo.",
+                        "carta_especial_nao_aprimora": "Cartas especiais não podem ser lapidadas.",
+                        "nao_encontrado": "Exemplar não encontrado na sua coleção."}
+            await interaction.response.edit_message(content="⛔ " + messages.get(result.get("status"), "Não foi possível lapidar o exemplar."), embed=None, view=None)
+
+    @discord.ui.button(label="Ascender", emoji="⬆️", style=discord.ButtonStyle.success, row=2, disabled=True)
+    async def ascender(self, interaction, button):
+        if not self.selected:
+            return await interaction.response.send_message("Selecione um exemplar primeiro.", ephemeral=True)
+        result = await self.bot.db.coliseu_evoluir_exemplar(self.user_id, int(self.selected["id"]))
+        if result.get("status") == "ok":
+            await interaction.response.edit_message(content=(f"⬆️ Ascensão concluída no exemplar **#{result['exemplar_id']}**. "
+                f"Nova raridade: **{result['rarity']}** · Poder: **{result['power']}** · "
+                f"Fragmentos gastos: **{result['fragmentos_gastos']}**."), embed=None, view=None)
+        else:
+            messages = {"fragmentos_insuficientes": f"Fragmentos insuficientes: precisa de {result.get('necessarios', '?')}; saldo {result.get('saldo', 0)}.",
+                        "limite_raridade": "Este exemplar não pode ascender por esta trilha.",
+                        "carta_especial_nao_evolui": "Cartas especiais não podem ascender.",
+                        "nao_encontrado": "Exemplar não encontrado na sua coleção."}
+            await interaction.response.edit_message(content="⛔ " + messages.get(result.get("status"), "Não foi possível ascender o exemplar."), embed=None, view=None)
+
 
 class PainelJogoView(discord.ui.View):
     def __init__(self, bot: commands.Bot, user_id: int, callback_voltar=None):
@@ -39,6 +241,14 @@ class PainelJogoView(discord.ui.View):
         self.add_item(discord.ui.Button(
             label="Abrir Coliseu no site", emoji="🌐", style=discord.ButtonStyle.link,
             url=f"{base_url}/", row=1,
+        ))
+        self.add_item(discord.ui.Button(
+            label="Forja no site", emoji="⚒️", style=discord.ButtonStyle.link,
+            url=f"{base_url}/forja", row=1,
+        ))
+        self.add_item(discord.ui.Button(
+            label="Receitas de Linhagem", emoji="🜂", style=discord.ButtonStyle.link,
+            url=f"{base_url}/linhagens", row=1,
         ))
         if callback_voltar is not None:
             voltar = discord.ui.Button(label="Voltar aos Jogos", emoji="↩️", style=discord.ButtonStyle.secondary, row=1)
@@ -126,6 +336,48 @@ class PainelJogoView(discord.ui.View):
             f"**MMR:** {ranking['mmr']}"
         )
         await self._mostrar(interaction, "📊 Suas estatísticas", texto)
+
+    @discord.ui.button(label="Forja", emoji="⚒️", style=discord.ButtonStyle.primary, row=2)
+    async def forja(self, interaction: discord.Interaction, button: discord.ui.Button):
+        rows = await self.bot.db.coliseu_listar_exemplares(self.user_id)
+        from sistemas.cartas import get_carta
+        elegiveis = [r for r in rows if (get_carta(str(r["card_id"])) is not None
+                    and str(get_carta(str(r["card_id"])).categoria).casefold() != "especial")]
+        if not elegiveis:
+            return await interaction.response.send_message("Você ainda não possui unidades elegíveis para a Forja.", ephemeral=True)
+        embed = discord.Embed(
+            title="⚒️ Forja das Terras Intermédias",
+            description=("Selecione um exemplar para consultar os custos e limites. "
+                         "Lapidação consome Almas e concede +1 poder; Ascensão consome Fragmentos e eleva a raridade. "
+                         "As operações são individuais e não transferem progresso entre duplicatas."),
+            color=COR_COLISEU)
+        paginas = max(1, (len(elegiveis) + 24) // 25)
+        embed.set_footer(text=f"{len(elegiveis)} exemplares elegíveis · {paginas} página(s)")
+        await interaction.response.send_message(
+            content=f"Página **1/{paginas}** · {len(elegiveis)} exemplares",
+            embed=embed, view=ForjaView(self.bot, self.user_id, elegiveis), ephemeral=True)
+
+    @discord.ui.button(label="Ritual de Convergência", emoji="🔥", style=discord.ButtonStyle.success, row=2)
+    async def convergencia(self, interaction, button):
+        rows = await self.bot.db.coliseu_listar_exemplares(self.user_id)
+        from collections import Counter
+        from sistemas.cartas import get_carta
+        grupos = Counter((str(r["card_id"]), str(r["rarity"])) for r in rows)
+        elegiveis = []
+        for r in rows:
+            modelo = get_carta(str(r["card_id"]))
+            if modelo is not None and str(modelo.categoria).casefold() != "especial" and grupos[(str(r["card_id"]), str(r["rarity"]))] >= 3:
+                elegiveis.append(r)
+        if not elegiveis:
+            return await interaction.response.send_message(
+                "Você ainda não possui três exemplares do mesmo modelo e raridade elegíveis.", ephemeral=True)
+        embed = discord.Embed(
+            title="🔥 Forja · Ritual de Convergência",
+            description=("Selecione três exemplares do mesmo modelo e raridade. "
+                         "Você verá o resultado antes da confirmação. Exemplares equipados no deck serão bloqueados."),
+            color=COR_COLISEU)
+        await interaction.response.send_message(
+            embed=embed, view=ConvergenciaView(self.bot, self.user_id, elegiveis[:25]), ephemeral=True)
 
     @discord.ui.button(label="Atualizar painel", emoji="🔄", style=discord.ButtonStyle.secondary, row=1)
     async def atualizar(self, interaction: discord.Interaction, button: discord.ui.Button):

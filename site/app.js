@@ -488,7 +488,7 @@ async function loadGwentDeck() {
 async function saveGwentDeck() {
   const button = $('#gwent-save-deck'); button.disabled = true; button.textContent = 'Salvando...';
   try {
-    const r = await fetch('/api/gwent/deck', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({cards:gwentDeckIds.map(key => { const card = collection.find(c => c.id === key); return {card_id:card?.card_id || card?.id, exemplar_id:Number(card?.exemplar_id || 0)}; }), faction:$('#gwent-faction').value, leader_id:$('#gwent-leader').value})});
+    const r = await fetch('/api/gwent/deck', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({cards:gwentDeckIds.map(key => { const card = collection.find(c => c.id === key); return {card_id:card?.card_id || card?.id, exemplar_id:Number(card?.exemplar_id || 0)}; }), faction:$('#gwent-faction').value, leader_id:$('#gwent-leader').value, relic_id:$('#gwent-relic-select')?.value || ''})});
     const data = await r.json(); if (!r.ok) throw new Error(data.error || 'Falha ao salvar deck.');
     gwentSavedIds = [...gwentDeckIds]; gwentSavedFaction = $('#gwent-faction').value; gwentSavedLeader = $('#gwent-leader').value;
     $('#gwent-deck-status').textContent = 'Deck, facção e líder salvos. Seu exército está pronto para a arena.';
@@ -636,7 +636,7 @@ function replaceGwentArenaMarkup(arena, markup) {
   if (focused) {
     if (focused.id) focusInfo = {id: focused.id};
     else {
-      const attr = ['data-gwent-swap', 'data-gwent-row', 'data-gwent-play', 'data-gwent-select-card', 'data-gwent-pass', 'data-gwent-leader', 'data-gwent-weather', 'data-gwent-keep', 'data-gwent-mulligan', 'data-gwent-surrender', 'data-gwent-hand-toggle'].find(name => focused.hasAttribute(name));
+      const attr = ['data-gwent-swap', 'data-gwent-row', 'data-gwent-play', 'data-gwent-select-card', 'data-gwent-pass', 'data-gwent-leader', 'data-gwent-weather', 'data-gwent-keep', 'data-gwent-mulligan', 'data-gwent-surrender', 'data-gwent-relic', 'data-gwent-hand-toggle'].find(name => focused.hasAttribute(name));
       if (attr) focusInfo = {attr, value: attr === 'data-gwent-swap' ? focused.value : focused.getAttribute(attr)};
     }
   }
@@ -822,6 +822,7 @@ function renderGwentArena(data) {
         </select></label>
         <button class="gwent-leader-button" data-gwent-leader ${actionDisabled || data.leader_used ? 'disabled' : ''}>USAR LÍDER</button>
         <button class="gwent-weather-button" data-gwent-weather ${actionDisabled || data.weather_used ? 'disabled' : ''}>CLIMA</button>
+        <button class="gwent-leader-button" data-gwent-relic ${actionDisabled || !mine.equipped_relic_id || mine.relic_used ? 'disabled' : ''}>ATIVAR RELÍQUIA</button>
         <button class="gwent-surrender-button" data-gwent-surrender ${data.status !== 'active' ? 'disabled' : ''}>DESISTIR</button>
       </div>
     </div>
@@ -1355,7 +1356,7 @@ document.addEventListener('click', async event => {
       const response = await fetch('/api/gwent/evolve', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({exemplar_id:Number(evolve.dataset.gwentEvolve)})});
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || (result.status === 'fragmentos_insuficientes' ? `Você precisa de ${result.necessarios} fragmentos; possui ${result.saldo}.` : result.status === 'destino_ja_possuido' ? `Você já possui um exemplar ${result.rarity} deste modelo. Lapide esse exemplar ou escolha outra evolução.` : 'Não foi possível evoluir esta carta.'));
-      showNotice(`Carta evoluída para ${result.rarity} · ${result.power} poder.`, 'success');
+      showNotice(`Ascensão concluída: ${result.rarity} · ${result.power}/${result.max_power ?? result.power} poder. O potencial de lapidação foi ampliado.`, 'success');
       await loadAccount(); await loadGwentDeck(); await loadDropHistory();
     } catch (error) { showNotice(error.message, 'error'); evolve.disabled = false; }
   }
@@ -1395,6 +1396,7 @@ document.addEventListener('click', async event => {
   if (event.target.closest('[data-gwent-pass]')) sendGwentAction('pass');
   if (event.target.closest('[data-gwent-leader]')) sendGwentAction('leader', '', $('#gwent-leader-row').value);
   if (event.target.closest('[data-gwent-weather]')) sendGwentAction('weather', '', $('#gwent-leader-row').value);
+  if (event.target.closest('[data-gwent-relic]')) sendGwentAction('relic');
   if (event.target.closest('[data-gwent-surrender]')) {
     if (window.confirm('Tem certeza de que deseja desistir? A vitória será concedida ao adversário.')) sendGwentAction('surrender');
   }
@@ -2032,3 +2034,34 @@ window.addEventListener('resize', () => {
   gwentLastViewportWidth = nextWidth;
   refreshGwentMatch();
 }, {passive:true});
+
+
+/* V20 — Arsenal de Relíquias: pré-seleção persistida no navegador. */
+(() => {
+  const relics = {
+    reliquia_grande_runa_godrick: ['Grande Runa de Godrick','Lendária','Concede +1 de bônus a todas as unidades aliadas em campo.','Grande Runa'],
+    reliquia_runa_nao_nascidos: ['Grande Runa dos Não Nascidos','Lendária','Purifica Geada e Podridão dos aliados e fortalece os purificados.','Grande Runa'],
+    reliquia_runa_morte: ['Runa da Morte','Mítica','Corrói bônus positivos das unidades inimigas em cada fileira.','Grande Runa'],
+    reliquia_noite_chama: ['Espada da Noite e da Chama','Lendária','Escolha entre a postura da Chama ou da Noite para atacar uma fileira inimiga.','Arma lendária'],
+    reliquia_lamina_negra: ['Lâmina Negra','Mítica','Reduz o bônus de uma unidade inimiga; Escudo pode bloquear o golpe.','Arma lendária'],
+    reliquia_algemas_margit: ['Algemas de Margit','Épica','Anula os bônus positivos de uma unidade inimiga.','Artefato']
+  };
+  const select = document.querySelector('#gwent-relic-select');
+  const preview = document.querySelector('#gwent-relic-preview');
+  const status = document.querySelector('#gwent-relic-status');
+  if (!select || !preview) return;
+  const key = 'narabot_gwent_relic_loadout_v20';
+  const render = () => {
+    const relic = relics[select.value];
+    preview.innerHTML = relic
+      ? `<small>${relic[1]} · ${relic[3]}</small><b>${relic[0]}</b><p>${relic[2]}</p><span class="gwent-relic-equipped">PREPARADA</span>`
+      : '<b>Nenhuma Relíquia selecionada</b><p>Você entrará sem Relíquia equipada.</p>';
+    if (status) status.textContent = 'Relíquia selecionada. Salve o deck para registrar a escolha na sua conta.';
+  };
+  try { select.value = localStorage.getItem(key) || ''; } catch (_) {}
+  render();
+  select.addEventListener('change', () => {
+    try { localStorage.setItem(key, select.value); } catch (_) {}
+    render();
+  });
+})();

@@ -402,6 +402,67 @@ def preparar_carta(card: dict) -> dict:
     }
 
 
+
+def preparar_carta_pessoal(definition: dict, exemplar: dict, *, owner_id: int | None = None) -> dict | None:
+    """Prepara uma carta publicada pelo Laboratório para o mesmo motor de batalha.
+
+    A autorização do proprietário é responsabilidade da camada de persistência;
+    esta função valida apenas a definição e o exemplar já resolvidos pelo servidor.
+    """
+    if not isinstance(definition, dict) or not isinstance(exemplar, dict):
+        return None
+    card_id = str(definition.get("card_id") or "")
+    if (not card_id.startswith("transmutacao_") or len(card_id) > 120
+            or definition.get("origem_tipo") != "transmutacao"
+            or definition.get("owner_scoped") is not True
+            or definition.get("is_sacrificable") is not False
+            or definition.get("categoria") != "Unidade"):
+        return None
+    # Quando a camada de persistência fornece os metadados do exemplar,
+    # revalidamos a identidade e a proteção também no limite do motor.
+    if exemplar.get("card_id") not in (None, "", card_id):
+        return None
+    if exemplar.get("origin_type") not in (None, "", "transmutacao"):
+        return None
+    if exemplar.get("is_sacrificable") not in (None, 0, False):
+        return None
+    if owner_id is not None:
+        try:
+            if int(exemplar.get("user_id", -1)) != int(owner_id):
+                return None
+        except (TypeError, ValueError):
+            return None
+    from sistemas.gerador_cartas import validar_definicao_gerada
+    from sistemas.cartas import FAIXA_PODER
+    valid, _errors = validar_definicao_gerada(definition)
+    if not valid:
+        return None
+    rarity = str(exemplar.get("rarity") or definition.get("raridade") or "Comum")
+    try:
+        power = int(exemplar.get("power") or definition.get("poder") or 0)
+        exemplar_id = int(exemplar.get("id") or 0)
+    except (TypeError, ValueError):
+        return None
+    allowed_range = FAIXA_PODER.get(rarity)
+    if rarity in {"Primordial", "Singular"} or not allowed_range or not int(allowed_range[0]) <= power <= int(allowed_range[1]) or exemplar_id <= 0:
+        return None
+    payload = dict(definition)
+    payload.update({
+        "id": str(definition["card_id"]), "nome": str(definition["nome"]),
+        "categoria": "Unidade", "raridade": rarity, "poder": power,
+        "tipo": str(definition["tipo"]), "faccao": str(definition["faccao"]),
+        "fileira": str(definition["fileira"]),
+        "habilidade": str(definition.get("habilidade") or ""),
+        "descricao": str(definition.get("descricao") or ""), "custo": 0,
+    })
+    card = preparar_carta(payload)
+    card["card_id"] = str(definition["card_id"])
+    card["exemplar_id"] = exemplar_id
+    card["id"] = f"{definition['card_id']}::{exemplar_id}"
+    card["personal_card"] = True
+    return card
+
+
 def _faction(cards):
     counts = {kind: 0 for kind in FACTIONS}
     for card in cards:
@@ -426,7 +487,8 @@ def novo_estado(match_id: int, creator_id: int, opponent_id: int, decks: dict[st
         players[uid] = {
             "hand": deck[:10], "draw_pile": deck[10:], "discard": [], "board": [],
             "passed": False, "leader_used": False, "weather_used": False,
-            "faction": faction, "leader_id": leader_id, "leader_name": LEADERS[leader_id]["name"], "faction_boost_used": False,
+            "faction": faction, "leader_id": leader_id, "leader_name": LEADERS[leader_id]["name"],
+            "equipped_relic_id": str(config.get("relic_id") or ""), "relic_used": False, "faction_boost_used": False,
             "mulligan_done": False, "last_row": None, "synergy_used": {}, "baixas": 0,
         }
     return {
@@ -715,6 +777,33 @@ def aplicar_jogada(state: dict, user_id: int, card_id: str | None = None,
     if uid not in state["players"]:
         return {"error": "Você não participa desta partida."}
     player = state["players"][uid]
+
+    # Relíquia equipada é uma carta tática adicional, separada das 12 cartas do deck.
+    # A ação "relic" converte a escolha equipada em uma carta temporária e usa o
+    # mesmo resolvedor de especiais, preservando validações e o limite de uma ativação.
+    if action == "relic":
+        relic_id = str(player.get("equipped_relic_id") or "")
+        if not relic_id:
+            return {"error": "Você não equipou uma Relíquia para esta partida."}
+        if player.get("relic_used"):
+            return {"error": "Sua Relíquia já foi ativada nesta partida."}
+        relic_cards = {
+            "reliquia_grande_runa_godrick", "reliquia_runa_nao_nascidos",
+            "reliquia_runa_morte", "reliquia_noite_chama",
+            "reliquia_lamina_negra", "reliquia_algemas_margit",
+        }
+        if relic_id not in relic_cards:
+            return {"error": "A Relíquia equipada não é válida."}
+        from sistemas.cartas import get_carta
+        relic_model = get_carta(relic_id)
+        if relic_model is None:
+            return {"error": "A carta da Relíquia não está disponível no catálogo."}
+        relic_payload = preparar_carta(relic_model.para_dict())
+        relic_payload["id"] = relic_id
+        relic_payload["especial"] = True
+        player["hand"].append(relic_payload)
+        action = "play"
+        card_id = relic_id
 
     # Rendição pode ser declarada mesmo fora do turno; todas as outras ações
     # continuam protegidas pela validação de turno abaixo.
