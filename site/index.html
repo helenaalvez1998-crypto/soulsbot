@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07080d"><title>NARABOT — Comunidade e Gwent do Coliseu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800;900&family=Cormorant+Garamond:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css?v=gwent-experience-v24">
+<link rel="stylesheet" href="/elden-ui.css?v=v49">
+<script>try{const v=JSON.parse(localStorage.getItem('vis')||'{}'),r=document.documentElement;r.dataset.theme=v.tema||'cinzas';if(/^#[0-9a-f]{6}$/i.test(v.cor||'')){r.style.setProperty('--gold',v.cor);r.style.setProperty('--gold-bright','color-mix(in srgb,'+v.cor+' 70%,#fff)')}}catch(e){}</script>
+
+  <link rel="stylesheet" href="/narabot-visual-v59.css?v=66">
+</head>
+<body>
+<div id="splash"><div><div class="s-fan"><i>⚔</i><i>✦</i><i>⚜</i><i>♜</i><i>☗</i></div><h1>GWENT</h1><p>DO COLISEU</p><div class="s-press">— CLIQUE PARA ENTRAR NA ARENA —</div></div></div>
+<canvas id="embers"></canvas>
+<script>
+(()=>{const sp=document.getElementById('splash');const go=()=>{sp.classList.add('out');setTimeout(()=>sp.remove(),1000);banner('QUE COMECE A BATALHA')};
+const dia=new Date().toDateString();let vis=0;try{vis=localStorage.getItem('sp')===dia}catch(e){}
+if(vis){sp.remove()}else{sp.onclick=()=>{try{localStorage.setItem('sp',dia)}catch(e){};go()};addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')sp.click()},{once:true})}
+function banner(t){const b=document.createElement('div');b.id='turn-banner';b.textContent=t;document.body.appendChild(b);setTimeout(()=>b.remove(),2300)}
+window.gwentBanner=banner;
+// brasas
+const c=document.getElementById('embers'),x=c.getContext('2d');let W,H,P=[];const rs=()=>{W=c.width=innerWidth;H=c.height=innerHeight};rs();addEventListener('resize',rs);
+const mk=()=>({x:Math.random()*W,y:H+10,r:Math.random()*2.2+.6,vy:Math.random()*.9+.3,vx:(Math.random()-.5)*.4,a:Math.random()*.7+.3,p:Math.random()*6});
+for(let i=0;i<60;i++){const p=mk();p.y=Math.random()*H;P.push(p)}
+(function f(){x.clearRect(0,0,W,H);for(const p of P){p.y-=p.vy;p.p+=.03;p.x+=p.vx+Math.sin(p.p)*.3;p.a-=.0015;if(p.y<-10||p.a<=0)Object.assign(p,mk());x.beginPath();x.fillStyle=`rgba(255,${150+p.r*20|0},60,${p.a})`;x.shadowBlur=10;x.shadowColor='#ff9a3c';x.arc(p.x,p.y,p.r,0,6.3);x.fill()}requestAnimationFrame(f)})();
+// clique
+addEventListener('click',e=>{const r=document.createElement('div');r.className='click-ring';r.style.left=e.clientX-6+'px';r.style.top=e.clientY-6+'px';document.body.appendChild(r);setTimeout(()=>r.remove(),600)});
+// tilt 3D
+document.addEventListener('mousemove',e=>{const el=e.target.closest&&e.target.closest('.gwent-unit,.game-card');document.querySelectorAll('.tilt').forEach(t=>{if(t!==el)t.classList.remove('tilt')});if(!el)return;const b=el.getBoundingClientRect(),px=(e.clientX-b.left)/b.width,py=(e.clientY-b.top)/b.height;el.classList.add('tilt');el.style.setProperty('--mx',px*100+'%');el.style.setProperty('--my',py*100+'%');el.style.setProperty('--rx',(.5-py)*16+'deg');el.style.setProperty('--ry',(px-.5)*18+'deg')});
+// raridade + leque da mão
+const R=['primordial','lendária','lendaria','mítica','mitica','singular','épica','epica','rara'];let t;
+const scan=()=>{document.querySelectorAll('.gwent-unit:not([data-r]),.game-card:not([data-r])').forEach(el=>{const s=el.textContent.toLowerCase();const m=R.find(k=>s.includes(k));if(m)el.dataset.r=m.normalize('NFD').replace(/[\u0300-\u036f]/g,'')});document.querySelectorAll('.gwent-hand').forEach(h=>[...h.children].forEach((c,i)=>{c.style.setProperty('--i',i);c.style.animationDelay=i*.05+'s'}));
+document.querySelectorAll('.wallet b').forEach(b=>{if(b.dataset.v!==b.textContent){if(b.dataset.v!==undefined){b.animate([{transform:'scale(1.6)',color:'#fff'},{transform:'scale(1)'}],400)}b.dataset.v=b.textContent}})};
+new MutationObserver(()=>{clearTimeout(t);t=setTimeout(scan,80)}).observe(document.body,{childList:true,subtree:true,characterData:true});scan();
+// banner ao passar/jogar
+document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const s=b.textContent.toLowerCase();if(s.includes('passar'))banner('VOCÊ PASSOU');else if(s.includes('iniciar partida'))banner('DUELO INICIADO');else if(s.includes('abrir'))banner('PACOTE DA FORJA')})
+})();
+</script>
+
+<div class="app">
+  <div class="hud">
+  <div class="brand"><div class="sigil">⚜</div><div><b>NARABOT</b><small>GWENT DO COLISEU</small></div></div>
+  <nav>
+    <button class="nav active" data-tab="home"><i><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11 12 3l9 8M5 10v10h14V10"/></svg></i><span>Início</span></button>
+    <button class="nav" data-tab="community"><i><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6"/></svg></i><span>Comunidade</span></button>
+    <button class="nav" data-tab="arena"><i><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2"/><path d="M9.5 6.5 21 18v3h-3L6.5 9.5"/></svg></i><span>Arena</span><em class="nbadge" id="nb-arena" hidden>!</em></button>
+    <button class="nav" data-tab="deck"><i><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="3" width="13" height="18" rx="2"/><path d="M3 7v12a2 2 0 0 0 2 2"/></svg></i><span>Deck</span><em class="nbadge" id="nb-deck">0/12</em></button>
+    <button class="nav" data-tab="market"><i><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 22 12 12 22 2 12z"/></svg></i><span>Mercado</span></button>
+    <button class="nav" data-tab="catalog"><i><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 17.5h7M17.5 14v7"/></svg></i><span>Catálogo</span></button>
+    <button class="nav" data-tab="atelier"><i><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.7 0 2-1 1.5-2-.6-1.2.2-2.5 1.6-2.5H17a4 4 0 0 0 4-4C21 6.5 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="12" cy="7" r="1"/><circle cx="16.5" cy="9.5" r="1"/></svg></i><span>Ateliê</span></button>
+    <button class="nav" data-tab="portal"><i><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></i><span>Meu Portal</span></button>
+    <button class="nav" data-tab="guide"><i><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5M9 8h6M9 12h6"/></svg></i><span>Guia</span></button>
+    <button class="nav" data-tab="admin" id="nav-admin" hidden><i><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></i><span>Moderação</span></button>
+  </nav>
+  <div class="wallet"><span title="Almas">✦ <b id="souls">—</b></span><span title="Fragmentos">✧ <b id="fragments">—</b></span><span title="Denários">◈ <b id="denarios">—</b></span><span title="XP">⚑ <b id="gwent-xp">—</b></span></div>
+  <button class="vis-btn" id="vis-open" type="button" title="Personalizar visual" aria-label="Personalizar visual">🎨</button>
+  <div class="player"><div class="profile"><div class="avatar">S</div><div><b id="profile-name">Visitante</b><small id="profile-status">Conecte sua conta Discord</small></div></div>
+  <button class="discord-btn" id="login-button">Entrar</button><button class="logout-btn" id="logout-button" hidden>Sair</button></div>
+</div>
+  <main>
+    <div class="screen-title"><small class="eyebrow">O COLISEU AGUARDA</small><h1 id="page-title">Arena</h1></div>
+    <div id="notice" class="notice" role="status">Conecte sua conta Discord para ver seu perfil, ranking e jogar Gwent.</div>
+    <section id="gwent" class="page show">
+  <div class="tab show" id="tab-home" data-title="Início"><section class="hub-hero"><img id="hub-icon" class="hub-icon" alt="" hidden><div class="hub-hero-txt"><small class="eyebrow">BEM-VINDO AO</small><h2 id="hub-server">Servidor</h2><p class="muted">Perfil, ranking, Gwent e a Nara — tudo do seu servidor num só lugar.</p><div class="hub-chips"><span>👥 <b id="hub-members">—</b> membros</span><span><i class="dot on"></i><b id="hub-online">—</b> online no Discord</span><span>🌐 <b id="hub-onsite">—</b> no site</span></div><div class="hub-cta"><a id="hub-invite" class="primary linkbtn" target="_blank" rel="noopener" hidden>Entrar no Discord</a><button class="big gold" data-goto="arena" type="button">⚔ Jogar Gwent</button><button class="big" data-goto="community" type="button">Ver ranking</button><button class="big" data-goto="catalog" type="button">📚 Catálogo</button></div></div></section>
+<div class="hub-grid"><section class="hub-card" id="hub-me"><div class="section-head"><div><small class="eyebrow">SEU PERFIL</small><h3 id="hub-me-name">Visitante</h3></div><b id="hub-me-rank" class="muted"></b></div><div id="hub-me-body"><p class="muted">Entre com Discord para ver seu nível, XP, platinas e posição no ranking.</p></div></section>
+<section class="hub-card"><div class="section-head"><div><small class="eyebrow">PERGUNTE À NARA</small><h3>Dúvidas do servidor</h3></div></div><div id="nara-log" class="nara-log" aria-live="polite"><p class="nara-msg bot">Fale comigo, guerreiro. Pergunte sobre XP, platinas, zerados, cartas ou como o bot funciona.</p></div><form id="nara-form" class="nara-form"><input id="nara-input" maxlength="300" placeholder="Ex.: como ganho cartas?" autocomplete="off"><button class="primary" type="submit">Enviar</button></form></section></div>
+<div class="section-head"><div><small class="eyebrow">DESTAQUES</small><h3>Top 5 do servidor</h3></div><button class="text-btn" data-goto="community" type="button">Ranking completo →</button></div><div class="hub-tops" id="hub-tops"><p class="muted">Entre com Discord para ver o ranking.</p></div>
+<div class="section-head"><div><small class="eyebrow">AO VIVO</small><h3>Atividade recente</h3></div></div><div id="hub-recent" class="hub-recent"><p class="muted">Entre com Discord para ver as conquistas da comunidade.</p></div></div>
+  <div class="tab" id="tab-community" data-title="Comunidade"><div class="section-head"><div><small class="eyebrow">COMUNIDADE</small><h3>Ranking</h3></div><div class="seg" id="rank-seg"><button class="on" data-rank="xp" type="button">XP</button><button data-rank="platinas" type="button">Platinas</button><button data-rank="zerados" type="button">Zerados</button></div></div><div id="rank-podium"></div><div id="rank-list" class="rank-list"><p class="muted">Entre com Discord para ver o ranking.</p></div><div class="section-head"><div><small class="eyebrow">MEMBROS</small><h3>Quem está online</h3></div><input id="players-search" class="deck-search" type="search" placeholder="Buscar membro..." style="max-width:260px;margin:0"></div><div id="players-list" class="players-list"></div></div>
+  <div class="tab" id="tab-arena" data-title="Arena"><div class="stage">
+  <div class="stage-cards"><i>⚔</i><i>✦</i><i>♜</i></div>
+  <div class="stage-center">
+    <div class="stage-emblem"><div class="ring"></div><div class="ring r2"></div><span>⚜</span></div>
+    <small class="eyebrow">ARENA ESTRATÉGICA · MELHOR DE TRÊS</small>
+    <h2>GWENT</h2><p class="stage-sub">DO COLISEU</p>
+    <p class="stage-txt">Monte seu deck, escolha uma facção e lidere suas unidades em três fileiras de combate.</p>
+    <div class="menu-btns"><button class="big gold" data-scroll="challenge-panel">⚔ Jogar</button><button class="big" data-goto="deck">🂠 Montar Deck</button><button class="big" data-goto="market">◈ Mercado</button></div>
+  </div>
+  <div class="stage-cards right"><i>☗</i><i>♛</i><i>✧</i></div>
+</div>
+      <div class="gwent-rules"><span>3 rodadas</span><span>3 fileiras táticas</span><span>12 cartas: mínimo 8 unidades</span><span>Máximo 4 especiais</span><span>Passar encerra suas jogadas na rodada</span><span>2 coroas vencem a partida</span></div>
+      <div class="challenge-panel" id="challenge-panel"><div><small class="eyebrow">DESAFIO</small><h3>Iniciar partida</h3><p class="muted">O adversário precisa ter um deck Gwent salvo.</p></div><div class="challenge-form"><select id="gwent-opponent"><option value="">Carregando jogadores...</option></select><button id="gwent-create-match" class="primary" type="button">Iniciar partida</button></div><section class="gwent-solo-panel"><div><b>Jogar contra a NARA</b><p>Partida solo contra uma IA que usa uma cópia do seu deck, com ordem de compra diferente. Modo treino: não altera MMR nem concede recompensas competitivas.</p></div><button id="gwent-solo-match" class="primary" type="button">⚔ Jogar contra NARA</button></section></div>
+      <div id="gwent-match-list" class="duel-list"></div>
+      <div id="gwent-arena" class="gwent-arena" hidden></div></div>
+  <div class="tab" id="tab-deck" data-title="Deck e Coleção"><div class="gwent-builder"><div><div class="section-head"><div><small class="eyebrow">SEU EXÉRCITO</small><h3>Deck Gwent</h3></div><b id="gwent-deck-count">0/12</b></div><div class="gwent-config"><label>Facção<select id="gwent-faction"><option value="Ordem Áurea">Ordem Áurea</option><option value="Véu Carmesim">Véu Carmesim</option><option value="Lua Negra">Lua Negra</option></select></label><label>Líder<select id="gwent-leader"></select></label><p id="gwent-leader-description" class="muted">O efeito do líder selecionado aparecerá aqui.</p><div id="gwent-leader-card" class="gwent-leader-card-preview" aria-label="Carta visual do líder selecionado"></div><div id="gwent-relic-loadout" class="gwent-relic-loadout">
+  <div class="section-head"><div><small class="eyebrow">ARSENAL</small><h3>Relíquia preparada</h3></div><span class="muted">1 por partida</span></div>
+  <label>Equipar Relíquia
+    <select id="gwent-relic-select">
+      <option value="">Sem Relíquia</option>
+      <option value="reliquia_grande_runa_godrick">Grande Runa de Godrick</option>
+      <option value="reliquia_runa_nao_nascidos">Grande Runa dos Não Nascidos</option>
+      <option value="reliquia_runa_morte">Runa da Morte</option>
+      <option value="reliquia_noite_chama">Espada da Noite e da Chama</option>
+      <option value="reliquia_lamina_negra">Lâmina Negra</option>
+      <option value="reliquia_algemas_margit">Algemas de Margit</option>
+    </select>
+  </label>
+  <article id="gwent-relic-preview" class="gwent-relic-preview"><b>Nenhuma Relíquia selecionada</b><p>Escolha uma peça do arsenal para ver seu efeito.</p></article>
+  <p id="gwent-relic-status" class="muted">A seleção fica salva neste navegador.</p>
+</div><p id="gwent-faction-description" class="muted">Escolha uma facção para definir sua sinergia e seus líderes disponíveis.</p><p class="muted">Cada exemplar aparece separadamente. Você pode escolher a raridade e o poder exatos que deseja usar; o deck aceita apenas um exemplar de cada modelo.</p></div><div id="gwent-deck-selected" class="gwent-deck-selected"></div><button id="gwent-save-deck" class="primary" type="button" disabled>Salvar deck Gwent</button><p id="gwent-deck-status" class="muted">Carregando deck...</p></div><div><div class="section-head"><div><small class="eyebrow">COLEÇÃO</small><h3>Escolha unidades e especiais</h3></div></div><div class="gwent-filters">
+          <input id="gwent-card-search" class="deck-search" type="search" placeholder="Buscar por nome, habilidade ou facção...">
+          <select id="gwent-filter-faction" aria-label="Filtrar por facção"><option value="">Todas as facções</option><option>Ordem Áurea</option><option>Véu Carmesim</option><option>Lua Negra</option></select>
+          <select id="gwent-filter-rarity" aria-label="Filtrar por raridade"><option value="">Todas as raridades</option><option>Comum</option><option>Rara</option><option>Épica</option><option>Lendária</option><option>Mítica</option><option>Primordial</option><option>Singular</option></select>
+        </div><div id="gwent-card-pool" class="gwent-card-pool"></div></div></div>
+      </div>
+  <div class="tab" id="tab-market" data-title="Mercado e Drops"><section class="earn" id="earn-panel"><div class="section-head"><div><small class="eyebrow">CONTRIBUA E GANHE</small><h3>Como ganhar cartas</h3></div><span class="muted">Contribuições aprovadas rendem cartas</span></div><ul class="earn-grid"><li class="earn-z"><i>🏆</i><div><b>Jogo zerado</b><span>Registre no painel de Zerados do Discord</span></div></li><li class="earn-p"><i>💎</i><div><b>Platina</b><span>Envie no painel de Platinas</span></div></li><li class="earn-s"><i>⚔</i><div><b>Run Soulslike</b><span>Conclua um desafio e ganhe até carta Singular</span></div></li><li class="earn-m"><i>🔧</i><div><b>Mod</b><span>Envie um mod ao catálogo e ganhe após aprovação</span></div></li><li class="earn-t"><i>🎮</i><div><b>Port de jogo</b><span>Compartilhe um port; a moderação aprova e a carta é sua</span></div></li><li class="earn-a"><i>🎨</i><div><b>Arte de carta</b><span>Ilustre uma carta no Ateliê — vira arte oficial com seu crédito</span></div></li></ul><p class="earn-note">Ganhou carta? O bot avisa no canal do Coliseu para toda a comunidade ver. <button class="earn-go" data-goto="atelier">Ir ao Ateliê</button></p></section><div class="market-cols"><section class="gwent-store gwent-drop-info">
+        <div class="section-head"><div><small class="eyebrow">MERCADO E RECOMPENSAS</small><h3>Mercado do Coliseu</h3></div><span id="gwent-store-wallet" class="muted">Carregando saldo...</span></div>
+        <div class="gwent-store-grid">
+          <article class="gwent-store-card gwent-pack-card"><div class="store-seal">✦</div><div><small class="eyebrow">PACOTE DA FORJA</small><h4>Pacote de 3 cartas</h4><p>Receba três cartas aleatórias diretamente na coleção. As raridades seguem a tabela global; após 10 cartas comuns consecutivas, a próxima recebe proteção de raridade.</p><small id="gwent-pack-limit" class="muted">Limite de 3 pacotes a cada 24 horas.</small></div><button id="gwent-open-pack" class="primary" type="button">Abrir por 120 Denários</button></article>
+          <article class="gwent-store-card"><div class="store-seal">✧</div><div><small class="eyebrow">ATIVIDADES APROVADAS</small><h4>Drops adicionais</h4><p>Zerados, platinas, runs Soulslike e contribuições aprovadas também podem conceder cartas sem custo. Drops e pacotes compartilham a coleção.</p></div></article>
+          <article class="gwent-store-card"><div class="store-seal">⚔</div><div><small class="eyebrow">DUPLICATAS E EVOLUÇÃO</small><h4>Recursos para fortalecer cartas</h4><p>Duplicatas podem gerar Almas ou fragmentos. Use fragmentos para evoluir exemplares e Almas para lapidar seu poder, respeitando os limites de cada modelo.</p></div></article>
+        </div>
+        <p id="gwent-store-status" class="muted" role="status">Entre com Discord para consultar o mercado.</p>
+        <div id="gwent-pack-results" class="gwent-pack-results" aria-live="polite"></div>
+      </section>
+      <section class="gwent-drop-history">
+        <div class="section-head"><div><small class="eyebrow">REGISTRO DE RECOMPENSAS</small><h3>Últimos drops</h3></div><span class="muted">Histórico pessoal</span></div>
+        <div id="gwent-drop-history" class="gwent-drop-history-list"><p class="muted">Conecte sua conta para consultar seus drops.</p></div>
+      </section>
+      </div></div>
+  <div class="tab" id="tab-catalog" data-title="Catálogo"><div class="section-head"><div><small class="eyebrow">BIBLIOTECA DA COMUNIDADE</small><h3>Jogos e Mods</h3></div><div class="seg" id="cat-seg"><button class="on" data-kind="ports" type="button">Jogos / Ports</button><button data-kind="mods" type="button">Mods</button></div></div>
+<div class="cat-bar"><input id="cat-search" class="deck-search" type="search" placeholder="Buscar por nome, jogo, plataforma..." autocomplete="off"><span id="cat-count" class="muted"></span></div>
+<div id="cat-grid" class="cat-grid"><p class="muted">Carregando catálogo...</p></div>
+<details class="cat-suggest" id="cat-suggest"><summary>＋ Sugerir um item ao catálogo</summary><div class="cat-form"><label>Jogo<input id="cs-game" maxlength="100" placeholder="Nome do jogo"></label><label id="cs-name-l">Nome do item<input id="cs-name" maxlength="120" placeholder="Nome do mod ou do port"></label><label id="cs-plat-l">Plataforma<input id="cs-plat" maxlength="40" placeholder="PC, Android, PS2..."></label><label class="wide">Link (http/https)<input id="cs-link" maxlength="500" placeholder="https://..."></label><label class="wide">Descrição<textarea id="cs-desc" rows="3" maxlength="1000" placeholder="O que é, versão, como instalar..."></textarea></label><button class="primary" id="cs-send" type="button">Enviar para aprovação</button><small class="muted">Itens enviados passam pela moderação. Até 3 pendentes por categoria.</small></div></details></div>
+  <div class="tab" id="tab-atelier" data-title="Ateliê"><section class="atelier-panel" id="atelier-panel">
+  <div class="section-head"><div><small class="eyebrow">CRIAÇÃO COMUNITÁRIA</small><h3>Ateliê de Cartas</h3></div><span class="muted">Uma arte oficial por modelo</span></div>
+  <p class="muted">Siga os três passos: escolha a carta, gere o prompt para sua ferramenta de IA e envie a ilustração para análise. Após aprovação, a arte aparece para todos os jogadores.</p>
+  <div class="atelier-steps">
+    <div class="atelier-col"><div class="atl-num">1</div><h4>Escolha a carta</h4>
+      <label>Carta da sua coleção<select id="atelier-card"><option value="">Carregando coleção...</option></select></label>
+      <div id="atelier-official-art" class="atelier-official-art"><p class="muted">Selecione uma carta para verificar se ela já possui arte oficial comunitária.</p></div>
+      <button class="secondary" id="atelier-generate-prompt" type="button">Gerar prompt individual</button></div>
+    <div class="atelier-col"><div class="atl-num">2</div><h4>Copie o prompt</h4>
+      <label>Prompt de arte (EN)<textarea id="atelier-prompt" rows="14" readonly placeholder="Selecione uma carta e gere o prompt."></textarea></label>
+      <button class="secondary" id="atelier-copy-prompt" type="button" disabled>Copiar prompt</button>
+      <small class="muted">Cole em sua ferramenta de geração de imagens preferida.</small></div>
+    <div class="atelier-col"><div class="atl-num">3</div><h4>Envie a arte</h4>
+      <label>Crédito do artista<input id="atelier-artist-name" type="text" maxlength="80" placeholder="Nome artístico ou apelido"></label>
+      <label>Ilustração (PNG, JPG ou WEBP)<input id="atelier-image" type="file" accept="image/png,image/jpeg,image/webp"></label>
+      <img id="atelier-preview" class="atelier-preview" alt="Prévia da arte enviada" hidden>
+      <button class="primary" id="atelier-submit" type="button" disabled>Enviar para aprovação</button>
+      <small class="muted">Mínimo 512 × 512, máximo 8 MB. Até 3 pendentes por conta.</small></div>
+  </div>
+  <div class="atelier-lower"><div><h4>Minhas submissões</h4><div id="atelier-history" class="atelier-history"><p class="muted">Entre com Discord para consultar.</p></div></div>
+  <div id="atelier-review-panel" hidden><h4>Fila de aprovação</h4><div id="atelier-review-queue" class="atelier-history"></div></div></div>
+</section></div>
+  <div class="tab" id="tab-portal" data-title="Meu Portal"><div class="pt-nav"><button class="pt-pill on" data-p="profile" type="button">👤 Perfil</button><button class="pt-pill" data-p="sanctuary" type="button">🏛 Santuário</button><button class="pt-pill" data-p="store" type="button">🛒 Loja</button><button class="pt-pill" data-p="submit" type="button">📤 Envios</button><button class="pt-pill" data-p="contrib" type="button">✍ Contribuições</button><button class="pt-pill" data-p="notif" type="button">🔔 Notificações</button></div>
+<section class="pt-pane" data-p="profile" id="pt-profile"></section><section class="pt-pane" data-p="sanctuary" id="pt-sanctuary" hidden></section><section class="pt-pane" data-p="store" id="pt-store" hidden></section>
+<section class="pt-pane" data-p="submit" hidden><div id="pt-submit-login"></div><div id="pt-submit-body" hidden><div class="section-head"><div><small class="eyebrow">REGISTRE SUAS CONQUISTAS</small><h3>Novo envio</h3></div><div class="seg" id="pt-kind"><button class="on" data-k="platina" type="button">Platina</button><button data-k="zerado" type="button">Jogo zerado</button><button data-k="run" type="button">Run Soulslike</button></div></div><div class="pt-card" id="pt-form"></div><div id="pt-mine"></div></div></section>
+<section class="pt-pane" data-p="contrib" hidden><div class="section-head"><div><small class="eyebrow">COMUNIDADE</small><h3>Guias, lore e ideias</h3></div><div class="seg" id="pt-cfilter"><button class="on" data-f="approved" type="button">Publicadas</button><button data-f="mine" type="button">Minhas</button><button data-f="fav" type="button">Favoritas</button></div></div><div id="pt-contrib-list"></div><details class="cat-suggest"><summary>＋ Enviar uma contribuição</summary><div id="pt-cform"></div></details></section>
+<section class="pt-pane" data-p="notif" id="pt-notif" hidden></section></div>
+  <div class="tab" id="tab-admin" data-title="Moderação"><div class="pt-nav"><button class="pt-pill on" data-p="queue" type="button">✅ Fila de aprovação</button><button class="pt-pill" data-p="news" type="button">📰 Notícias RSS</button></div><section class="pt-pane" data-p="queue" id="ad-queue"></section><section class="pt-pane" data-p="news" id="ad-news" hidden></section></div>
+  <div class="tab" id="tab-guide" data-title="Guia"><div style="text-align:center;margin:0 0 18px"><button class="big tour-again" type="button">▶ Ver tutorial guiado</button></div><section class="sec-title reveal"><small class="eyebrow">ESCOLHA SEU DESTINO</small><h2>As Três Facções</h2></section>
+      <div class="factions reveal"><article class="faction-card f1" data-s="⚔"><h3>Ordem Áurea</h3><p>Luz, Lei e Fé. Juramentos, proteção, escudos e formação disciplinada.</p></article><article class="faction-card f2" data-s="血"><h3>Véu Carmesim</h3><p>Sangue, Sacrifício e Heresia. Sangramento, rituais e poder obtido pelo custo dos aliados.</p></article><article class="faction-card f3" data-s="☾"><h3>Lua Negra</h3><p>Magia, Cosmos e Segredos. Feitiçarias lunares, gravidade, congelamento e controle do campo.</p></article></div>
+      <section class="sec-title reveal"><small class="eyebrow">GUIA DO GUERREIRO</small><h2>Como Jogar</h2></section>
+      <div class="steps reveal"><div class="step"><h4>Monte o Deck</h4><p>12 cartas: no mínimo 8 unidades e até 4 especiais. Escolha um líder e, se desejar, prepare uma Relíquia.</p></div><div class="step"><h4>Desafie</h4><p>Escolha um rival com deck salvo e inicie o duelo.</p></div><div class="step"><h4>Domine as Fileiras</h4><p>Jogue cartas e supere o poder do adversário na rodada.</p></div><div class="step"><h4>Conquiste 2 Coroas</h4><p>Vença duas das três rodadas e leve glória e recompensas.</p></div></div>
+      <section class="sec-title reveal"><small class="eyebrow">COMPÊNDIO DE COMBATE</small><h2>Biblioteca de Efeitos</h2><p class="muted">Efeitos cadastrados no catálogo de cartas. O texto abaixo é derivado das definições do jogo; não inclui habilidades que ainda não estejam no catálogo.</p></section>
+      <div class="effect-library reveal"><section class="effect-group"><div class="effect-group-head"><h3>Habilidades de unidade</h3><span>21 efeitos</span></div><div class="effect-grid"><article class="effect-card"><span class="effect-code">PRIMEIRA LUZ</span><h4>Graça Dourada</h4><p>Recebe +1 de poder ao entrar na primeira rodada.</p></article><article class="effect-card"><span class="effect-code">RETALIACAO</span><h4>Retaliação dos Semideuses</h4><p>Recebe +1 de poder quando sua pontuação está abaixo da rival.</p></article><article class="effect-card"><span class="effect-code">IMPETO</span><h4>Ímpeto do Lorde</h4><p>Recebe +1 de poder quando sua pontuação está acima da rival.</p></article><article class="effect-card"><span class="effect-code">ULTIMO FOLEGO</span><h4>Último Suspiro</h4><p>Recebe +1 de poder na terceira rodada.</p></article><article class="effect-card"><span class="effect-code">CONTRAGOLPE</span><h4>Contragolpe</h4><p>Recebe +2 de poder quando sua pontuação está abaixo da rival.</p></article><article class="effect-card"><span class="effect-code">ENCADEAMENTO</span><h4>Postura Encadeada</h4><p>Recebe +2 ao jogar na mesma fileira da sua unidade anterior.</p></article><article class="effect-card"><span class="effect-code">ADAPTACAO</span><h4>Passo do Peregrino</h4><p>Recebe +1 ao jogar em uma fileira diferente da sua última unidade.</p></article><article class="effect-card"><span class="effect-code">SANGUE FRIO</span><h4>Concentração</h4><p>Recebe +2 quando as pontuações atuais estão empatadas.</p></article><article class="effect-card"><span class="effect-code">INSTINTO</span><h4>Instinto de Caçador</h4><p>Recebe +2 quando sua pontuação está abaixo da rival.</p></article><article class="effect-card"><span class="effect-code">PRECISAO</span><h4>Mira Cariana</h4><p>Recebe +1 ao entrar na fileira de longa distância.</p></article><article class="effect-card"><span class="effect-code">DRENAGEM</span><h4>Selo Enfraquecedor</h4><p>Reduz em 1 o bônus de todas as unidades inimigas, até o limite de -2.</p></article><article class="effect-card"><span class="effect-code">CACADOR ARCANO</span><h4>Caçador de Feitiços</h4><p>Recebe +1 se o adversário controlar uma unidade da Lua Negra ou qualquer unidade com bônus positivo.</p></article><article class="effect-card"><span class="effect-code">QUEBRA RITMO</span><h4>Ruptura de Postura</h4><p>Recebe +1 se o adversário jogou na mesma fileira em seu último turno.</p></article><article class="effect-card"><span class="effect-code">GUARDIAO FILEIRA</span><h4>Guardião da Fileira</h4><p>+1 para cada outra unidade sua na mesma fileira, até +3.</p></article><article class="effect-card"><span class="effect-code">CACADOR SOLITARIO</span><h4>Caçador Solitário</h4><p>+2 se não houver outra unidade sua na fileira.</p></article><article class="effect-card"><span class="effect-code">ESTANDARTE</span><h4>Estandarte</h4><p>Concede +1 às outras unidades aliadas da mesma fileira.</p></article><article class="effect-card"><span class="effect-code">RESISTENCIA CLIMATICA</span><h4>Resistência Climática</h4><p>Ignora até 2 pontos de penalidade climática; sem clima ativo ao entrar, recebe +1.</p></article><article class="effect-card"><span class="effect-code">ECO ARCANO</span><h4>Eco Arcano</h4><p>+2 se você tiver uma carta especial no descarte.</p></article><article class="effect-card"><span class="effect-code">DUPLA FORNALHA</span><h4>Pacto da Fornalha</h4><p>+2 se houver outra unidade de Força na mesma fileira.</p></article><article class="effect-card"><span class="effect-code">IRMANDADE VEU</span><h4>Formação do Véu</h4><p>+2 se houver uma unidade de Destreza em outra fileira.</p></article><article class="effect-card"><span class="effect-code">CIRCULO ARCANO</span><h4>Círculo de Ressonância</h4><p>+2 se houver Magia aliada na mesma fileira ou especial no descarte.</p></article></div></section><section class="effect-group"><div class="effect-group-head"><h3>Efeitos de ciclo de vida</h3><span>6 efeitos</span></div><div class="effect-grid"><article class="effect-card"><span class="effect-code">VINGANCA</span><h4>Vingança</h4><p>Ao cair, concede +1 às unidades aliadas da mesma fileira.</p></article><article class="effect-card"><span class="effect-code">ESCUDO FERRO</span><h4>Escudo de Ferro</h4><p>Entra com escudo: ignora a primeira remoção sofrida.</p></article><article class="effect-card"><span class="effect-code">RESSURGIR</span><h4>Ressurgir</h4><p>Se houver uma unidade elegível, traz do descarte a mais forte com poder base 5 ou menos diretamente ao campo.</p></article><article class="effect-card"><span class="effect-code">DEVORAR</span><h4>Devorar</h4><p>Ao entrar, consome a unidade aliada de menor poder efetivo na mesma fileira e recebe bônus igual ao poder dela, até +4.</p></article><article class="effect-card"><span class="effect-code">SOBREVIVENTE</span><h4>Sobrevivente</h4><p>Ao fim da rodada, permanece no campo (a mais forte, se houver várias).</p></article><article class="effect-card"><span class="effect-code">ESPOLIOS</span><h4>Espólios</h4><p>Se você vencer a rodada com ela em campo, compra uma carta.</p></article></div></section><section class="effect-group"><div class="effect-group-head"><h3>Cartas especiais</h3><span>20 efeitos</span></div><div class="effect-grid"><article class="effect-card"><span class="effect-code">GWENT NEVOA</span><h4>Névoa de Sellia</h4><p>Aplica clima -2 à fileira escolhida: todas as unidades nela perdem 2 de poder efetivo até o fim da rodada.</p></article><article class="effect-card"><span class="effect-code">GWENT GEADA</span><h4>Lua Gélida</h4><p>Aplica clima -1 às três fileiras: todas as unidades nelas perdem 1 de poder efetivo até o fim da rodada.</p></article><article class="effect-card"><span class="effect-code">GWENT CHUVA</span><h4>Chuva de Estrelas</h4><p>Aplica clima -2 à fileira de cerco: todas as unidades nela perdem 2 de poder efetivo até o fim da rodada.</p></article><article class="effect-card"><span class="effect-code">GWENT CHIFRE</span><h4>Rugido de Godfrey</h4><p>Concede +2 às suas unidades na fileira escolhida até o fim da rodada.</p></article><article class="effect-card"><span class="effect-code">GWENT MEDICO</span><h4>Lágrima Sagrada</h4><p>Devolve à sua mão uma unidade do seu descarte com poder-base 4 ou menos; você pode escolher o alvo.</p></article><article class="effect-card"><span class="effect-code">GWENT QUEIMA</span><h4>Chama Negra</h4><p>Tenta remover a unidade de maior poder efetivo de cada lado; um escudo pode bloquear cada remoção.</p></article><article class="effect-card"><span class="effect-code">GWENT PURIFICAR</span><h4>Lei da Regressão</h4><p>Remove todos os efeitos climáticos.</p></article><article class="effect-card"><span class="effect-code">GWENT EXECUCAO</span><h4>Lâmina da Morte Destinada</h4><p>Remove uma unidade inimiga escolhida da fileira selecionada se ela tiver poder efetivo 6 ou menos; um escudo pode bloquear a remoção.</p></article><article class="effect-card"><span class="effect-code">GWENT VINCULO</span><h4>Juramento do Crisol</h4><p>Se houver ao menos duas unidades aliadas na fileira escolhida, concede +2 a todas elas até o fim da rodada.</p></article><article class="effect-card"><span class="effect-code">GWENT BATEDOR</span><h4>Passo do Cão de Caça</h4><p>Compra uma carta da reserva, se disponível.</p></article><article class="effect-card"><span class="effect-code">GWENT MURALHA</span><h4>Bastião de Leyndell</h4><p>Concede +1 às suas unidades na fileira escolhida até o fim da rodada.</p></article><article class="effect-card"><span class="effect-code">GWENT EGIDE</span><h4>Bênção da Árvore Áurea</h4><p>Concede escudo a uma unidade sua.</p></article><article class="effect-card"><span class="effect-code">GWENT REQUIEM</span><h4>Chamado dos Mortos</h4><p>Traz do descarte diretamente ao campo uma unidade com poder base 6 ou menos.</p></article><article class="effect-card"><span class="effect-code">GWENT PASSO</span><h4>Passo do Lobo</h4><p>Move uma unidade sua para a fileira escolhida.</p></article><article class="effect-card"><span class="effect-code">GWENT SANGRAMENTO</span><h4>Sangramento</h4><p>Marca as unidades inimigas da fileira; a segunda marca reduz o bônus em 2 (mínimo -2) e consome as marcas. Marcas expiram no fim da rodada.</p></article><article class="effect-card"><span class="effect-code">GWENT GEADA CARIANA</span><h4>Geada Cariana</h4><p>Aplica até duas marcas às unidades inimigas da fileira escolhida; cada marca reduz 1 de poder efetivo até o fim da rodada.</p></article><article class="effect-card"><span class="effect-code">GWENT PODRIDA</span><h4>Podridão Escarlate</h4><p>Cada marca reduz 1 de poder efetivo; a segunda também corrói 1 ponto de bônus positivo, se houver. Marcas expiram no fim da rodada.</p></article><article class="effect-card"><span class="effect-code">GWENT LOUCURA</span><h4>Loucura Frenética</h4><p>Cada marca reduz 1 de poder efetivo; a segunda remove todos os bônus positivos da unidade. Marcas expiram no fim da rodada.</p></article><article class="effect-card"><span class="effect-code">GWENT CHAMA</span><h4>Chama do Gigante</h4><p>Remove Geada de todas as suas unidades; cada unidade purificada recebe +1 de poder até o fim da rodada.</p></article><article class="effect-card"><span class="effect-code">GWENT INVOCACAO</span><h4>Cinzas dos Lobos Solitários</h4><p>Invoca Lobos Espirituais com 3 de poder na fileira escolhida.</p></article></div></section><section class="effect-group"><div class="effect-group-head"><h3>Efeitos Primordiais</h3><span>5 efeitos</span></div><div class="effect-grid"><article class="effect-card"><span class="effect-code">LEI PRIMEVA</span><h4>Lei Primeva</h4><p>Recebe +2 de poder ao entrar na primeira rodada.</p></article><article class="effect-card"><span class="effect-code">DECRETO SOBERANO</span><h4>Decreto Soberano</h4><p>Reduz em 2 o bônus de todas as unidades inimigas, até o limite de -2.</p></article><article class="effect-card"><span class="effect-code">OLHO TEMPESTADE</span><h4>Olho da Tempestade</h4><p>Recebe +2 quando sua fileira estiver sob efeito climático.</p></article><article class="effect-card"><span class="effect-code">FOME ABISMO</span><h4>Fome do Abismo</h4><p>Recebe +2 quando sua pontuação está abaixo da rival.</p></article><article class="effect-card"><span class="effect-code">PARADOXO ETERNO</span><h4>Paradoxo Eterno</h4><p>Recebe +2 na terceira rodada se o adversário venceu a segunda.</p></article></div></section></div>
+      <section class="sec-title reveal"><small class="eyebrow">SPOILS DA ARENA</small><h2>Recompensas</h2></section>
+      <div class="rewards-strip reveal"><div class="reward-chip"><span>✦</span>Almas</div><div class="reward-chip"><span>✧</span>Fragmentos</div><div class="reward-chip"><span>◈</span>Denários</div><div class="reward-chip"><span>🂠</span>Cartas Raras</div><div class="reward-chip"><span>♛</span>Ranking MMR</div></div>
+      </div>
+</section>
+    <footer>NARABOT · GWENT DO COLISEU <span>Jogo principal · conectado ao servidor oficial</span></footer>
+  </main>
+</div>
+<script src="/app.js?v=gwent-experience-v66" defer></script>
+<script>
+(()=>{const io=new IntersectionObserver(e=>e.forEach(x=>{if(x.isIntersecting){x.target.classList.add('in');io.unobserve(x.target)}}),{threshold:.12});
+const sc=()=>document.querySelectorAll('.reveal:not(.in),.gwent-store,.atelier-panel,.gwent-drop-history,.challenge-panel').forEach(el=>{if(!el.dataset.o){el.dataset.o=1;el.classList.add('reveal');io.observe(el)}});sc();
+const ps=document.getElementById('profile-status'),pf=document.querySelector('.profile');new MutationObserver(()=>pf.classList.toggle('online',!/conecte/i.test(ps.textContent))).observe(ps,{childList:true,characterData:true,subtree:true})})();
+</script>
+<script>
+(()=>{const tabs=[...document.querySelectorAll('.tab')],navs=[...document.querySelectorAll('.nav[data-tab]')],T=document.getElementById('page-title');
+function show(n,push){const t=document.getElementById('tab-'+n);if(!t)return;tabs.forEach(x=>x.classList.toggle('show',x===t));navs.forEach(b=>b.classList.toggle('active',b.dataset.tab===n));T.textContent=t.dataset.title;t.querySelectorAll('.reveal').forEach(e=>e.classList.add('in'));if(push)history.replaceState(null,'','#'+n);if(!document.body.classList.contains('gwent-match-active'))scrollTo({top:0,behavior:'smooth'});if(window.gwentBanner&&push&&n==='arena')0}
+navs.forEach(b=>b.onclick=()=>show(b.dataset.tab,1));
+document.addEventListener('click',e=>{const g=e.target.closest('[data-goto]');if(g)show(g.dataset.goto,1);const c=e.target.closest('[data-scroll]');if(c){const t=document.getElementById(c.dataset.scroll);t&&t.scrollIntoView({behavior:'smooth',block:'center'})}});
+const h=location.hash.slice(1);if(h)show(h);
+const ar=document.getElementById('gwent-arena'),nb=document.getElementById('nb-arena');
+new MutationObserver(()=>{const on=!ar.hidden;nb.hidden=!on;if(on&&!ar.dataset.seen){ar.dataset.seen=1;show('arena',1);if(!document.body.classList.contains('gwent-match-active'))ar.scrollIntoView({behavior:'smooth'})}if(!on)delete ar.dataset.seen}).observe(ar,{attributes:true,attributeFilter:['hidden']});
+const dc=document.getElementById('gwent-deck-count'),nd=document.getElementById('nb-deck');new MutationObserver(()=>{nd.textContent=dc.textContent}).observe(dc,{childList:true,characterData:true,subtree:true});
+})();
+</script>
+<script>
+/* ===== Página de detalhes da carta ===== */
+(()=>{
+const RAR=['Comum','Rara','Épica','Lendária','Mítica','Primordial','Singular'];
+const EVO={Comum:20,Rara:40,'Épica':80,'Lendária':160},UPG={Comum:10,Rara:20,'Épica':40,'Lendária':80,'Mítica':150,'Primordial':250};
+const RC={comum:'#b9a888',rara:'#6fb4ee',epica:'#b07af0',lendaria:'#ffd36b',mitica:'#ff6fb4',primordial:'#ffb84d',singular:'#6ff5e1'};
+const key=r=>String(r||'Comum').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const E=v=>escapeHTML(v==null?'':v),N=v=>number(v);
+const fmt=s=>{try{return new Date(s).toLocaleString('pt-BR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}catch(e){return s||''}};
+const SRC={zerado:'Jogo zerado',platina:'Platina',run:'Run Soulslike',comunidade:'Comunidade',port:'Port enviado',mod:'Mod enviado',boas_vindas:'Boas-vindas',patente:'Patente',feito_singular:'Feito especial',pacote:'Pacote da Forja',loja:'Mercado'};
+let list=[],idx=0,ov=null,hist=null;
+
+function build(){ov=document.createElement('div');ov.id='cd';ov.hidden=true;ov.innerHTML='<div class="cd-back"></div><div class="cd-shell" role="dialog" aria-modal="true"><button class="cd-x" aria-label="Fechar">✕</button><button class="cd-nav prev" aria-label="Anterior">‹</button><button class="cd-nav next" aria-label="Próxima">›</button><div class="cd-body"></div></div>';document.body.appendChild(ov);
+ov.querySelector('.cd-back').onclick=ov.querySelector('.cd-x').onclick=close;ov.querySelector('.prev').onclick=()=>go(-1);ov.querySelector('.next').onclick=()=>go(1)}
+function close(){if(!ov)return;ov.hidden=true;document.body.style.overflow=''}
+function go(d){if(list.length<2)return;idx=(idx+d+list.length)%list.length;render()}
+
+function open(card,pool){if(!ov)build();list=pool&&pool.length?pool:[card];idx=Math.max(0,list.findIndex(c=>c===card||(c.exemplar_id&&c.exemplar_id===card.exemplar_id)));if(idx<0){list=[card];idx=0}
+ov.hidden=false;document.body.style.overflow='hidden';hist=null;render();
+fetch('/api/gwent/drops/history',{credentials:'same-origin',cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{hist=d||{history:[],movements:[]};if(!ov.hidden)renderHistory()}).catch(()=>{hist={history:[],movements:[]};if(!ov.hidden)renderHistory()})}
+
+function render(){const c=list[idx],rk=key(c.raridade),esp=c.categoria==='Especial'||c.especial,pw=Number(c.poder||0),mx=Number(c.max_power||pw||0);
+ov.style.setProperty('--rc',RC[rk]||RC.comum);ov.dataset.r=rk;
+ov.querySelector('.prev').hidden=ov.querySelector('.next').hidden=list.length<2;
+const seg=Array.from({length:Math.max(15,mx)},(_,i)=>`<i class="${i<pw?'on':i<mx?'pot':''}"></i>`).join('');
+const rarityPot=Number.isFinite(Number(c.potencia_raridade))?Number(c.potencia_raridade):RAR.indexOf(c.raridade);
+const ri=RAR.indexOf(c.raridade),ladder=RAR.map((r,i)=>`<li class="${i<ri?'done':i===ri?'now':''}" style="--c:${RC[key(r)]}"><span>${i<ri?'✓':i===ri?'◆':'◇'}</span><b>${r}</b>${EVO[r]&&i===ri?`<small>→ ${RAR[i+1]} · ${EVO[r]} fragmentos</small>`:''}</li>`).join('');
+const chips=[c.faccao||c.tipo,c.row_label||c.fileira,c.papel_gwent,c.categoria,c.custo!=null?`Custo ${N(c.custo)}`:''].filter(Boolean).map(x=>`<span>${E(x)}</span>`).join('');
+const syn=(c.sinergias||[]).map(s=>`<span class="syn">${E(String(s).replaceAll('_',' '))}</span>`).join('');
+const combos=(c.combos_compativeis||[]).map(x=>`<li><b>${E(x.nome)}</b><small>${E(x.descricao)}</small></li>`).join('');
+const canEvo=c.exemplar_id&&!esp&&EVO[c.raridade],canUp=c.exemplar_id&&!esp&&UPG[c.raridade]&&pw<mx;
+ov.querySelector('.cd-body').innerHTML=`
+<div class="cd-art"><div class="cd-frame"><img class="cd-card-art" src="${E(imageUrl(c))}" alt="${E(c.nome)}" decoding="async"><div class="cd-shine"></div></div><div class="cd-plate">${E(c.nome)}</div><small class="cd-ex">${c.exemplar_id?`Exemplar #${N(c.exemplar_id)}`:'Carta'} · ${idx+1} / ${list.length}</small></div>
+<div class="cd-info">
+ <small class="eyebrow">${E(c.arquetipo_faccao||c.faccao||'Gwent do Coliseu')}</small>
+ <h2>${E(c.nome)}</h2>
+ <div class="cd-rar"><span class="cd-badge">${E(c.raridade||'Comum')}</span>${chips}</div>
+ <section class="cd-power"><div class="cd-pcol"><small>PODER ATUAL</small><strong>${esp?'—':N(pw)}</strong></div><div class="cd-pmid">${esp?'<p class="muted">Carta especial: efeito tático, sem poder próprio.</p>':`<div class="cd-seg">${seg}</div><small>${pw>=mx?'Poder máximo atingido':`Faltam ${N(mx-pw)} para o máximo`}${UPG[c.raridade]&&pw<mx?` · lapidar +1 = ${UPG[c.raridade]} Almas`:''}</small>`}</div><div class="cd-pcol"><small>PODER MÁXIMO</small><strong>${esp?'—':N(mx)}</strong></div></section>
+ <section class="cd-box cd-rarity-power"><h4>Potência da raridade</h4><strong>${rarityPot} / 6</strong><p>Amplia a eficácia de habilidades conforme as regras de cada efeito. Não é poder-base, não aumenta diretamente o ataque e não substitui o poder efetivo em combate.</p></section>
+ <section class="cd-box"><h4>Habilidade</h4><div class="cd-skill"><b>${E(c.habilidade_nome||'Sem habilidade')}</b><p>${E(c.habilidade_texto||'Sem efeito adicional.')}</p></div>${c.descricao&&c.descricao!==c.habilidade_texto?`<blockquote>${E(c.descricao)}</blockquote>`:''}${c.arquetipo_descricao?`<small class="muted">${E(c.arquetipo_descricao)}</small>`:''}</section>
+ ${syn||combos?`<section class="cd-box"><h4>Sinergias</h4>${syn?`<div class="cd-syns">${syn}</div>`:''}${combos?`<ul class="cd-combos">${combos}</ul>`:''}</section>`:''}
+ <section class="cd-box"><h4>Caminho de raridade</h4><ol class="cd-ladder">${ladder}</ol></section>
+ <section class="cd-box"><h4>Histórico do exemplar</h4><div id="cd-hist" class="cd-hist"><p class="muted">Carregando histórico…</p></div></section>
+ <div class="cd-actions">${canEvo?`<button class="primary" data-gwent-evolve="${E(c.exemplar_id)}">⬆ Evoluir · ${EVO[c.raridade]} fragmentos</button>`:''}${canUp?`<button class="secondary" data-gwent-upgrade="${E(c.exemplar_id)}">✦ Lapidar +1 · ${UPG[c.raridade]} Almas</button>`:''}<button class="secondary cd-close2">Fechar</button></div>
+</div>`;
+ov.querySelector('.cd-close2').onclick=close;
+// A miniatura aparece primeiro; a imagem HD só a substitui depois de carregar.
+const artImg=ov.querySelector('.cd-card-art');
+if(artImg){
+ const hdUrl=new URL(imageUrl(c),window.location.origin);
+ if(hdUrl.pathname.includes('/api/gwent/cards/')){
+   hdUrl.searchParams.delete('thumb');
+   hdUrl.searchParams.set('detail','1');
+   hdUrl.searchParams.set('v','21');
+   const hd=new Image(); hd.decoding='async';
+   hd.onload=()=>{ if(ov && !ov.hidden && list[idx]===c) artImg.src=hdUrl.pathname+hdUrl.search; };
+   hd.onerror=()=>{};
+   hd.src=hdUrl.pathname+hdUrl.search;
+ }
+}
+const fr=ov.querySelector('.cd-frame');fr.onmousemove=e=>{const b=fr.getBoundingClientRect(),px=(e.clientX-b.left)/b.width,py=(e.clientY-b.top)/b.height;fr.style.setProperty('--mx',px*100+'%');fr.style.setProperty('--my',py*100+'%');fr.style.transform=`perspective(900px) rotateX(${(.5-py)*14}deg) rotateY(${(px-.5)*16}deg)`};fr.onmouseleave=()=>{fr.style.transform=''};
+ov.querySelector('.cd-body').scrollTop=0;if(hist)renderHistory()}
+
+function renderHistory(){const el=document.getElementById('cd-hist');if(!el)return;const c=list[idx],id=Number(c.exemplar_id||0);
+const mv=(hist.movements||[]).filter(m=>id&&Number(m.exemplar_id)===id).map(m=>m.action==='evolucao'?{t:m.created_at,i:'⬆',h:'Evoluída',d:`${m.rarity_before} → ${m.rarity_after}`,s:`-${N(m.amount)} fragmentos`}:{t:m.created_at,i:'✦',h:'Lapidada',d:`${N(m.power_before)} → ${N(m.power_after)} poder`,s:`-${N(m.amount)} Almas`}),
+dr=(hist.history||[]).filter(h=>id&&Number(h.exemplar_id)===id).map(h=>({t:h.created_at,i:'🂠',h:'Obtida',d:`${h.rarity||c.raridade||''}${h.power?` · ${N(h.power)} poder`:''}`,s:SRC[h.origin]||(h.origin?String(h.origin).replaceAll('_',' '):'Atividade')}));
+let ev=[...mv,...dr].sort((a,b)=>String(a.t||'').localeCompare(String(b.t||'')));
+if(!dr.length&&c.source)ev.unshift({t:'',i:'🂠',h:'Obtida',d:c.raridade||'',s:SRC[c.source]||String(c.source).replaceAll('_',' ')});
+el.innerHTML=ev.length?`<ol class="cd-tl">${ev.map(x=>`<li><span>${x.i}</span><div><b>${E(x.h)}</b><small>${E(x.d)}${x.s?' · '+E(x.s):''}</small>${x.t?`<em>${E(fmt(x.t))}</em>`:''}</div></li>`).join('')}</ol>`:'<p class="muted">Nenhuma evolução ou lapidação ainda — esta carta está no estado original.</p>'}
+
+function resolve(el){const t=el.textContent||'',m=t.match(/Exemplar #(\d+)/);let c=m&&collection.find(x=>Number(x.exemplar_id)===Number(m[1]));
+if(!c){const n=(el.querySelector('b')||{}).textContent;c=collection.find(x=>x.nome&&n&&x.nome.trim()===n.trim())||collection.find(x=>x.nome&&t.includes(x.nome))}
+if(!c){const img=el.querySelector('img'),n=(el.querySelector('b')||{}).textContent||'Carta';c={nome:n,image_url:img&&img.src,raridade:(t.match(/Comum|Rara|Épica|Lendária|Mítica|Primordial|Singular/)||['Comum'])[0],poder:(t.match(/(\d+) poder/)||[0,0])[1],max_power:(t.match(/(\d+) poder/)||[0,0])[1]}}return c}
+document.addEventListener('click',e=>{if(e.target.closest('button,select,input,label,a,textarea')||e.target.closest('#cd'))return;const el=e.target.closest('#gwent-card-pool .gwent-unit, #gwent-deck-selected .gwent-unit');if(!el)return;
+let pool=null;const host=el.closest('#gwent-card-pool,#gwent-deck-selected');if(host){pool=[...host.querySelectorAll('.gwent-unit')].map(resolve)}
+const c=resolve(el);open(c,pool)});
+document.addEventListener('keydown',e=>{if(!ov||ov.hidden)return;if(e.key==='Escape')close();else if(e.key==='ArrowLeft')go(-1);else if(e.key==='ArrowRight')go(1)});
+document.addEventListener('click',e=>{if(e.target.closest('#cd [data-gwent-evolve],#cd [data-gwent-upgrade]'))setTimeout(close,250)});
+window.openCardDetail=open;
+})();
+</script>
+<script>
+(()=>{const n=document.getElementById('notice');if(n){let busy=0;const f=()=>{if(busy)return;busy=1;const t=n.textContent;if(/entre com sua conta/i.test(t)&&!n.querySelector('a.nl')){const a=document.createElement('a');a.className='nl';a.href='/auth/discord/login';a.textContent='Entrar com Discord';a.title='Entre para montar deck, abrir pacotes e jogar partidas';n.appendChild(a)}busy=0};new MutationObserver(f).observe(n,{childList:true,characterData:true,subtree:true});f()}
+let to;const mark=()=>document.querySelectorAll('main p,main span,main small').forEach(e=>{if(e.children.length)return;e.classList.toggle('is-loading',/^carregando/i.test(e.textContent.trim()))});
+new MutationObserver(()=>{clearTimeout(to);to=setTimeout(mark,100)}).observe(document.body,{childList:true,subtree:true,characterData:true});mark()})();
+</script>
+<script>
+/* Tutorial guiado: abre na 1ª visita e pelo botão "Ver tutorial" (Guia) */
+(()=>{const S=[
+{t:'arena',s:'.menu-btns .gold',h:'Jogar',p:'Aqui começa o duelo. Escolha um rival com deck salvo e inicie a partida: melhor de 3 rodadas, vence quem ganhar 2 coroas.'},
+{t:'deck',s:'.gwent-config',h:'Monte seu deck',p:'Escolha a facção e o líder, depois monte 12 cartas: no mínimo 8 unidades e até 4 especiais. Salve para poder jogar.'},
+{t:'deck',s:'#gwent-card-pool',h:'Sua coleção',p:'Todas as suas cartas aparecem aqui. Use a busca e os filtros de facção e raridade; clique numa carta para ver detalhes.'},
+{t:'market',s:'#earn-panel',h:'Ganhe cartas contribuindo',p:'Jogos zerados, platinas, runs, mods e ports aprovados rendem cartas. O bot avisa a comunidade quando você ganha.'},
+{t:'market',s:'.gwent-pack-card',h:'Pacotes da Forja',p:'Gaste Denários para abrir pacotes de 3 cartas. Há proteção de raridade após várias comuns seguidas.'},
+{t:'atelier',s:'.atelier-steps',h:'Ateliê',p:'Crie a arte oficial de uma carta em 3 passos e receba o crédito para todos verem.'}];
+let i=0,dim,box;const $=s=>document.querySelector(s);
+const tab=n=>{const b=document.querySelector('.nav[data-tab="'+n+'"]');if(b&&!b.classList.contains('active'))b.click();const t=document.getElementById('tab-'+n);t&&t.querySelectorAll('.reveal').forEach(e=>e.classList.add('in'))};
+function end(){try{localStorage.setItem('tour','1')}catch(e){}dim&&dim.remove();box&&box.remove();dim=box=null;scrollTo({top:0})}
+function step(){const d=S[i];tab(d.t);setTimeout(()=>{const el=$(d.s);if(!el){if(++i<S.length)return step();return end()}
+el.scrollIntoView({block:'center',behavior:'instant'});const r=el.getBoundingClientRect(),m=6;
+Object.assign(dim.style,{left:r.left-m+'px',top:r.top-m+'px',width:r.width+2*m+'px',height:r.height+2*m+'px'});
+box.innerHTML='<b>'+d.h+'</b><p>'+d.p+'</p><div class="tb"><em>'+(i+1)+' / '+S.length+'</em><button data-a="x">Pular</button><button class="go" data-a="n">'+(i==S.length-1?'Concluir':'Próximo')+'</button></div>';
+const bw=Math.min(340,innerWidth-24),below=r.bottom+m+14,top=below+170<innerHeight?below:Math.max(12,r.top-m-14-170);
+box.style.left=Math.max(12,Math.min(innerWidth-bw-12,r.left+r.width/2-bw/2))+'px';box.style.top=top+'px'},350)}
+function start(){end();i=0;dim=document.createElement('div');dim.id='tour-dim';box=document.createElement('div');box.id='tour-box';box.setAttribute('role','dialog');
+box.onclick=e=>{const a=e.target.dataset&&e.target.dataset.a;if(a==='x')end();if(a==='n'){if(++i>=S.length)end();else step()}};
+addEventListener('keydown',e=>{if(box&&e.key==='Escape')end()});document.body.append(dim,box);step()}
+window.startTour=start;
+document.addEventListener('click',e=>{if(e.target.closest('.tour-again'))start()});
+let seen=0;try{seen=localStorage.getItem('tour')}catch(e){}
+if(!seen){const w=setInterval(()=>{if(!document.getElementById('splash')){clearInterval(w);setTimeout(start,1600)}},400)}
+})();
+</script>
+</body></html>
