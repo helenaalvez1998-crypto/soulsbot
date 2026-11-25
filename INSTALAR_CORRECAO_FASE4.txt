@@ -1,0 +1,14 @@
+CORREÇÃO DE INSTALAÇÃO — NARA FASE 4
+
+Este pacote é um PATCH com caminhos relativos à RAIZ DO PROJETO.
+
+1. Faça backup da pasta do projeto e do banco SQLite.
+2. Abra a pasta real em que está o bot.py que é executado pelo serviço.
+3. Extraia o conteúdo deste ZIP DIRETAMENTE nessa pasta, permitindo substituir arquivos.
+4. Confirme que os caminhos ficaram assim: bot.py, site/index.html, site/app.js, site_portal.py e cogs/portal_role_panel.py.
+5. Não deixe os arquivos dentro de outra pasta narabot-main/narabot-main.
+6. Reinicie o processo do bot (não basta atualizar o navegador).
+7. Abra o site com Ctrl+F5 ou janela anônima e entre com Discord.
+8. A aba Administração exige conta com permissão de administrador/gerenciar servidor ou cargo de moderação configurado.
+
+O site é servido a partir de Path(__file__).resolve().parent / 'site', no mesmo diretório do bot.py ativo. Se você atualizar outra cópia do projeto, o site em produção continuará igual.
