@@ -1021,7 +1021,7 @@ class NaraBot(commands.Bot):
         owned = await self.db.coliseu_listar_colecao(user_id)
         game_by_id = {str(r["card_id"]): str(r["game_name"] or "") for r in owned}
         from sistemas.cartas import get_carta, carta_de_jogo_por_id, CUSTO_RARIDADE, faixa_poder_exemplar, VERSAO_ARTES
-        from sistemas.gwent import preparar_carta
+        from sistemas.gwent import preparar_carta, RARITY_EFFECT_BUDGET
         cards = []
         for index, card_id in enumerate(ids):
             exemplar_id = int(exemplar_ids[index]) if index < len(exemplar_ids) and exemplar_ids[index] else 0
@@ -1037,6 +1037,7 @@ class NaraBot(commands.Bot):
             if record and str(card_id).startswith("transmutacao_"):
                 personal = await self._gwent_generated_card_payload(user_id, str(card_id), record)
                 if personal:
+                    personal["potencia_raridade"] = int(RARITY_EFFECT_BUDGET.get(str(personal.get("raridade", "Comum")), 0))
                     cards.append(personal)
                 continue
             card = get_carta(str(card_id))
@@ -1056,6 +1057,7 @@ class NaraBot(commands.Bot):
                 item["exemplar_id"] = int(record["id"])
                 item["id"] = f"{card_id}::{int(record['id'])}"
                 item["max_power"] = faixa_poder_exemplar(card, rarity)[1]
+                item["potencia_raridade"] = int(RARITY_EFFECT_BUDGET.get(rarity, 0))
                 item["image_url"] = (
                     f"/api/gwent/cards/{quote(card_id, safe='')}/image"
                     f"?exemplar_id={int(record['id'])}&v={VERSAO_ARTES}"
@@ -1807,7 +1809,7 @@ class NaraBot(commands.Bot):
             await self._gwent_prepare_user(user_id)
             await self._gwent_sync_patents(user_id)
             from sistemas.cartas import get_carta, carta_de_jogo_por_id, CUSTO_RARIDADE, faixa_poder_exemplar, VERSAO_ARTES
-            from sistemas.gwent import preparar_carta
+            from sistemas.gwent import preparar_carta, RARITY_EFFECT_BUDGET
             estado = await self.db.coliseu_estado_usuario(user_id)
             owned_rows = await self.db.coliseu_listar_colecao(user_id)
             game_by_id = {str(r["card_id"]): str(r["game_name"] or "") for r in owned_rows}
@@ -1821,6 +1823,8 @@ class NaraBot(commands.Bot):
                         personal["exemplares"] = 1
                         personal["source"] = str(record["source"] or "transmutacao")
                         personal["max_power"] = int(personal["poder"])
+                        from sistemas.gwent import RARITY_EFFECT_BUDGET
+                        personal["potencia_raridade"] = int(RARITY_EFFECT_BUDGET.get(str(personal.get("raridade", "Comum")), 0))
                         personal["image_url"] = (
                             f"/api/gwent/cards/{quote(card_id, safe='')}/image"
                             f"?exemplar_id={int(record['id'])}&v=transmutacao-v36"
@@ -1847,6 +1851,7 @@ class NaraBot(commands.Bot):
                 item["exemplares"] = 1
                 item["source"] = str(record["source"] or "")
                 item["max_power"] = faixa_poder_exemplar(card, rarity)[1]
+                item["potencia_raridade"] = int(RARITY_EFFECT_BUDGET.get(rarity, 0))
                 item["image_url"] = (
                     f"/api/gwent/cards/{quote(card_id, safe='')}/image"
                     f"?exemplar_id={int(record['id'])}&v={VERSAO_ARTES}"

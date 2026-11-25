@@ -263,8 +263,11 @@ class EldenGwentReworkTests(unittest.TestCase):
     def test_rarity_bonus_is_bounded_and_visible_in_card_text(self):
         mythic = gwent.preparar_carta({**self.catalog["gwent_especial_chifre"], "raridade": "Mítica"})
         singular = gwent.preparar_carta({**self.catalog["gwent_especial_chifre"], "raridade": "Singular"})
-        self.assertEqual(mythic["potencia_raridade"], 2)
-        self.assertEqual(singular["potencia_raridade"], 3)
+        self.assertEqual(mythic["potencia_raridade"], 4)
+        self.assertEqual(singular["potencia_raridade"], 6)
+        values = [gwent.RARITY_EFFECT_BUDGET[r] for r in
+                  ("Comum", "Rara", "Épica", "Lendária", "Mítica", "Primordial", "Singular")]
+        self.assertEqual(values, list(range(7)))
         self.assertIn("Potência Mítica", mythic["habilidade_texto"])
 
 

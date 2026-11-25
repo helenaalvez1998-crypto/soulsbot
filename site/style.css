@@ -4952,3 +4952,265 @@ body.gwent-match-active .gwent-row.has-entering {
 .gwent-relic-preview small{color:#c6a86b;text-transform:uppercase;letter-spacing:.08em}
 .gwent-relic-preview p{margin:0;color:var(--muted,#aaa);line-height:1.45}
 .gwent-relic-equipped{justify-self:start;padding:4px 8px;border-radius:4px;background:rgba(177,137,62,.18);color:#d9b96e;font-size:.7rem;letter-spacing:.1em}
+
+
+/* ==========================================================
+   V51 — SISTEMA DE CARTAS / INSÍGNIAS DO COLISEU
+   Componentes semânticos: facção, raridade, fileira e habilidade.
+   ========================================================== */
+:root {
+  --v51-gold: #c6a66b;
+  --v51-gold-soft: rgba(198,166,107,.18);
+  --v51-ink: #100f13;
+  --v51-panel: #1a171d;
+  --v51-line: rgba(198,166,107,.36);
+  --v51-text: #eee7d9;
+  --v51-muted: #b5a99a;
+  --v51-crimson: #9d3f4b;
+  --v51-moon: #7776a8;
+  --v51-verdigris: #788e71;
+}
+.gwent-unit.v51-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--v51-line) !important;
+  border-radius: 12px !important;
+  background:
+    linear-gradient(155deg, rgba(198,166,107,.10), transparent 32%),
+    linear-gradient(180deg, #211c23 0%, #100f13 100%) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,.34), inset 0 0 0 1px rgba(255,255,255,.025);
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.gwent-unit.v51-card:hover {
+  border-color: rgba(224,194,133,.82) !important;
+  box-shadow: 0 14px 32px rgba(0,0,0,.48), 0 0 0 1px rgba(198,166,107,.16);
+}
+.gwent-unit.v51-card > img {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 420 / 620;
+  object-fit: contain;
+  background: #0d0b10;
+  border-radius: 8px 8px 0 0;
+}
+.v51-card-topline {
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--v51-line);
+  background: linear-gradient(90deg, rgba(30,25,31,.98), rgba(16,15,19,.96));
+  color: var(--v51-text);
+  font: 700 10px/1.2 system-ui, sans-serif;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+.v51-card-topline span, .v51-card-bottomline span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.v51-card-topline i, .v51-card-bottomline i {
+  display: inline-grid;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 1px solid rgba(198,166,107,.45);
+  border-radius: 50%;
+  color: #e1c58d;
+  background: rgba(198,166,107,.10);
+  font: 700 11px/1 Georgia, serif;
+  font-style: normal;
+}
+.v51-card-faction {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.v51-card-rarity {
+  flex: 0 0 auto;
+  color: #e5c98f;
+  white-space: nowrap;
+}
+.gwent-unit.v51-card[data-r="lendaria"] .v51-card-rarity,
+.gwent-unit.v51-card[data-r="lendária"] .v51-card-rarity { color: #f1cf7b; }
+.gwent-unit.v51-card[data-r="mitica"] .v51-card-rarity,
+.gwent-unit.v51-card[data-r="mítica"] .v51-card-rarity { color: #d7a2ed; }
+.gwent-unit.v51-card[data-r="primordial"] .v51-card-rarity { color: #ffb78a; }
+.v51-card-bottomline {
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(0,1fr);
+  gap: 5px;
+  padding: 7px 8px 8px;
+  border-top: 1px solid rgba(198,166,107,.24);
+  background: rgba(13,12,16,.96);
+  color: var(--v51-muted);
+  font: 600 10px/1.35 system-ui, sans-serif;
+}
+.v51-card-bottomline span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.v51-card-bottomline .v51-card-ability { color: #e8d8b5; }
+.v51-card-bottomline .v51-no-ability { color: #aaa29a; }
+.gwent-unit.v51-card > b {
+  display: block;
+  padding: 8px 9px 2px;
+  color: var(--v51-text);
+  font: 700 13px/1.25 Georgia, serif;
+  text-align: left;
+}
+.gwent-unit.v51-card > small {
+  display: block;
+  padding: 3px 9px 8px;
+  color: var(--v51-muted);
+  font: 500 10px/1.4 system-ui, sans-serif;
+}
+.gwent-unit.v51-card > button {
+  margin: 4px 8px 8px;
+  border: 1px solid var(--v51-line);
+  border-radius: 7px;
+  background: rgba(198,166,107,.12);
+  color: var(--v51-text);
+  font-weight: 700;
+}
+.gwent-unit.v51-card > button:hover:not(:disabled) {
+  border-color: var(--v51-gold);
+  background: rgba(198,166,107,.22);
+}
+@media (max-width: 640px) {
+  .v51-card-topline { padding: 5px 6px; font-size: 9px; }
+  .v51-card-bottomline { padding: 6px; font-size: 9px; }
+  .v51-card-topline i, .v51-card-bottomline i { flex-basis: 16px; width: 16px; height: 16px; }
+  .gwent-unit.v51-card > b { padding: 6px 7px 2px; font-size: 11px; }
+  .gwent-unit.v51-card > small { padding: 2px 7px 6px; font-size: 9px; }
+}
+
+.v51-inspection-tags span { display:inline-flex; align-items:center; gap:6px; }
+.v51-inspection-tags i {
+ display:inline-grid; width:19px; height:19px; place-items:center;
+ border:1px solid var(--v51-line); border-radius:50%;
+ color:#e1c58d; background:var(--v51-gold-soft);
+ font:700 11px Georgia,serif; font-style:normal;
+}
+
+
+/* ==========================================================
+   V52 — IDENTIDADES DISTINTAS: ESPECIAIS, LÍDERES E RELÍQUIAS
+   ========================================================== */
+.v51-card-special {
+  border-color: rgba(148,119,190,.62) !important;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(125,91,168,.23), transparent 54%),
+    linear-gradient(180deg,#211a2a 0%,#100e15 100%) !important;
+}
+.v51-special-banner {
+  display:flex; justify-content:space-between; align-items:center; gap:8px;
+  padding:8px 9px;
+  color:#eadcf8;
+  border-top:1px solid rgba(179,145,218,.55);
+  border-bottom:1px solid rgba(179,145,218,.32);
+  background:linear-gradient(90deg,rgba(83,57,112,.72),rgba(29,22,39,.96));
+  font:800 10px/1.2 system-ui,sans-serif; letter-spacing:.08em;
+}
+.v51-special-banner span:first-child {display:inline-flex;align-items:center;gap:6px}
+.v51-special-banner i {
+ display:grid;place-items:center;width:19px;height:19px;border-radius:50%;
+ border:1px solid rgba(210,180,244,.65);background:rgba(177,139,220,.16);
+ color:#e4caff;font:700 13px Georgia,serif;font-style:normal;
+}
+.v51-card-bottomline.v51-special-effect {
+ min-height:48px;align-content:center;
+ background:linear-gradient(90deg,rgba(46,34,58,.96),rgba(13,12,17,.98));
+}
+.v51-card-bottomline.v51-special-effect span {white-space:normal;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.v51-card-bottomline.v51-special-effect i {
+ border-color:rgba(179,145,218,.55);color:#e4caff;background:rgba(141,104,185,.16);
+}
+.v52-leader-card {
+ position:relative;overflow:hidden;
+ border:1px solid rgba(207,176,111,.72) !important;
+ border-radius:14px !important;
+ box-shadow:0 16px 40px rgba(0,0,0,.48),inset 0 0 0 2px rgba(207,176,111,.10);
+}
+.v52-leader-card::before {
+ content:"";position:absolute;inset:7px;z-index:1;pointer-events:none;
+ border:1px solid rgba(226,202,153,.42);border-radius:9px;
+}
+.v52-leader-card .leader-relic-sigil {
+ display:grid;place-items:center;width:44px;height:44px;margin:0 auto 10px;
+ border:1px solid rgba(225,197,133,.75);border-radius:50%;
+ background:rgba(12,10,13,.78);color:#f0d59b;
+ box-shadow:0 0 24px rgba(207,176,111,.18);
+ font:26px Georgia,serif;
+}
+.v52-leader-card small,.v52-leader-card strong,.v52-leader-card p,.v52-leader-card em {
+ position:relative;z-index:2;
+}
+.v52-leader-card strong {text-shadow:0 2px 12px #000,0 0 18px rgba(0,0,0,.8)}
+.v52-leader-card p {max-width:34ch;text-shadow:0 2px 8px #000}
+.v52-leader-card em {
+ display:inline-block;margin-top:12px;padding:6px 10px;
+ border:1px solid rgba(225,197,133,.5);border-radius:20px;
+ background:rgba(12,10,13,.76);color:#e8d3a7;
+ font:800 9px/1 system-ui,sans-serif;letter-spacing:.12em;
+}
+#gwent-relic-preview {
+ position:relative;overflow:hidden;
+ border:1px solid rgba(201,164,99,.64) !important;
+ border-radius:12px !important;
+ background:
+  radial-gradient(circle at 50% 0%,rgba(201,164,99,.2),transparent 55%),
+  linear-gradient(155deg,#262018,#100e10 75%) !important;
+ box-shadow:inset 0 0 0 1px rgba(255,255,255,.025),0 10px 28px rgba(0,0,0,.3);
+}
+.v52-relic-seal {
+ display:flex;align-items:center;justify-content:center;gap:9px;
+ margin-bottom:10px;color:#e6c98d;
+ font:800 10px/1.2 system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;
+}
+.v52-relic-seal i {
+ display:grid;place-items:center;width:38px;height:38px;
+ border:1px solid rgba(218,185,119,.7);border-radius:50%;
+ background:rgba(202,163,93,.12);font:22px Georgia,serif;font-style:normal;
+ box-shadow:0 0 18px rgba(202,163,93,.12);
+}
+#gwent-relic-preview > small {color:#d7bc87;letter-spacing:.08em;text-transform:uppercase}
+#gwent-relic-preview > b {display:block;color:#f1e4c9;font:700 18px/1.25 Georgia,serif}
+#gwent-relic-preview > p {color:#c5b9a8;line-height:1.55}
+#gwent-relic-preview .gwent-relic-equipped {
+ display:inline-block;padding:6px 10px;border:1px solid rgba(201,164,99,.55);
+ border-radius:20px;background:rgba(201,164,99,.12);color:#e8cf9c;
+ font:800 9px/1 system-ui,sans-serif;letter-spacing:.12em;
+}
+@media(max-width:640px) {
+ .v51-special-banner {padding:6px;font-size:9px}
+ .v52-leader-card::before {inset:5px}
+ #gwent-relic-preview > b {font-size:16px}
+}
+
+
+/* V54 — potência de raridade separada do poder-base */
+.v54-card-rarity-line{display:flex;align-items:center;justify-content:space-between;gap:5px;padding:5px 8px;background:linear-gradient(90deg,rgba(190,155,96,.13),rgba(20,17,22,.3));border-bottom:1px solid rgba(190,155,96,.22);color:#d8c39d;font-size:10px;line-height:1.25}
+.v54-card-rarity-line small{color:#a99a84;font-size:9px;text-align:right}
+.v54-rarity-power{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;font-weight:800;letter-spacing:.025em;color:#efd49b}
+.v54-rarity-power i{font-style:normal;color:#f5c96e}
+.cd-rarity-power{border-color:rgba(205,169,104,.45)!important;background:linear-gradient(135deg,rgba(117,82,38,.2),rgba(22,18,23,.8))!important}
+.cd-rarity-power>strong{display:inline-block;font:800 25px Georgia,serif;color:#f0d49b}
+.cd-rarity-power p{margin:6px 0 0;color:#bcb0a0;font-size:13px;line-height:1.5}
+
+.gwent-board-card-stats{grid-template-columns:repeat(4,minmax(0,1fr))}.gwent-board-card-stats .gwent-rarity-potency{border-color:rgba(205,169,104,.52);background:linear-gradient(145deg,rgba(76,55,29,.75),rgba(23,17,12,.94))}.gwent-board-card-stats .gwent-rarity-potency strong{color:#efd49b}
+@media(max-width:560px){.gwent-board-card-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}

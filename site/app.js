@@ -16,6 +16,42 @@ const imageUrl = (card) => {
 };
 const cardImageMarkup = (card, alt = '') =>
   `<img data-card-src="${escapeHTML(imageUrl(card))}" loading="lazy" decoding="async" alt="${escapeHTML(alt)}">`;
+// V51 — linguagem visual semântica das cartas (ícones vetoriais locais, sem dependência externa).
+const CARD_SIGILS = {
+  'ordem áurea': '✦', 'véu carmesim': '血', 'lua negra': '☾',
+  'corpo a corpo': '⚔', 'longa distância': '➶', 'cerco': '⌖',
+  'especial': '◇', 'relíquia': '♜', 'primordial': '✹'
+};
+const normalizeCardLabel = value => String(value || '').normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+const cardSigil = value => {
+  const key = normalizeCardLabel(value);
+  return CARD_SIGILS[key] || (key.includes('lua') ? '☾' : key.includes('sangue') ? '血'
+    : key.includes('fogo') || key.includes('chama') ? '♨'
+    : key.includes('gelo') || key.includes('geada') ? '❄'
+    : key.includes('morte') || key.includes('exec') ? '†'
+    : key.includes('invoc') || key.includes('espir') ? '♧'
+    : key.includes('escud') || key.includes('protec') ? '⬡'
+    : key.includes('venen') || key.includes('podrid') ? '☣'
+    : key.includes('louc') || key.includes('frenes') ? '◉'
+    : key.includes('cura') || key.includes('purif') ? '✧'
+    : key.includes('Especial') ? '◇' : '✦');
+};
+const RARITY_POWER = {'Comum':0,'Rara':1,'Épica':2,'Lendária':3,'Mítica':4,'Primordial':5,'Singular':6};
+const rarityPower = card => Number.isFinite(Number(card?.potencia_raridade)) ? Number(card.potencia_raridade) : (RARITY_POWER[card?.raridade] ?? 0);
+const rarityPowerMarkup = card => `<span class=\"v54-rarity-power\" title=\"Potência da raridade: amplia habilidades; não é poder de ataque\"><i>✦</i> Potência ${rarityPower(card)}</span>`;
+const cardInsigniaMarkup = card => {
+  const category = card.categoria === 'Especial' ? 'Especial' : 'Unidade';
+  const faction = card.faccao || card.tipo || 'Sem facção';
+  const row = card.row_label || card.fileira || (category === 'Especial' ? 'Efeito' : 'Fileira não informada');
+  const rarity = card.raridade || 'Comum';
+  const ability = card.habilidade || card.efeito || '';
+  if (category === 'Especial') {
+    const effect = ability || card.descricao || card.texto_efeito || 'Efeito especial';
+    return `<div class="v51-special-banner"><span><i>◇</i> CARTA ESPECIAL</span><span>${escapeHTML(rarity)}</span></div><div class="v54-card-rarity-line">${rarityPowerMarkup(card)}<small>Escala do efeito · não soma ao poder-base</small></div><div class="v51-card-bottomline v51-special-effect"><span title="${escapeHTML(effect)}"><i>${cardSigil(effect)}</i>${escapeHTML(effect)}</span></div>`;
+  }
+  return `<div class="v51-card-topline"><span class="v51-card-faction" title="${escapeHTML(faction)}"><i>${cardSigil(faction)}</i>${escapeHTML(faction)}</span><span class="v51-card-rarity">${escapeHTML(rarity)}</span></div><div class="v54-card-rarity-line">${rarityPowerMarkup(card)}<small>Escala do efeito · não soma ao poder-base</small></div><div class="v51-card-bottomline"><span title="${escapeHTML(row)}"><i>${cardSigil(row)}</i>${escapeHTML(row)}</span>${ability ? `<span class="v51-card-ability" title="${escapeHTML(ability)}"><i>${cardSigil(ability)}</i>${escapeHTML(ability)}</span>` : `<span class="v51-card-ability v51-no-ability"><i>—</i>Força pura</span>`}</div>`;
+};
 const CARD_IMAGE_FALLBACK = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 620"><rect width="420" height="620" rx="20" fill="#17131c"/><rect x="18" y="18" width="384" height="584" rx="16" fill="none" stroke="#9b805a" stroke-width="4"/><path d="M210 190l55 55-55 55-55-55z" fill="none" stroke="#9b805a" stroke-width="8"/><text x="210" y="390" fill="#d8c6a6" font-family="sans-serif" font-size="22" text-anchor="middle">ARTE INDISPONÍVEL</text><text x="210" y="425" fill="#978a9b" font-family="sans-serif" font-size="16" text-anchor="middle">Tente recarregar a página</text></svg>')}`;
 const CARD_IMAGE_RETRY_DELAYS = [700, 1600];
 const CARD_IMAGE_MAX_ACTIVE = 4;
@@ -248,7 +284,7 @@ function renderGwentLeaderOptions(selected = '') {
     const sigils = {'Ordem Áurea':'✧','Véu Carmesim':'♜','Lua Negra':'☾'};
     const portraits = {Godfrey:'godfrey',Morgott:'morgott',Radagon:'radagon',Mohg:'mohg',Rykard:'rykard',Esgar:'esgar',Rennala:'rennala',Astel:'astel',Loretta:'loretta'};
     const portrait = portraits[leader[1]] || 'godfrey';
-    preview.innerHTML = `<div class="gwent-leader-relic faction-${faction === 'Ordem Áurea' ? 'gold' : faction === 'Véu Carmesim' ? 'blood' : 'moon'}" style="--leader-art:url('assets/leaders/${portrait}.webp')"><div class="leader-relic-sigil">${sigils[faction] || '✦'}</div><small>${escapeHTML(faction)}</small><strong>${escapeHTML(leader[1])}</strong><p>${escapeHTML(leader[2])}</p><em>LÍDER · CARTA DE COMANDO</em></div>`;
+    preview.innerHTML = `<div class="gwent-leader-relic v52-leader-card faction-${faction === 'Ordem Áurea' ? 'gold' : faction === 'Véu Carmesim' ? 'blood' : 'moon'}" style="--leader-art:url('assets/leaders/${portrait}.webp')"><div class="leader-relic-sigil">${sigils[faction] || '✦'}</div><small>${escapeHTML(faction)}</small><strong>${escapeHTML(leader[1])}</strong><p>${escapeHTML(leader[2])}</p><em>LÍDER · CARTA DE COMANDO</em></div>`;
   }
 }
 function renderGwentBuilder() {
@@ -258,7 +294,7 @@ function renderGwentBuilder() {
   const specialCount = selected.filter(card => card.categoria === 'Especial').length;
   const unitCount = selected.length - specialCount;
   $('#gwent-deck-count').textContent = `${selected.length}/12 cartas · ${unitCount} unidades · ${specialCount} especiais`;
-  $('#gwent-deck-selected').innerHTML = selected.map(card => `<article class="gwent-unit">${cardImageMarkup(card)}<b>${escapeHTML(card.nome)}</b><small>Exemplar #${number(card.exemplar_id)} · ${escapeHTML(card.raridade)} · ${escapeHTML(card.categoria === "Especial" ? "Especial" : `${card.faccao || card.tipo} · ${card.row_label || card.fileira || "Unidade"}`)} · ${card.categoria === "Especial" ? "Efeito tático" : `${number(card.poder)} poder`}</small>${card.exemplar_id && card.categoria !== 'Especial' && evolutionCost[card.raridade] ? `<button type="button" class="secondary" data-gwent-evolve="${escapeHTML(String(card.exemplar_id))}">Evoluir · ${evolutionCost[card.raridade]} fragmentos</button>` : ''}${card.exemplar_id && card.categoria !== 'Especial' && upgradeCost[card.raridade] && Number(card.poder) < Number(card.max_power) ? `<button type="button" class="secondary" data-gwent-upgrade="${escapeHTML(String(card.exemplar_id))}">Lapidar +1 · ${upgradeCost[card.raridade]} Almas</button>` : ''}<button type="button" data-gwent-remove="${escapeHTML(card.id)}">Remover</button></article>`).join('') || '<div class="empty-state">Selecione 12 cartas (unidades e especiais) da coleção.</div>';
+  $('#gwent-deck-selected').innerHTML = selected.map(card => `<article class="gwent-unit v51-card ${card.categoria === 'Especial' ? 'v51-card-special' : 'v51-card-unit'}">${cardImageMarkup(card)}${cardInsigniaMarkup(card)}<b>${escapeHTML(card.nome)}</b><small>Exemplar #${number(card.exemplar_id)} · ${escapeHTML(card.raridade)} · ${escapeHTML(card.categoria === "Especial" ? "Especial" : `${card.faccao || card.tipo} · ${card.row_label || card.fileira || "Unidade"}`)} · ${card.categoria === "Especial" ? "Efeito tático" : `${number(card.poder)} poder`}</small>${card.exemplar_id && card.categoria !== 'Especial' && evolutionCost[card.raridade] ? `<button type="button" class="secondary" data-gwent-evolve="${escapeHTML(String(card.exemplar_id))}">Evoluir · ${evolutionCost[card.raridade]} fragmentos</button>` : ''}${card.exemplar_id && card.categoria !== 'Especial' && upgradeCost[card.raridade] && Number(card.poder) < Number(card.max_power) ? `<button type="button" class="secondary" data-gwent-upgrade="${escapeHTML(String(card.exemplar_id))}">Lapidar +1 · ${upgradeCost[card.raridade]} Almas</button>` : ''}<button type="button" data-gwent-remove="${escapeHTML(card.id)}">Remover</button></article>`).join('') || '<div class="empty-state">Selecione 12 cartas (unidades e especiais) da coleção.</div>';
   const q = ($('#gwent-card-search').value || '').trim().toLocaleLowerCase('pt-BR');
   const selectedSet = new Set(selected.map(card => card.card_id || card.id));
   const factionFilter = $('#gwent-filter-faction')?.value || '';
@@ -267,7 +303,7 @@ function renderGwentBuilder() {
     && (!factionFilter || c.faccao === factionFilter)
     && (!rarityFilter || c.raridade === rarityFilter)
     && (`${c.nome} ${c.faccao} ${c.row_label || c.fileira} ${c.papel_gwent} ${c.categoria} ${c.habilidade}`.toLocaleLowerCase('pt-BR').includes(q)));
-  $('#gwent-card-pool').innerHTML = pool.map(card => `<article class="gwent-unit">${cardImageMarkup(card)}<b>${escapeHTML(card.nome)}</b><small>Exemplar #${number(card.exemplar_id)} · ${escapeHTML(card.raridade)} · ${escapeHTML(card.categoria === "Especial" ? "Especial" : `${card.faccao || card.tipo} · ${card.row_label || card.fileira || "Unidade"}`)} · ${card.categoria === "Especial" ? "Efeito tático" : `${number(card.poder)} poder`}</small><button type="button" data-gwent-add="${escapeHTML(card.id)}" ${gwentDeckIds.length >= 12 ? 'disabled' : ''}>Adicionar</button>${card.exemplar_id && card.categoria !== 'Especial' && evolutionCost[card.raridade] ? `<button type="button" class="secondary" data-gwent-evolve="${escapeHTML(String(card.exemplar_id))}">Evoluir · ${evolutionCost[card.raridade]} fragmentos</button>` : ''}${card.exemplar_id && card.categoria !== 'Especial' && upgradeCost[card.raridade] && Number(card.poder) < Number(card.max_power) ? `<button type="button" class="secondary" data-gwent-upgrade="${escapeHTML(String(card.exemplar_id))}">Lapidar +1 · ${upgradeCost[card.raridade]} Almas</button>` : ''}</article>`).join('') || '<div class="empty-state">Nenhuma unidade disponível.</div>';
+  $('#gwent-card-pool').innerHTML = pool.map(card => `<article class="gwent-unit v51-card ${card.categoria === 'Especial' ? 'v51-card-special' : 'v51-card-unit'}">${cardImageMarkup(card)}${cardInsigniaMarkup(card)}<b>${escapeHTML(card.nome)}</b><small>Exemplar #${number(card.exemplar_id)} · ${escapeHTML(card.raridade)} · ${escapeHTML(card.categoria === "Especial" ? "Especial" : `${card.faccao || card.tipo} · ${card.row_label || card.fileira || "Unidade"}`)} · ${card.categoria === "Especial" ? "Efeito tático" : `${number(card.poder)} poder`}</small><button type="button" data-gwent-add="${escapeHTML(card.id)}" ${gwentDeckIds.length >= 12 ? 'disabled' : ''}>Adicionar</button>${card.exemplar_id && card.categoria !== 'Especial' && evolutionCost[card.raridade] ? `<button type="button" class="secondary" data-gwent-evolve="${escapeHTML(String(card.exemplar_id))}">Evoluir · ${evolutionCost[card.raridade]} fragmentos</button>` : ''}${card.exemplar_id && card.categoria !== 'Especial' && upgradeCost[card.raridade] && Number(card.poder) < Number(card.max_power) ? `<button type="button" class="secondary" data-gwent-upgrade="${escapeHTML(String(card.exemplar_id))}">Lapidar +1 · ${upgradeCost[card.raridade]} Almas</button>` : ''}</article>`).join('') || '<div class="empty-state">Nenhuma unidade disponível.</div>';
   const configChanged = ($('#gwent-faction')?.value || 'Ordem Áurea') !== gwentSavedFaction
     || ($('#gwent-leader')?.value || 'comandante_fornalha') !== gwentSavedLeader;
   $('#gwent-save-deck').disabled = selected.length !== 12 || unitCount < 8 || specialCount > 4
@@ -1112,6 +1148,7 @@ function openGwentBoardCardModal(cardId) {
   const bonus = Number(card.bonus || 0);
   const currentPower = Math.max(1, basePower + bonus);
   const shield = Number(card.escudo || 0);
+  const rarityBudget = rarityPower(card);
   const rowLabel = card.row_label || gwentRowLabel(card.row || '');
   const isSpecial = !!card.especial || card.categoria === 'Especial';
   const modalCard = {...card};
@@ -1130,22 +1167,24 @@ function openGwentBoardCardModal(cardId) {
       <div class="gwent-board-card-info">
         <small class="gwent-board-card-eyebrow">GWENT DO COLISEU · INSPEÇÃO DE COMBATE</small>
         <h2>${escapeHTML(card.nome || 'Carta')}</h2>
-        <div class="gwent-board-card-tags">
-          <span>${escapeHTML(card.raridade || 'Carta')}</span>
-          <span>${escapeHTML(isSpecial ? 'Carta especial' : rowLabel)}</span>
+        <div class="gwent-board-card-tags v51-inspection-tags">
+          <span><i>${cardSigil(card.faccao || card.tipo || 'Especial')}</i>${escapeHTML(card.faccao || card.tipo || 'Coliseu')}</span>
+          <span><i>${cardSigil(card.raridade || 'Carta')}</i>${escapeHTML(card.raridade || 'Carta')}</span>
+          <span><i>${cardSigil(isSpecial ? 'Especial' : rowLabel)}</i>${escapeHTML(isSpecial ? 'Carta especial' : rowLabel)}</span>
           <span>EM CAMPO</span>
         </div>
         <div class="gwent-board-card-stats">
           <article><small>PODER ATUAL</small><strong>${number(currentPower)}</strong></article>
           <article><small>BÔNUS</small><strong>${bonus > 0 ? '+' : ''}${number(bonus)}</strong></article>
           <article><small>ESCUDO</small><strong>${number(shield)}</strong></article>
+          <article class="gwent-rarity-potency"><small>POTÊNCIA DA RARIDADE</small><strong>${number(rarityBudget)} / 6</strong></article>
         </div>
         <section class="gwent-board-card-ability">
           <small>HABILIDADE</small>
           <strong>${escapeHTML(card.habilidade_nome || 'Sem habilidade')}</strong>
           <p>${escapeHTML(card.habilidade_texto || 'Esta carta não possui efeito adicional.')}</p>
         </section>
-        <p class="gwent-board-card-note">Esta carta já está em jogo. Os valores exibidos refletem os atributos recebidos pela partida.</p>
+        <p class="gwent-board-card-note">A potência da raridade amplia habilidades conforme seus limites. Ela não é somada ao poder-base nem ao poder atual.</p>
         <button type="button" class="gwent-board-card-dismiss" data-gwent-board-close>FECHAR INSPEÇÃO</button>
       </div>
     </section>`;
@@ -2054,7 +2093,7 @@ window.addEventListener('resize', () => {
   const render = () => {
     const relic = relics[select.value];
     preview.innerHTML = relic
-      ? `<small>${relic[1]} · ${relic[3]}</small><b>${relic[0]}</b><p>${relic[2]}</p><span class="gwent-relic-equipped">PREPARADA</span>`
+      ? `<div class="v52-relic-seal"><i>♜</i><span>${escapeHTML(relic[3])}</span></div><small>${escapeHTML(relic[1])} · ${escapeHTML(relic[3])}</small><b>${escapeHTML(relic[0])}</b><p>${escapeHTML(relic[2])}</p><span class="gwent-relic-equipped">PREPARADA</span>`
       : '<b>Nenhuma Relíquia selecionada</b><p>Você entrará sem Relíquia equipada.</p>';
     if (status) status.textContent = 'Relíquia selecionada. Salve o deck para registrar a escolha na sua conta.';
   };

@@ -205,6 +205,7 @@ function render(){const c=list[idx],rk=key(c.raridade),esp=c.categoria==='Especi
 ov.style.setProperty('--rc',RC[rk]||RC.comum);ov.dataset.r=rk;
 ov.querySelector('.prev').hidden=ov.querySelector('.next').hidden=list.length<2;
 const seg=Array.from({length:Math.max(15,mx)},(_,i)=>`<i class="${i<pw?'on':i<mx?'pot':''}"></i>`).join('');
+const rarityPot=Number.isFinite(Number(c.potencia_raridade))?Number(c.potencia_raridade):RAR.indexOf(c.raridade);
 const ri=RAR.indexOf(c.raridade),ladder=RAR.map((r,i)=>`<li class="${i<ri?'done':i===ri?'now':''}" style="--c:${RC[key(r)]}"><span>${i<ri?'✓':i===ri?'◆':'◇'}</span><b>${r}</b>${EVO[r]&&i===ri?`<small>→ ${RAR[i+1]} · ${EVO[r]} fragmentos</small>`:''}</li>`).join('');
 const chips=[c.faccao||c.tipo,c.row_label||c.fileira,c.papel_gwent,c.categoria,c.custo!=null?`Custo ${N(c.custo)}`:''].filter(Boolean).map(x=>`<span>${E(x)}</span>`).join('');
 const syn=(c.sinergias||[]).map(s=>`<span class="syn">${E(String(s).replaceAll('_',' '))}</span>`).join('');
@@ -217,6 +218,7 @@ ov.querySelector('.cd-body').innerHTML=`
  <h2>${E(c.nome)}</h2>
  <div class="cd-rar"><span class="cd-badge">${E(c.raridade||'Comum')}</span>${chips}</div>
  <section class="cd-power"><div class="cd-pcol"><small>PODER ATUAL</small><strong>${esp?'—':N(pw)}</strong></div><div class="cd-pmid">${esp?'<p class="muted">Carta especial: efeito tático, sem poder próprio.</p>':`<div class="cd-seg">${seg}</div><small>${pw>=mx?'Poder máximo atingido':`Faltam ${N(mx-pw)} para o máximo`}${UPG[c.raridade]&&pw<mx?` · lapidar +1 = ${UPG[c.raridade]} Almas`:''}</small>`}</div><div class="cd-pcol"><small>PODER MÁXIMO</small><strong>${esp?'—':N(mx)}</strong></div></section>
+ <section class="cd-box cd-rarity-power"><h4>Potência da raridade</h4><strong>${rarityPot} / 6</strong><p>Amplia a eficácia de habilidades conforme as regras de cada efeito. Não é poder-base, não aumenta diretamente o ataque e não substitui o poder efetivo em combate.</p></section>
  <section class="cd-box"><h4>Habilidade</h4><div class="cd-skill"><b>${E(c.habilidade_nome||'Sem habilidade')}</b><p>${E(c.habilidade_texto||'Sem efeito adicional.')}</p></div>${c.descricao&&c.descricao!==c.habilidade_texto?`<blockquote>${E(c.descricao)}</blockquote>`:''}${c.arquetipo_descricao?`<small class="muted">${E(c.arquetipo_descricao)}</small>`:''}</section>
  ${syn||combos?`<section class="cd-box"><h4>Sinergias</h4>${syn?`<div class="cd-syns">${syn}</div>`:''}${combos?`<ul class="cd-combos">${combos}</ul>`:''}</section>`:''}
  <section class="cd-box"><h4>Caminho de raridade</h4><ol class="cd-ladder">${ladder}</ol></section>

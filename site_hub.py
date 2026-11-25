@@ -690,6 +690,7 @@ def registrar_rotas(bot, app: web.Application) -> None:
             CUSTO_APRIMORAMENTO_ALMAS, BONUS_EVOLUCAO_FRAGMENTOS,
             RARIDADES, get_carta, faixa_poder_exemplar,
         )
+        from sistemas.gwent import RARITY_EFFECT_BUDGET
         items = []
         for row in rows:
             card = get_carta(str(row["card_id"]))
@@ -709,6 +710,7 @@ def registrar_rotas(bot, app: web.Application) -> None:
                 "id": int(row["id"]), "card_id": str(row["card_id"]),
                 "name": str(getattr(card, "nome", None) or getattr(card, "name", None) or row["card_id"]),
                 "rarity": rarity, "power": power, "max_power": int(maximum),
+                "potencia_raridade": int(RARITY_EFFECT_BUDGET.get(rarity, 0)),
                 "lap_cost": CUSTO_APRIMORAMENTO_ALMAS.get(rarity),
                 "next_rarity": next_rarity,
                 "evo_cost": BONUS_EVOLUCAO_FRAGMENTOS.get(rarity) if next_rarity else None,

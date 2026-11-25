@@ -297,8 +297,10 @@ DEFAULT_LEADERS = {
 # Potência adicional por raridade. O bônus é um orçamento por ativação:
 # é distribuído entre os alvos que a habilidade já afetou, sem criar alvos novos.
 RARITY_EFFECT_BUDGET = {
-    "Comum": 0, "Rara": 1, "Épica": 1, "Lendária": 2,
-    "Mítica": 2, "Primordial": 3, "Singular": 3,
+    # Escala estritamente crescente: cada raridade tem um nível próprio.
+    # Estes pontos ampliam a habilidade; nunca são somados ao poder-base.
+    "Comum": 0, "Rara": 1, "Épica": 2, "Lendária": 3,
+    "Mítica": 4, "Primordial": 5, "Singular": 6,
 }
 
 
@@ -308,8 +310,8 @@ def _aplicar_potencia_raridade(card: dict, player: dict, other: dict,
     """Amplia buffs/debuffs numéricos já produzidos pela habilidade, com teto por carta.
 
     Não aumenta poder-base, não cria alvos e não altera custos, duração, compra,
-    invocação, escudos ou condições. O orçamento extra é limitado a 3 pontos
-    por ativação e segue o sinal do efeito original.
+    invocação, escudos ou condições. O orçamento segue o nível exclusivo
+    da raridade e respeita o teto individual de cada alvo/efeito.
     """
     budget = int(RARITY_EFFECT_BUDGET.get(str(card.get("raridade", "Comum")), 0))
     if budget <= 0:
@@ -362,7 +364,7 @@ def preparar_carta(card: dict) -> dict:
             "gwent_chuva": f" Raridade {raridade}: mantém o Sangramento como ameaça de Hemorragia.",
             "gwent_geada": f" Raridade {raridade}: pode aplicar uma segunda marca de Geada.",
             "gwent_medico": f" Raridade {raridade}: recupera unidade com poder-base até {min(8, 4 + budget)}.",
-            "gwent_execucao": f" Raridade {raridade}: alcança poder efetivo até {min(9, 6 + budget)}.",
+            "gwent_execucao": f" Raridade {raridade}: alcança poder efetivo até {min(6, 6 + budget)}.",
             "gwent_requiem": f" Raridade {raridade}: recupera unidade com poder-base até {min(10, 6 + budget)}.",
             "gwent_batedor": f" Raridade {raridade}: compra até {min(2, 1 + budget)} cartas.",
             "gwent_invocacao": f" Raridade {raridade}: invoca lobos com {min(6, 3 + budget)} de poder.",
@@ -616,9 +618,9 @@ def opcoes_de_alvo(state: dict, user_id) -> dict:
             continue
         skill = card.get("habilidade", "")
         if skill == "gwent_execucao":
-            info = {"rotulo": f"Escolha a unidade inimiga a eliminar (poder efetivo {min(9, 6 + int(RARITY_EFFECT_BUDGET.get(str(card.get('raridade', 'Comum')), 0)))} ou menos)",
+            info = {"rotulo": f"Escolha a unidade inimiga a eliminar (poder efetivo {min(6, 6 + int(RARITY_EFFECT_BUDGET.get(str(card.get('raridade', 'Comum')), 0)))} ou menos)",
                     "filtro_fileira": "mesma",
-                    "opcoes": [u for u in other.get("board", []) if _poder_efetivo(u, state.get("weather")) <= min(9, 6 + int(RARITY_EFFECT_BUDGET.get(str(card.get("raridade", "Comum")), 0)))]}
+                    "opcoes": [u for u in other.get("board", []) if _poder_efetivo(u, state.get("weather")) <= min(6, 6 + int(RARITY_EFFECT_BUDGET.get(str(card.get("raridade", "Comum")), 0)))]}
         elif skill == "gwent_medico":
             info = {"rotulo": f"Escolha a unidade (poder {min(8, 4 + int(RARITY_EFFECT_BUDGET.get(str(card.get('raridade', 'Comum')), 0)))} ou menos) que volta para a sua mão",
                     "filtro_fileira": None,
@@ -1098,9 +1100,9 @@ def aplicar_jogada(state: dict, user_id: int, card_id: str | None = None,
                 targets = [c for c in other["board"] if c["row"] == row]
                 if not targets:
                     return {"error": "Não há unidade inimiga nessa fileira."}
-                elegiveis = [c for c in targets if _poder_efetivo(c, state.get("weather")) <= min(9, 6 + potencia_raridade)]
+                elegiveis = [c for c in targets if _poder_efetivo(c, state.get("weather")) <= min(6, 6 + potencia_raridade)]
                 if not elegiveis:
-                    return {"error": f"A Lâmina da Morte Destinada só alcança unidades com poder efetivo {min(9, 6 + potencia_raridade)} ou menos."}
+                    return {"error": f"A Lâmina da Morte Destinada só alcança unidades com poder efetivo {min(6, 6 + potencia_raridade)} ou menos."}
                 if target_id:
                     victim = next((c for c in elegiveis if c["id"] == str(target_id)), None)
                     if victim is None:
