@@ -33,9 +33,9 @@ class CardCatalogQualityTests(unittest.TestCase):
                 for fragment in fragments:
                     self.assertIn(fragment, text)
 
-    def test_all_110_catalog_cards_have_narrative_description(self):
+    def test_all_122_catalog_cards_have_narrative_description(self):
         cards = [*_CARTAS_BASE, *CARTAS_PRIMORDIAIS, *CARTAS_PATENTE]
-        self.assertEqual(len(cards), 110)
+        self.assertEqual(len(cards), 122)
         missing = [card.id for card in cards if not card.descricao.strip()]
         self.assertEqual(missing, [])
 

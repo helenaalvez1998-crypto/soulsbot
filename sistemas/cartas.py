@@ -13,7 +13,7 @@ from typing import Any
 
 from levels import PATENTES
 
-VERSAO_ARTES = 27
+VERSAO_ARTES = 29
 
 TIPOS = ("Destreza", "Força", "Magia")
 
@@ -361,6 +361,30 @@ for _c in [*_CARTAS_BASE, *CARTAS_PRIMORDIAIS]:
 _CARTAS_BASE = [c for c in _cartas_v18 if c.id not in {x.id for x in CARTAS_PRIMORDIAIS}]
 CARTAS_PRIMORDIAIS = [c for c in _cartas_v18 if c.id in {x.id for x in CARTAS_PRIMORDIAIS}]
 
+# Expansão V75 — 12 unidades novas, quatro por facção.
+# As cartas entram após o balanceamento legado V18 para preservar suas habilidades próprias.
+CARTAS_EXPANSAO_V75 = [
+    # ORDEM ÁUREA — formação, proteção e purificação.
+    Carta("gwent_v75_ordem_veterano_juramento", "Veterano do Juramento Dourado", "Covenant", "Força", 4, "Rara", 2, "primeira_luz", "Veterano de Leyndell que mantém a formação unida: ao entrar, fortalece a si e o aliado mais fraco da mesma fileira.", fileira="melee"),
+    Carta("gwent_v75_ordem_guardiao_crisol", "Guardião do Crisol Menor", "Chefe", "Força", 4, "Rara", 2, "", "Um guardião das raízes antigas que mantém a posição ao lado dos soldados de Leyndell, lembrando que a muralha é tão forte quanto sua formação.", fileira="melee"),
+    Carta("gwent_v75_ordem_confessora_graca", "Confessora da Graça Serena", "Magia", "Força", 5, "Épica", 3, "primeira_luz", "Uma confessorada treinada na Lei da Regressão remove condições negativas de até dois aliados na fileira de Cerco e os fortalece.", fileira="siege"),
+    Carta("gwent_v75_ordem_arauto_estandarte", "Arauto do Estandarte Áureo", "Covenant", "Força", 5, "Épica", 3, "", "O arauto ergue o estandarte da capital entre fileiras distintas, sinalizando a marcha coordenada dos soldados de Leyndell.", fileira="ranged"),
+
+    # VÉU CARMESIM — marcas de Sangramento, pressão e sacrifício calculado.
+    Carta("gwent_v75_veu_acolito_sangue", "Acólito da Dinastia Sanguínea", "Magia", "Destreza", 4, "Rara", 2, "primeira_luz", "Servo do Palácio de Mohgwyn que marca o inimigo mais forte da fileira; a segunda marca provoca Hemorragia.", fileira="ranged"),
+    Carta("gwent_v75_veu_devota_hemorragia", "Devota da Hemorragia", "Covenant", "Destreza", 4, "Rara", 2, "", "Uma devota do Palácio de Mohgwyn conduz cânticos rituais diante de um campo marcado pelo sangue da dinastia.", fileira="siege"),
+    Carta("gwent_v75_veu_carrasco_preco", "Carrasco da Procissão Carmesim", "Chefe", "Destreza", 5, "Épica", 3, "primeira_luz", "O carrasco sacrifica o aliado mais fraco da mesma fileira para absorver parte de seu poder, com ganho limitado.", fileira="melee"),
+    Carta("gwent_v75_veu_cacador_sangue", "Caçador das Catacumbas de Mohgwyn", "Arma", "Destreza", 5, "Épica", 3, "", "Um caçador de Mohgwyn segue rastros de combatentes feridos pelas galerias subterrâneas, aguardando o momento de fechar a perseguição.", fileira="ranged"),
+
+    # LUA NEGRA — Geada, leitura de campo e controle gravitacional.
+    Carta("gwent_v75_lua_oraculo_geada", "Oráculo Gélido de Sellia", "Magia", "Magia", 4, "Rara", 2, "primeira_luz", "Uma astróloga de Sellia aplica Geada ao inimigo mais forte da fileira; completar a segunda marca fortalece o oráculo.", fileira="siege"),
+    Carta("gwent_v75_lua_cartografo_lunar", "Cartógrafo das Cidades Eternas", "Covenant", "Magia", 4, "Rara", 2, "", "Lê as rotas subterrâneas de Nokron e orienta aliados entre pontes e distritos separados da Cidade Eterna.", fileira="ranged"),
+    Carta("gwent_v75_lua_graviturgista", "Graviturgista de Nokron", "Magia", "Magia", 5, "Épica", 3, "primeira_luz", "Dobra a gravidade sobre até dois inimigos fortalecidos na fileira escolhida; se atingir dois, recebe poder adicional.", fileira="siege"),
+    Carta("gwent_v75_lua_guardia", "Guardiã do Juramento Lunar", "Chefe", "Magia", 5, "Épica", 3, "", "Uma guardiã cariana vigia as passagens entre fileiras, mantendo-se entre os aliados e os inimigos marcados pela Geada.", fileira="melee"),
+]
+
+_CARTAS_BASE = [*_CARTAS_BASE, *CARTAS_EXPANSAO_V75]
+
 CARTAS_POR_ID: dict[str, Carta] = {c.id: c for c in [*_CARTAS_BASE, *CARTAS_PRIMORDIAIS]}
 
 
@@ -378,7 +402,7 @@ def _hash_int(valor: str) -> int:
 
 
 def carta_jogo(nome_jogo: str, marco: str) -> Carta:
-    """Gera recompensa temática do universo Gwent sem expor o título do jogo externo."""
+    """Cria uma recompensa com identidade coerente e nome exclusivo por origem."""
     marco = "platina" if str(marco).lower() == "platina" else "zerado"
     slug = slug_jogo(nome_jogo)
     n = _hash_int(f"{slug}:{marco}:gwent-reward-v2")
@@ -387,20 +411,50 @@ def carta_jogo(nome_jogo: str, marco: str) -> Carta:
     habilidade = HABILIDADES_COMUNS[(n // 7) % len(HABILIDADES_COMUNS)] if (raridade == "Épica" or n % 2 == 0) else ""
     minimo, maximo = FAIXA_PODER[raridade]
     poder = minimo + ((n // 11) % (maximo - minimo + 1))
-    nomes = {
-        "Força": ("Cavaleiro de Leyndell", "Sentinela da Árvore Áurea", "Juramentado do Crisol"),
-        "Destreza": ("Cavaleiro Sanguíneo", "Recusante de Volcano Manor", "Lâmina de Ravenmount"),
-        "Magia": ("Feiticeiro Cariano", "Astrólogo de Liurnia", "Erudito de Raya Lucaria"),
+
+    # O título e o território precisam pertencer à mesma facção.
+    identidades = {
+        "Força": {
+            "nomes": ("Cavaleiro de Leyndell", "Sentinela da Árvore Áurea", "Juramentado do Crisol"),
+            "epitetos": ("da Graça Dourada", "de Leyndell", "da Árvore Áurea", "do Crisol", "da Capital Dourada"),
+            "facção": "Ordem Áurea",
+            "lore": "Soldado da Ordem Áurea, treinado para proteger Leyndell e sustentar a linha de frente.",
+        },
+        "Destreza": {
+            "nomes": ("Cavaleiro Sanguíneo", "Recusante de Volcano Manor", "Lâmina de Ravenmount"),
+            "epitetos": ("da Dinastia Sanguínea", "de Mohgwyn", "da Procissão Carmesim", "das Catacumbas de Mohgwyn", "do Véu Carmesim"),
+            "facção": "Véu Carmesim",
+            "lore": "Combatente do Véu Carmesim, ligado aos rituais de Mohgwyn e à pressão por Sangramento.",
+        },
+        "Magia": {
+            "nomes": ("Feiticeiro Cariano", "Astrólogo de Liurnia", "Erudito de Raya Lucaria"),
+            "epitetos": ("da Lua Negra", "de Sellia", "de Nokron", "da Tradição Cariana", "das Cidades Eternas"),
+            "facção": "Lua Negra",
+            "lore": "Estudioso da Lua Negra, dedicado às artes arcanas de Sellia, Liurnia e Nokron.",
+        },
     }
-    epitetos = ("da Graça Dourada", "do Palácio de Mohgwyn", "das Ruínas de Farum Azula", "da Lua Negra", "do Monte Gelmir")
-    titulo = nomes[tipo][(n // 13) % len(nomes[tipo])] + " " + epitetos[(n // 19) % len(epitetos)]
+    identidade = identidades[tipo]
+    titulo_base = identidade["nomes"][(n // 13) % len(identidade["nomes"])]
+    epiteto = identidade["epitetos"][(n // 19) % len(identidade["epitetos"])]
+    # O selo curto evita que jogos diferentes gerem cartas indistinguíveis com o mesmo título.
+    selo = hashlib.sha256(f"{slug}:{marco}".encode("utf-8")).hexdigest()[:4].upper()
+    titulo = f"{titulo_base} {epiteto} · Selo {selo}"
+
+    descricao = identidade["lore"]
+    if habilidade:
+        nome_habilidade = HABILIDADES.get(habilidade, {}).get("nome", "sua técnica especial")
+        descricao += f" Técnica: {nome_habilidade}."
+    else:
+        descricao += " Sem habilidade especial; depende do poder-base e dos bônus de combate."
+    if marco == "platina":
+        descricao += " Recompensa por domínio completo."
+    else:
+        descricao += " Recompensa por conquista."
+
     return Carta(
         id=f"jogo_{slug}_{marco}", nome=titulo[:95], categoria="Chefe", tipo=tipo,
         poder=int(poder), raridade=raridade, custo=CUSTO_RARIDADE[raridade],
-        habilidade=habilidade,
-        descricao=("Recompensa de domínio: guerreiro de elite das Terras Intermédias." if marco == "platina"
-                   else "Recompensa de conquista: combatente das Terras Intermédias."),
-        jogo_origem="",
+        habilidade=habilidade, descricao=descricao[:240], jogo_origem="",
     )
 
 

@@ -60,7 +60,7 @@ class EldenRingArtPromptTests(unittest.TestCase):
         from sistemas.atelie_coliseu import CENAS_ELDEN_POR_ID
 
         catalog = cartas.CARTAS_POR_ID
-        self.assertEqual(len(CENAS_ELDEN_POR_ID), 95)
+        self.assertEqual(len(CENAS_ELDEN_POR_ID), 107)
         for card_id, card in catalog.items():
             with self.subTest(card_id=card_id):
                 prompt = gerar_prompt_carta(card.para_dict())

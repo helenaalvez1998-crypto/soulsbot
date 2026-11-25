@@ -4,7 +4,7 @@ let currentUser = null;
 const text = (value, fallback = '—') => value === null || value === undefined || value === '' ? fallback : String(value);
 const number = (value) => new Intl.NumberFormat('pt-BR').format(Number(value || 0));
 // Manter sincronizado com VERSAO_ARTES em sistemas/cartas.py.
-const CARD_IMAGE_VERSION = 27;
+const CARD_IMAGE_VERSION = 28;
 const imageUrl = (card) => {
   const raw = card.image_url || `/api/gwent/cards/${encodeURIComponent(card.card_id || String(card.id || '').split('::')[0])}/image`;
   if (!raw.includes('/api/gwent/cards/')) return raw;
@@ -1563,7 +1563,7 @@ function openGwentBoardCardModal(cardId) {
           <p>${escapeHTML(card.habilidade_texto || 'Sem habilidade especial.')}</p>
         </section>
         ${card.descricao ? `<section class="gwent-board-card-ability gwent-board-card-lore"><small>DESCRIÇÃO</small><p>${escapeHTML(card.descricao)}</p></section>` : ''}
-        <p class="gwent-board-card-note">A potência da raridade amplia habilidades conforme seus limites. Ela não é somada ao poder-base nem ao poder atual.</p>
+        <p class="gwent-board-card-note"><strong>Como ler o poder:</strong> o número impresso na carta é o poder-base (${number(basePower)}). O bônus de combate é ${bonus > 0 ? "+" : ""}${number(bonus)}. Por isso, o poder atual é ${number(currentPower)} (poder-base + bônus, com mínimo de 1). A potência da raridade melhora apenas os efeitos da habilidade; ela não é somada ao poder.</p>
         <button type="button" class="gwent-board-card-dismiss" data-gwent-board-close>FECHAR INSPEÇÃO</button>
       </div>
     </section>`;

@@ -859,6 +859,67 @@ CENAS_ELDEN_POR_ID = {
         "A spectral enemy silhouette is pinned in place as bright positive enchantments around it collapse, while darker negative marks remain untouched. "
         "Use damp subterranean masonry, dust and a focused shaft of light; the shackle itself is the unmistakable focal object."
     ),
+    # Expansão V75 — cenas individuais para as doze novas cartas.
+    "gwent_v75_ordem_veterano_juramento": (
+        "A seasoned Leyndell foot soldier in practical gold-bronze plate, weathered red-brown undercloth and a crested closed helm braces shoulder-to-shoulder with a younger shield bearer on the capital's outer processional steps. "
+        "The veteran's gloved hand steadies the ally's shield strap while both face an unseen threat; the gesture communicates a disciplined oath and mutual reinforcement, not a magical beam. "
+        "Use pale limestone, root-cracked paving and late warm daylight. Keep the armor standardized and believable, not a demigod's ornate regalia."
+    ),
+    "gwent_v75_ordem_guardiao_crisol": (
+        "A Crucible Knight-inspired guardian in heavy, weathered bronze-gold armor with restrained bestial reliefs plants a broad shield beside a wounded Leyndell soldier on a stone stair. "
+        "The guardian raises the shield to cover the ally, showing the protective oath through physical positioning rather than a glowing force field. "
+        "Set the scene in an ancient chamber beneath Leyndell with worn stone, root veins and a narrow shaft of amber light. Preserve the weight and practical construction of Crucible armor."
+    ),
+    "gwent_v75_ordem_confessora_graca": (
+        "A Golden Order Confessor in a fitted dark hood, layered black-brown leather and discreet gold stitching kneels beside two battle-worn allies in a quiet Leyndell chapel. "
+        "With a small sacred seal held close, the Confessor performs the restrained gesture of Regression; frost and scarlet rot recede from the allies' armor without explosive light or ornate spell circles. "
+        "Use weathered pale stone, broken prayer tablets and a controlled amber shaft of light. Keep all three figures grounded and the Confessor as the clear focal subject."
+    ),
+    "gwent_v75_ordem_arauto_estandarte": (
+        "A Leyndell standard-bearer in disciplined gold-trimmed plate and a worn ivory mantle stands on a high stone landing overlooking two separated ranks of royal soldiers. "
+        "The bearer lifts a compact Erdtree banner as nearby allies answer with a synchronized advance; the cloth moves in the wind and the formation remains the narrative focus. "
+        "Use monumental but weathered capital architecture, pale stone and warm reflected gold light. The banner is a practical military standard, not a giant glowing symbol."
+    ),
+    "gwent_v75_veu_acolito_sangue": (
+        "A Mohgwyn dynasty acolyte in dark ceremonial robes, tarnished iron plates and a restrained crimson sash marks a single armored opponent with a narrow ritual blade on a black-stone causeway. "
+        "A thin blood-red trace appears at the opponent's armor seam, suggesting the first stage of a blood rite without gore or vampiric exaggeration. "
+        "Use the underground approach to Mohgwyn Palace, pale hanging roots, crimson water reflections and deep shadow. Preserve the acolyte's human proportions and severe ritual attire."
+    ),
+    "gwent_v75_veu_devota_hemorragia": (
+        "A devout Mohgwyn ritualist in layered burgundy cloth and dark iron jewelry stands beside a shallow ceremonial basin, studying several distant wounded enemy silhouettes across the causeway. "
+        "The ritualist draws measured strength from the battlefield's crimson reflections, represented by a subtle red sheen on the basin rather than visible blood streams or an oversized aura. "
+        "Use the underground palace's severe arches, pale roots and still red water. Keep the figure composed, dangerous and clearly secondary to the ritual basin's visual line."
+    ),
+    "gwent_v75_veu_carrasco_preco": (
+        "A Mohgwyn executioner in heavy black iron armor and a dark crimson mantle performs a grim battlefield sacrifice: one exhausted allied retainer kneels and yields a weapon while the executioner takes up the fallen strength as a controlled ritual vow. "
+        "Show no graphic injury; communicate the cost through the abandoned shield, lowered posture and the executioner's newly steadied stance. "
+        "Set the scene in a stone procession hall of Mohgwyn Palace, with red reflections and pale roots. The executioner remains the dominant subject."
+    ),
+    "gwent_v75_veu_cacador_sangue": (
+        "A hunter of Mohgwyn in fitted dark steel, a narrow crimson cloak and a hooked short blade pursues a visibly weakened opponent across a blood-red underground terrace. "
+        "The hunter reads a single wound-mark on the opponent's armor and closes the distance with a precise, economical step; no gore, fangs or supernatural transformation. "
+        "Use black palace stone, pale hanging roots and restrained crimson reflections. Compose the hunter in a sharp three-quarter movement with the target clearly secondary."
+    ),
+    "gwent_v75_lua_oraculo_geada": (
+        "A Sellian astrologer in dark blue-grey robes, a modest glintstone crown and a weathered travelling mantle studies an armored opponent from a ruined rooftop in Sellia. "
+        "A precise cold glintstone mark settles as frost across the opponent's shield rim, with a second thin frost layer forming only where the first already exists. "
+        "Show Sellia's low domes, sealed sorcerous streets and Caelid's rust-red horizon beneath cold night light. Keep the spell compact and scholarly, not a blizzard or giant ice projectile."
+    ),
+    "gwent_v75_lua_cartografo_lunar": (
+        "A Nox cartographer in flowing silver-grey robes and a smooth pale mask stands at a black-stone junction in Nokron, studying three elevated bridges that lead toward separate districts of the Eternal City. "
+        "The cartographer traces the route with one gloved hand while a small lantern reveals the distinct paths and underground river below. "
+        "Use the artificial starry night above Nokron, silver balustrades and deep blue reflections. The scene is about reading the battlefield's multiple routes, not casting a spell or displaying a readable map."
+    ),
+    "gwent_v75_lua_graviturgista": (
+        "A gravity sorcerer of the Academy in layered indigo robes and a faceted glintstone crown stands on a broken Raya Lucaria observatory platform. "
+        "Two enemy weapons and their bearers' stances are pulled subtly downward by a compact gravitational distortion, bending dust and loose stones toward the floor without levitating bodies or creating a black hole. "
+        "Use cold academy stone, distant Liurnia mist and restrained violet-blue glintstone reflections. Keep the sorcerer in clear focus and the two affected opponents secondary."
+    ),
+    "gwent_v75_lua_guardia": (
+        "A Carian guardian in fitted blue-grey plate, silver fastenings and a restrained crescent mantle steps between an ally and a frost-marked enemy on a moonlit academy bridge. "
+        "The guardian raises a practical round shield toward the ally on the adjacent span; frost on the enemy's armor catches the same cold moonlight, linking defense and control without a large magical barrier. "
+        "Use Carian stone arches, Liurnia mist and a narrow silver-blue key light. Preserve the guardian's disciplined knightly silhouette; no generic wizard robes or oversized moon aura."
+    ),
 }
 
 def _valor_prompt(valor: Any, limite: int) -> str:

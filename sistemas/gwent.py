@@ -142,6 +142,19 @@ CARD_SYNERGY_TAGS = {
     "gwent_unidade_detonador": {"runico"},
     "gwent_unidade_devorador_mana": {"eclipse_voraz", "sangue_mohgwyn"},
     "gwent_unidade_bibliotecaria": {"eclipse_voraz"},
+    # Expansão V75 — duas metades de cada combo de facção.
+    "gwent_v75_ordem_veterano_juramento": {"v75_erdtree_oath"},
+    "gwent_v75_ordem_guardiao_crisol": {"v75_crucible_guard"},
+    "gwent_v75_ordem_confessora_graca": {"v75_erdtree_oath"},
+    "gwent_v75_ordem_arauto_estandarte": {"v75_crucible_guard"},
+    "gwent_v75_veu_acolito_sangue": {"v75_blood_mark"},
+    "gwent_v75_veu_devota_hemorragia": {"v75_blood_feast"},
+    "gwent_v75_veu_carrasco_preco": {"v75_blood_feast"},
+    "gwent_v75_veu_cacador_sangue": {"v75_blood_mark"},
+    "gwent_v75_lua_oraculo_geada": {"v75_frost_lore"},
+    "gwent_v75_lua_cartografo_lunar": {"v75_lunar_paths"},
+    "gwent_v75_lua_graviturgista": {"v75_frost_lore"},
+    "gwent_v75_lua_guardia": {"v75_lunar_paths"},
 }
 SYNERGY_COMBOS = {
     "cinzas_fornalha": {"name": "Aliança da Árvore Áurea", "tags": {"cinzas", "fornalha"}, "bonus": 2, "description": "Cavaleiro da Árvore Áurea ou Cavaleiros de Radahn e uma unidade da Fornalha coordenam a formação (+2)."},
@@ -162,6 +175,10 @@ SYNERGY_COMBOS = {
     "juramento_erdtree": {"name": "Juramento da Árvore Áurea", "tags": {"ordem_dourada"}, "minimum": 2, "bonus": 2, "team_bonus": 1, "description": "Duas unidades da Ordem Áurea reforçam a formação: +2 para quem completa o combo e +1 aos aliados da mesma fileira."},
     "convergencia_lunar": {"name": "Convergência da Lua Negra", "tags": {"lua_cariana"}, "minimum": 2, "bonus": 2, "description": "Duas unidades ligadas à Lua Negra convergem e recebem +2."},
     "ritual_dinastia": {"name": "Ritual do Véu Carmesim", "tags": {"sangue_mohgwyn"}, "minimum": 2, "bonus": 2, "team_bonus": 1, "description": "Duas unidades do Véu Carmesim fortalecem a carta que completa o ritual (+2) e os aliados na fileira (+1)."},
+    # Novos combos V75: exigem duas cartas e duas tags distintas; uma ativação por rodada.
+    "v75_juramento_dois_crisol": {"name": "Juramento do Crisol e da Graça", "tags": {"v75_erdtree_oath", "v75_crucible_guard"}, "minimum": 2, "bonus": 2, "description": "Formação e proteção convergem: a carta que completa o juramento recebe +2."},
+    "v75_banquete_hemorragia": {"name": "Banquete da Hemorragia", "tags": {"v75_blood_mark", "v75_blood_feast"}, "minimum": 2, "bonus": 2, "description": "Uma marca aberta alimenta o ritual: a carta que completa o combo recebe +2."},
+    "v75_convergencia_gelida": {"name": "Convergência da Geada Lunar", "tags": {"v75_frost_lore", "v75_lunar_paths"}, "minimum": 2, "bonus": 2, "description": "Geada e leitura das fileiras entram em ressonância: a carta que completa o combo recebe +2."},
 }
 
 
@@ -202,6 +219,13 @@ CARD_IDENTITY_ABILITIES = {
     "chefe_maliketh_morte_destinada": {"name": "Morte Destinada", "text": "Ao entrar, remove até 2 pontos de bônus da unidade inimiga mais forte.", "effect": "destined_death"},
     "chefe_messmer_impalador": {"name": "Lança do Impalador", "text": "Ao entrar, aplica Sangramento às unidades inimigas da fileira; uma segunda marca provoca Hemorragia.", "effect": "impaling_spear"},
     "chefe_placidusax_lorde_dragao": {"name": "Tempestade do Tempo", "text": "Ao entrar, aplica Geada às unidades inimigas da fileira e recebe +1 por inimigo atingido, até +3.", "effect": "time_storm"},
+    # Expansão V75 — efeitos individuais das doze novas unidades.
+    "gwent_v75_ordem_veterano_juramento": {"name": "Juramento Dourado", "text": "Ao entrar, recebe +1; se houver aliado na mesma fileira, o aliado mais fraco também recebe +1.", "effect": "v75_golden_vow"},
+    "gwent_v75_ordem_confessora_graca": {"name": "Regressão Serena", "text": "Purifica até dois aliados da mesma fileira de estados negativos; cada aliado purificado recebe +1. Se ninguém precisar de purificação, fortalece o aliado mais fraco em +1.", "effect": "v75_grace_mender"},
+    "gwent_v75_veu_acolito_sangue": {"name": "Marca da Dinastia", "text": "Aplica uma marca de Sangramento ao inimigo mais forte da fileira; a segunda marca provoca Hemorragia e reduz 2 de bônus.", "effect": "v75_blood_mark"},
+    "gwent_v75_veu_carrasco_preco": {"name": "Preço em Sangue", "text": "Sacrifica o aliado mais fraco da mesma fileira e recebe bônus igual ao seu poder efetivo, até +3; sem aliado, recebe +1.", "effect": "v75_blood_price"},
+    "gwent_v75_lua_oraculo_geada": {"name": "Presságio da Geada", "text": "Aplica uma marca de Geada ao inimigo mais forte da fileira; se já tinha uma marca, completa a segunda e recebe +1.", "effect": "v75_frost_oracle"},
+    "gwent_v75_lua_graviturgista": {"name": "Cisalhamento Gravitacional", "text": "Reduz em 1 o bônus de até dois inimigos com bônus positivo na fileira; se atingir dois, recebe +1.", "effect": "v75_gravity_shear"},
 }
 
 
@@ -316,6 +340,90 @@ def _aplicar_habilidade_identidade(player: dict, other: dict, card: dict, state:
             unit["geada"] = min(2, int(unit.get("geada", 0)) + 1)
             atingidos += 1
         card["bonus"] += min(3, atingidos)
+    elif effect == "v75_golden_vow":
+        card["bonus"] += 1
+        ally = min(same_row, key=lambda u: _poder_efetivo(u, weather), default=None)
+        if ally:
+            ally["bonus"] = int(ally.get("bonus", 0)) + 1
+    elif effect == "v75_crucible_guard":
+        target = min((u for u in same_row if int(u.get("escudo", 0)) <= 0),
+                     key=lambda u: _poder_efetivo(u, weather), default=None)
+        if target is not None:
+            target["escudo"] = 1
+        else:
+            card["escudo"] = 1
+    elif effect == "v75_grace_mender":
+        status_keys = ("sangramento", "geada", "podrida", "loucura")
+        targets = sorted((u for u in same_row if any(int(u.get(k, 0)) > 0 for k in status_keys)),
+                         key=lambda u: _poder_efetivo(u, weather))[:2]
+        for target in targets:
+            for key in status_keys:
+                target[key] = 0
+            target["bonus"] = int(target.get("bonus", 0)) + 1
+        if not targets:
+            target = min(same_row, key=lambda u: _poder_efetivo(u, weather), default=None)
+            if target:
+                target["bonus"] = int(target.get("bonus", 0)) + 1
+            else:
+                card["bonus"] += 1
+    elif effect == "v75_golden_standard":
+        occupied_rows = {u.get("row") for u in allies}
+        if len(occupied_rows | {row}) >= 2:
+            card["bonus"] += 1
+            for target in same_row[:2]:
+                target["bonus"] = int(target.get("bonus", 0)) + 1
+    elif effect == "v75_blood_mark":
+        target = max(enemy_row, key=lambda u: _poder_efetivo(u, weather), default=None)
+        if target:
+            marks = int(target.get("sangramento", 0)) + 1
+            if marks >= 2:
+                target["sangramento"] = 0
+                target["bonus"] = max(-2, int(target.get("bonus", 0)) - 2)
+                card["bonus"] += 1
+            else:
+                target["sangramento"] = marks
+    elif effect == "v75_blood_feast":
+        card["bonus"] += min(2, sum(1 for u in enemies if int(u.get("sangramento", 0)) > 0))
+    elif effect == "v75_blood_price":
+        victim = min(same_row, key=lambda u: _poder_efetivo(u, weather), default=None)
+        if victim is not None:
+            gain = min(3, max(1, _poder_efetivo(victim, weather)))
+            _remover_unidade(player, victim, "sacrificio")
+            card["bonus"] += gain
+        else:
+            card["bonus"] += 1
+    elif effect == "v75_blood_pursuit":
+        target = max((u for u in enemy_row if int(u.get("sangramento", 0)) > 0),
+                     key=lambda u: _poder_efetivo(u, weather), default=None)
+        if target:
+            target["bonus"] = max(-2, int(target.get("bonus", 0)) - 1)
+            card["bonus"] += 1
+    elif effect == "v75_frost_oracle":
+        target = max(enemy_row, key=lambda u: _poder_efetivo(u, weather), default=None)
+        if target:
+            old_marks = int(target.get("geada", 0))
+            target["geada"] = min(2, old_marks + 1)
+            if old_marks >= 1:
+                card["bonus"] += 1
+    elif effect == "v75_lunar_cartography":
+        occupied = {u.get("row") for u in allies if u.get("row") != row}
+        card["bonus"] += min(2, len(occupied))
+    elif effect == "v75_gravity_shear":
+        targets = sorted((u for u in enemy_row if int(u.get("bonus", 0)) > 0),
+                         key=lambda u: int(u.get("bonus", 0)), reverse=True)[:2]
+        for target in targets:
+            target["bonus"] = max(-2, int(target.get("bonus", 0)) - 1)
+        if len(targets) == 2:
+            card["bonus"] += 1
+    elif effect == "v75_moon_ward":
+        target = min((u for u in allies if u.get("row") != row and int(u.get("escudo", 0)) <= 0),
+                     key=lambda u: _poder_efetivo(u, weather), default=None)
+        if target is not None:
+            target["escudo"] = 1
+        else:
+            card["escudo"] = 1
+        if any(int(u.get("geada", 0)) > 0 for u in enemy_row):
+            card["bonus"] += 1
     return str(data["name"])
 
 
