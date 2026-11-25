@@ -16,6 +16,7 @@ from __future__ import annotations
 import functools
 import math
 import random
+import unicodedata
 from typing import Callable
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
@@ -78,6 +79,22 @@ FACCOES: dict[str, dict] = {
     "Véu Carmesim": dict(cor=(190, 54, 68), metal=(246, 187, 184), esc=(43, 13, 18)),
     "Lua Sombria": dict(cor=(139, 112, 214), metal=(224, 215, 255), esc=(18, 15, 39)),
 }
+
+# Nomes antigos ainda podem existir em cartas salvas, decks e templates.
+# Normalizamos antes de desenhar para nunca cair silenciosamente na Ordem Áurea.
+_ALIASES_FACCAO = {
+    "ordem aurea": "Ordem Áurea", "golden order": "Ordem Áurea",
+    "veu carmesim": "Véu Carmesim", "dinastia mohgwyn": "Véu Carmesim",
+    "mohgwyn": "Véu Carmesim", "blood dynasty": "Véu Carmesim",
+    "lua sombria": "Lua Sombria", "casa cariana": "Lua Sombria",
+    "cariana": "Lua Sombria", "carian": "Lua Sombria",
+}
+
+def normalizar_faccao(valor: str | None) -> str:
+    """Converte nomes atuais/legados para uma das três facções oficiais."""
+    bruto = str(valor or "").strip()
+    chave = unicodedata.normalize("NFKD", bruto).encode("ascii", "ignore").decode("ascii").casefold()
+    return _ALIASES_FACCAO.get(chave, bruto if bruto in FACCOES else "Ordem Áurea")
 ELEMENTOS: dict[str, dict] = {
     "Força": dict(cor=(238, 112, 70), claro=(255, 186, 140), escuro=(110, 30, 18)),
     "Destreza": dict(cor=(70, 214, 170), claro=(170, 255, 226), escuro=(14, 80, 62)),
@@ -419,35 +436,42 @@ def _estrela_gema(ov, cx, cy, r, cor, luz, pontas=8):
 # ---------------------------------------------------------------------------
 # Moldura por raridade
 # ---------------------------------------------------------------------------
-def _forma_moldura(rar: str, est: dict) -> Image.Image:
+def _pontos_arquitetura_faccao(faccao: str, inset: float = 0) -> list[tuple[float, float]]:
+    """Silhueta externa própria de cada facção; o miolo da carta permanece intacto."""
+    f = normalizar_faccao(faccao)
+    # Os três perfis mudam a arquitetura do aro, não a janela da ilustração.
+    if f == "Ordem Áurea":
+        pts = [(3, 22), (22, 3), (174, 3), (210, 13), (246, 3), (398, 3),
+               (417, 22), (417, 598), (398, 617), (246, 617), (210, 607),
+               (174, 617), (22, 617), (3, 598)]
+    elif f == "Véu Carmesim":
+        pts = [(3, 12), (25, 3), (395, 3), (417, 12), (417, 150), (405, 170),
+               (417, 190), (417, 286), (402, 310), (417, 334), (417, 430),
+               (405, 450), (417, 470), (417, 608), (395, 617), (25, 617),
+               (3, 608), (3, 470), (15, 450), (3, 430), (3, 334), (18, 310),
+               (3, 286), (3, 190), (15, 170), (3, 150)]
+    else:  # Lua Sombria: arcos ogivais e perfil de observatório astral.
+        pts = [(3, 28), (24, 3), (158, 3), (184, 18), (210, 3), (236, 18),
+               (262, 3), (396, 3), (417, 28), (417, 592), (396, 617),
+               (262, 617), (236, 602), (210, 617), (184, 602), (158, 617),
+               (24, 617), (3, 592)]
+    # Escala em torno do centro para gerar o recorte interno com espessura uniforme.
+    fator = 1.0 - (inset / 420.0)
+    return [(210 + (x - 210) * fator, 310 + (y - 310) * fator) for x, y in pts]
+
+
+def _forma_moldura(rar: str, est: dict, faccao: str = "Ordem Áurea") -> Image.Image:
     """Máscara (255 = metal) do aro externo + ornamentos próprios de cada raridade."""
     t = est["esp"]
     W, H = BASE_W, BASE_H
     cx = W / 2
 
     def fn(d):
-        # ---------- aro base ----------
-        if rar == "Primordial":
-            ch = 20
-
-            def octo(inset):
-                i = inset
-                return _p([(3 + ch + i, 3 + i), (W - 3 - ch - i, 3 + i), (W - 3 - i, 3 + ch + i),
-                           (W - 3 - i, H - 3 - ch - i), (W - 3 - ch - i, H - 3 - i), (3 + ch + i, H - 3 - i),
-                           (3 + i, H - 3 - ch - i), (3 + i, 3 + ch + i)])
-            d.polygon(octo(0), fill=255)
-            d.polygon(octo(t), fill=0)
-            d.polygon(octo(t + 6), fill=255)
-            d.polygon(octo(t + 8.5), fill=0)
-        elif rar == "Singular":
-            d.rounded_rectangle(_box((3, 3, W - 3, H - 3)), radius=34 * S, fill=255,
-                                corners=(True, False, True, False))
-            d.rounded_rectangle(_box((3 + t, 3 + t, W - 3 - t, H - 3 - t)), radius=24 * S, fill=0,
-                                corners=(True, False, True, False))
-        else:
-            r = {"Comum": 20, "Rara": 22, "Épica": 12, "Lendária": 26, "Mítica": 20}[rar]
-            d.rounded_rectangle(_box((3, 3, W - 3, H - 3)), radius=r * S, fill=255)
-            d.rounded_rectangle(_box((3 + t, 3 + t, W - 3 - t, H - 3 - t)), radius=max(3, r - t * .6) * S, fill=0)
+        # ---------- aro base: arquitetura determinada pela facção ----------
+        # O mesmo perfil é usado nas sete raridades; cada raridade acrescenta
+        # seus próprios metais, gemas e ornamentos sem apagar a identidade da facção.
+        d.polygon(_p(_pontos_arquitetura_faccao(faccao, 0)), fill=255)
+        d.polygon(_p(_pontos_arquitetura_faccao(faccao, t)), fill=0)
 
         # ---------- ornamentos ----------
         if rar == "Rara":
@@ -686,7 +710,8 @@ def _medalhao_poder(ov, est, especial):
 
 
 def _emblema_faccao(ov, est, faccao):
-    f = FACCOES.get(faccao, FACCOES["Ordem Áurea"])
+    faccao = normalizar_faccao(faccao)
+    f = FACCOES[faccao]
     cx, cy = CENTRO_FACCAO
     r = 28
     m = _mascara(lambda d: d.ellipse(_box((cx - r, cy - r, cx + r, cy + r)), fill=255))
@@ -730,9 +755,10 @@ def _chip_fileira(ov, est, fileira):
 
 def _decoracoes_faccao(ov, faccao, est):
     """Heráldica temática discreta: a facção aparece também nos cantos e filetes."""
+    faccao = normalizar_faccao(faccao)
     d = ImageDraw.Draw(ov)
-    cor = FACCOES.get(faccao, FACCOES["Ordem Áurea"])["cor"]
-    metal = FACCOES.get(faccao, FACCOES["Ordem Áurea"])["metal"]
+    cor = FACCOES[faccao]["cor"]
+    metal = FACCOES[faccao]["metal"]
     # Desenho em coordenadas-base, ampliadas pelo supersampling.
     def line(points, fill, width=1.0):
         d.line(_p(points), fill=(*fill[:3], fill[3] if len(fill) > 3 else 150), width=max(1, int(width*S)), joint="curve")
@@ -778,14 +804,19 @@ def construir_overlay(*, raridade: str, faccao: str, tipo: str, fileira: str, es
                       largura_raridade: float = 100) -> Image.Image:
     """Camada RGBA (BASE × S) com moldura, placas, medalhão e emblemas."""
     est = ESTILOS.get(raridade, ESTILOS["Comum"])
+    faccao = normalizar_faccao(faccao)
     ov = Image.new("RGBA", (BASE_W * S, BASE_H * S), (0, 0, 0, 0))
     # 1) peças que ficam *atrás* do conteúdo
     _janela_arte(ov, est)
     _painel_texto(ov, est, faccao)
     _placa_titulo(ov, est)
     # 2) moldura externa (por último dos blocos grandes, para cobrir as bordas das placas)
-    masc = _forma_moldura(raridade if raridade in ESTILOS else "Comum", est)
+    masc = _forma_moldura(raridade if raridade in ESTILOS else "Comum", est, faccao)
     _bisel_moldura(ov, masc, est)
+    # Filete interno colorido: reforça a facção sem competir com o metal da raridade.
+    f_est = FACCOES[faccao]
+    aro_interno = ImageChops.subtract(_erodir(masc, 2.2), _erodir(masc, 3.35))
+    _compor(ov, aro_interno, [f_est["cor"]], alpha=145)
     _decoracoes_moldura(ov, raridade if raridade in ESTILOS else "Comum", est)
     _decoracoes_faccao(ov, faccao, est)
     # 3) HUD

@@ -53,7 +53,7 @@ def _fingerprint_renderizador() -> str:
 
 # A versão explícita documenta releases; a impressão digital também invalida
 # automaticamente o cache quando o código/overlay/fonte muda sem bump manual.
-VERSAO_RENDERIZADOR = f"{VERSAO_ARTES}-V6-HERALDICA-ELDEN-{_fingerprint_renderizador()}"
+VERSAO_RENDERIZADOR = f"{VERSAO_ARTES}-V8-ARQUITETURA-FACCOES-{_fingerprint_renderizador()}"
 
 # Cor principal da moldura por raridade: as categorias e os tipos continuam
 # visualmente distintos dentro de cada faixa de raridade.
@@ -1027,7 +1027,7 @@ def _draw_card(card: dict[str, Any], width: int = LARGURA_PADRAO, height: int = 
     rarity = str(card.get("raridade", "Comum"))
     category = "Especial" if str(card.get("categoria", "Unidade")).casefold() == "especial" else "Unidade"
     ctype = str(card.get("tipo", "Magia"))
-    faction = str(card.get("faccao") or {"Força":"Ordem Áurea","Destreza":"Véu Carmesim","Magia":"Lua Sombria"}.get(ctype,"Ordem Áurea"))
+    faction = molduras_cartas.normalizar_faccao(card.get("faccao") or {"Força":"Ordem Áurea","Destreza":"Véu Carmesim","Magia":"Lua Sombria"}.get(ctype,"Ordem Áurea"))
     row = str(card.get("fileira") or {"Força":"melee","Destreza":"ranged","Magia":"siege"}.get(ctype,"melee"))
     seed = _seed(card); rng = random.Random(seed)
     palettes = {
@@ -1446,7 +1446,7 @@ def _draw_card_com_template(card: dict[str, Any], illustration_bytes: bytes) -> 
 
     category = str(card.get("categoria", "Unidade"))
     card_type = str(card.get("tipo", "Magia"))
-    faction = str(card.get("faccao") or {"Força": "Ordem Áurea", "Destreza": "Véu Carmesim", "Magia": "Lua Sombria"}.get(card_type, "Ordem Áurea"))
+    faction = molduras_cartas.normalizar_faccao(card.get("faccao") or {"Força": "Ordem Áurea", "Destreza": "Véu Carmesim", "Magia": "Lua Sombria"}.get(card_type, "Ordem Áurea"))
     row = str(card.get("fileira") or {"Força": "melee", "Destreza": "ranged", "Magia": "siege"}.get(card_type, "melee"))
     rarity_base, rarity_accent = CORES_RARIDADE.get(rarity, CORES_RARIDADE["Comum"])
     type_accent = CORES_FACCAO.get(faction, ((21, 29, 39), (44, 47, 61)))[1]
