@@ -48,8 +48,7 @@ LAYOUT_PADRAO: dict[str, Any] = {
     "arte": [56, 256, 784, 846],
     "poder": {"centro": [115, 938], "raio": 80},
     "tipo": [215, 884, 800, 932],
-    "custo": [215, 946, 800, 995],
-    "habilidade": [45, 1018, 800, 1175],
+    "habilidade": [45, 946, 800, 1175],
 }
 
 _CACHE: dict[str, tuple[str, int, int, Image.Image, dict[str, Any]]] = {}

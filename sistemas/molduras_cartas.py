@@ -33,7 +33,6 @@ CENTRO_PODER = (54, 126)             # medalhão de poder
 CENTRO_FACCAO = (366, 126)           # emblema da facção
 CENTRO_ELEMENTO = (366, 176)         # gema do elemento
 CENTRO_FILEIRA = (54, 176)           # fileira (corpo a corpo / distância / cerco)
-CENTRO_CUSTO = (366, 551)            # orbe de custo
 CENTRO_RARIDADE = (210, 474)         # placa de raridade, a cavalo no painel
 
 # ---------------------------------------------------------------------------
@@ -42,34 +41,36 @@ CENTRO_RARIDADE = (210, 474)         # placa de raridade, a cavalo no painel
 # metal: sequência de tons (claro → escuro) varrida na diagonal.
 # luz/cor: realce e cor de destaque; esc: base escura das placas.
 ESTILOS: dict[str, dict] = {
+    # A raridade define o metal principal da moldura; a facção permanece como
+    # cor secundária nos emblemas, filetes e no painel de habilidade.
     "Comum": dict(
-        metal=[(222, 228, 232), (150, 162, 172), (104, 114, 126), (166, 178, 188), (92, 100, 114)],
-        luz=(232, 237, 240), cor=(150, 170, 185), esc=(26, 31, 38),
+        metal=[(238, 242, 245), (160, 174, 186), (91, 104, 118), (190, 201, 210), (76, 88, 102)],
+        luz=(246, 249, 250), cor=(166, 181, 194), esc=(23, 29, 37),
         esp=8, brilho=0, vinheta=0.34),
     "Rara": dict(
-        metal=[(205, 244, 255), (82, 188, 222), (30, 100, 134), (96, 200, 230), (26, 84, 116)],
-        luz=(196, 242, 255), cor=(72, 190, 218), esc=(10, 34, 48),
-        esp=10, brilho=40, vinheta=0.36),
+        metal=[(218, 245, 255), (76, 174, 220), (24, 83, 133), (104, 204, 239), (18, 62, 108)],
+        luz=(222, 248, 255), cor=(77, 180, 226), esc=(9, 29, 48),
+        esp=10, brilho=42, vinheta=0.36),
     "Épica": dict(
-        metal=[(246, 220, 255), (176, 112, 232), (88, 46, 140), (190, 126, 240), (70, 36, 112)],
-        luz=(240, 214, 255), cor=(188, 119, 239), esc=(30, 16, 52),
-        esp=11, brilho=70, vinheta=0.38),
+        metal=[(248, 229, 255), (178, 119, 235), (91, 48, 151), (204, 150, 250), (65, 31, 112)],
+        luz=(247, 230, 255), cor=(183, 126, 239), esc=(28, 15, 50),
+        esp=11, brilho=72, vinheta=0.38),
     "Lendária": dict(
-        metal=[(255, 244, 196), (236, 180, 70), (150, 94, 26), (252, 208, 104), (128, 78, 20)],
-        luz=(255, 238, 178), cor=(246, 194, 83), esc=(40, 26, 10),
-        esp=13, brilho=95, vinheta=0.40),
+        metal=[(255, 248, 211), (239, 185, 75), (145, 87, 24), (255, 218, 112), (112, 65, 18)],
+        luz=(255, 247, 205), cor=(239, 185, 75), esc=(39, 25, 10),
+        esp=13, brilho=92, vinheta=0.40),
     "Mítica": dict(
-        metal=[(255, 214, 244), (255, 108, 190), (150, 92, 255), (92, 204, 255), (255, 110, 196), (96, 22, 88)],
-        luz=(255, 206, 238), cor=(255, 105, 190), esc=(38, 12, 42),
-        esp=12, brilho=100, vinheta=0.40),
+        metal=[(255, 225, 220), (202, 58, 68), (91, 18, 30), (239, 105, 104), (58, 12, 24)],
+        luz=(255, 226, 215), cor=(205, 61, 75), esc=(38, 10, 18),
+        esp=13, brilho=100, vinheta=0.41),
     "Primordial": dict(
-        metal=[(255, 253, 220), (246, 218, 118), (160, 122, 38), (255, 238, 150), (140, 102, 30)],
-        luz=(255, 248, 196), cor=(255, 232, 140), esc=(36, 28, 10),
-        esp=13, brilho=105, vinheta=0.40),
+        metal=[(255, 255, 248), (232, 224, 190), (139, 131, 103), (255, 248, 218), (105, 100, 82)],
+        luz=(255, 255, 245), cor=(239, 224, 174), esc=(34, 32, 25),
+        esp=14, brilho=112, vinheta=0.42),
     "Singular": dict(
-        metal=[(214, 255, 250), (103, 245, 226), (118, 170, 255), (92, 238, 222), (14, 84, 90)],
-        luz=(200, 255, 247), cor=(103, 245, 226), esc=(8, 36, 40),
-        esp=11, brilho=105, vinheta=0.40),
+        metal=[(238, 236, 255), (130, 117, 170), (34, 37, 62), (112, 206, 203), (17, 21, 38)],
+        luz=(248, 244, 255), cor=(151, 143, 206), esc=(9, 12, 24),
+        esp=14, brilho=125, vinheta=0.43),
 }
 
 FACCOES: dict[str, dict] = {
@@ -215,6 +216,23 @@ def _T(R):
     return lambda x, y: (R + x * R, R + y * R)
 
 
+def _g_erdtree(md, R, v=255):
+    """Selo da Ordem Áurea: Térvore estilizada dentro do círculo do Elden."""
+    T = _T(R)
+    w = max(2, int(R * .095))
+    # Círculo do Elden incompleto, para não competir com a árvore.
+    md.arc([R*.12, R*.10, R*1.88, R*1.90], 205, 335, fill=v, width=max(2, int(R*.055)))
+    # Tronco, raízes e copa ramificada.
+    md.line([T(0, .76), T(0, -.42)], fill=v, width=w)
+    md.line([T(0, .48), T(-.34, .82), T(-.58, .90)], fill=v, width=max(2, int(R*.07)))
+    md.line([T(0, .48), T(.34, .82), T(.58, .90)], fill=v, width=max(2, int(R*.07)))
+    for side in (-1, 1):
+        md.line([T(0, -.22), T(side*.28, -.43), T(side*.57, -.48)], fill=v, width=w)
+        md.line([T(side*.25, -.40), T(side*.20, -.69)], fill=v, width=max(2, int(R*.065)))
+        md.line([T(side*.45, -.45), T(side*.61, -.72)], fill=v, width=max(2, int(R*.065)))
+    md.ellipse([R*.43, R*.02, R*.57, R*.16], outline=v, width=max(2, int(R*.045)))
+    _estrela4(md, R, 0, -.94, .12, v)
+
 def _g_bigorna(md, R, v=255):
     T = _T(R)
     md.polygon([T(-.98, -.30), T(-.50, -.52), T(.74, -.52), T(.74, -.20), T(-.50, -.20)], fill=v)
@@ -224,11 +242,15 @@ def _g_bigorna(md, R, v=255):
 
 
 def _g_lua(md, R, v=255):
-    md.ellipse([R - .78 * R - .05 * R, R - .78 * R, R + .78 * R - .05 * R, R + .78 * R], fill=v)
-    md.ellipse([R - .62 * R + .34 * R, R - .62 * R - .10 * R, R + .62 * R + .34 * R, R + .62 * R - .10 * R], fill=0)
-    _estrela4(md, R, .46, -.04, .30, v)
-    _estrela4(md, R, .12, -.62, .14, v)
-
+    """Selo da Lua Sombria: lua crescente, órbita e estrelas distantes."""
+    # Crescente aberto à direita, com recorte limpo.
+    md.ellipse([R*.12, R*.08, R*1.88, R*1.92], fill=v)
+    md.ellipse([R*.55, R*.00, R*2.05, R*1.50], fill=0)
+    # Órbita inclinada e três estrelas.
+    md.arc([R*.02, R*.18, R*1.98, R*1.82], 205, 345, fill=v, width=max(2, int(R*.07)))
+    _estrela4(md, R, -.40, -.55, .18, v)
+    _estrela4(md, R, .58, .34, .22, v)
+    _estrela4(md, R, -.28, .64, .11, v)
 
 def _g_arcano(md, R, v=255):
     T = _T(R)
@@ -242,11 +264,24 @@ def _g_arcano(md, R, v=255):
 
 
 def _g_sangue(md, R, v=255):
+    """Selo do Véu Carmesim: tridente ritual, gota e aro de espinhos."""
     T = _T(R)
-    md.polygon([T(0, -.98), T(-.42, -.22), T(-.38, .28), T(0, .72),
-                T(.38, .28), T(.42, -.22)], fill=v)
-    md.ellipse([R - .34 * R, R - .12 * R, R + .34 * R, R + .56 * R], fill=v)
-
+    w = max(2, int(R*.105))
+    # Haste central e três pontas evocam o rito sanguíneo de Mohgwyn.
+    md.line([T(0, .88), T(0, -.42)], fill=v, width=w)
+    md.line([T(0, -.12), T(-.48, -.72)], fill=v, width=w)
+    md.line([T(0, -.12), T(.48, -.72)], fill=v, width=w)
+    md.line([T(-.48, -.72), T(-.48, -.94)], fill=v, width=w)
+    md.line([T(0, -.42), T(0, -.98)], fill=v, width=w)
+    md.line([T(.48, -.72), T(.48, -.94)], fill=v, width=w)
+    # Gota suspensa no centro e meia coroa de espinhos.
+    md.polygon([T(0, -.02), T(-.23, .28), T(-.18, .55), T(0, .70), T(.18, .55), T(.23, .28)], fill=v)
+    md.arc([R*.12, R*.35, R*1.88, R*1.92], 205, 335, fill=v, width=max(2, int(R*.06)))
+    for ang in (220, 250, 280, 310, 340):
+        a = math.radians(ang)
+        x, y = .72*math.cos(a), .72*math.sin(a)
+        md.polygon([T(x, y), T(x+.10*math.cos(a), y+.10*math.sin(a)),
+                    T(x+.20*math.cos(a+1.0), y+.20*math.sin(a+1.0))], fill=v)
 
 def _espada_rot(md, R, ang, v, dx=0.0, dy=0.0):
     """Espada de pé (ponta para cima) girada em torno do centro."""
@@ -607,7 +642,7 @@ def _painel_texto(ov, est, faccao):
     c = 9
     pts = [(x1 + c, y1), (x2 - c, y1), (x2, y1 + c), (x2, y2 - 6), (x2 - 6, y2), (x1 + 6, y2), (x1, y2 - 6), (x1, y1 + c)]
     m = _mascara(lambda d: d.polygon(_p(pts), fill=255))
-    base = _mix(est["esc"], FACCOES.get(faccao, FACCOES["Ordem Áurea"])["esc"], .5)
+    base = _mix(est["esc"], FACCOES.get(faccao, FACCOES["Ordem Áurea"])["esc"], .72)
     _forma(ov, m, fundo=[_tom(base, 1.25), _tom(base, .62), (7, 8, 10)], borda=est["metal"], borda_w=2.4,
            luz=est["luz"], sombra=3.5)
     # divisória sob a linha de facção/fileira
@@ -660,7 +695,7 @@ def _emblema_faccao(ov, est, faccao):
            luz=f["metal"], sombra=3.2)
     anel = _mascara(lambda d: d.ellipse(_box((cx - r + 6, cy - r + 6, cx + r - 6, cy + r - 6)), fill=255))
     _compor(ov, ImageChops.subtract(anel, _erodir(anel, .7)), [f["cor"]], alpha=95)
-    glifo = {"Ordem Áurea": _g_bigorna, "Lua Sombria": _g_lua, "Véu Carmesim": _g_sangue}.get(faccao, _g_arcano)
+    glifo = {"Ordem Áurea": _g_erdtree, "Lua Sombria": _g_lua, "Véu Carmesim": _g_sangue}.get(faccao, _g_arcano)
     _carimbar(ov, glifo, cx, cy + (1.2 if faccao == "Ordem Áurea" else 0), 15.5, [_tom(f["metal"], 1.25), f["cor"]])
 
 
@@ -691,21 +726,49 @@ def _chip_fileira(ov, est, fileira):
     _carimbar(ov, glifo, cx, cy, 9.4, [(255, 255, 255), _tom(est["luz"], .95)])
 
 
-def _orbe_custo(ov, est):
-    cx, cy = CENTRO_CUSTO
-    r = 26
-    m = _mascara(lambda d: d.ellipse(_box((cx - r, cy - r, cx + r, cy + r)), fill=255))
-    cor = est["cor"]
-    _forma(ov, m, fundo=[_tom(cor, 1.1), _tom(cor, .5), _tom(cor, .28)], modo_fundo="diag",
-           borda=est["metal"], borda_w=3.2, luz=est["luz"], sombra=3.4)
+
+
+def _decoracoes_faccao(ov, faccao, est):
+    """Heráldica temática discreta: a facção aparece também nos cantos e filetes."""
     d = ImageDraw.Draw(ov)
-    # reflexo
-    d.pieslice(_box((cx - 16, cy - 20, cx + 16, cy + 4)), 200, 340, fill=(255, 255, 255, 56))
-    # pontos de calibração
-    for k in range(12):
-        a = k * math.pi / 6
-        d.ellipse(_box((cx + math.cos(a) * 20.4 - .9, cy + math.sin(a) * 20.4 - .9,
-                        cx + math.cos(a) * 20.4 + .9, cy + math.sin(a) * 20.4 + .9)), fill=(*est["luz"], 150))
+    cor = FACCOES.get(faccao, FACCOES["Ordem Áurea"])["cor"]
+    metal = FACCOES.get(faccao, FACCOES["Ordem Áurea"])["metal"]
+    # Desenho em coordenadas-base, ampliadas pelo supersampling.
+    def line(points, fill, width=1.0):
+        d.line(_p(points), fill=(*fill[:3], fill[3] if len(fill) > 3 else 150), width=max(1, int(width*S)), joint="curve")
+    def gem(x, y, r=2.2):
+        d.polygon(_p([(x,y-r*1.8),(x+r,y),(x,y+r*1.8),(x-r,y)]), fill=(*metal,185))
+    if faccao == "Ordem Áurea":
+        # Ramos dourados e pequenas folhas: iconografia da Térvore e do voto áureo.
+        for side in (-1, 1):
+            x = 13 if side < 0 else BASE_W-13
+            pts = [(x, 205), (x+side*5, 224), (x, 244), (x+side*5, 264), (x, 284),
+                   (x+side*5, 304), (x, 324), (x+side*5, 344), (x, 364)]
+            line(pts, (*cor,115), 1.1)
+            for yy in (230, 270, 310, 350):
+                d.ellipse(_box((x-3, yy-5, x+3, yy+1)), outline=(*metal,170), width=max(1,S))
+            gem(x, 185, 2.0)
+    elif faccao == "Véu Carmesim":
+        # Espinhos e gotas rituais, como um selo de sangue gravado no metal.
+        for side in (-1, 1):
+            x = 13 if side < 0 else BASE_W-13
+            for yy in (205, 250, 295, 340, 385):
+                line([(x,yy-15),(x+side*5,yy-5),(x,yy+4),(x+side*6,yy+13)], (*cor,135), 1.25)
+                line([(x+side*3,yy-5),(x+side*10,yy-12)], (*metal,135), .8)
+                d.polygon(_p([(x,yy+7),(x-2.2,yy+12),(x,yy+16),(x+2.2,yy+12)]), fill=(*cor,175))
+    elif faccao == "Lua Sombria":
+        # Órbitas lunares e estrelas de quatro pontas.
+        for side in (-1, 1):
+            x = 14 if side < 0 else BASE_W-14
+            d.arc(_box((x-9, 205, x+9, 250)), 65 if side < 0 else 115, 295 if side < 0 else 245,
+                  fill=(*cor,145), width=max(1,S))
+            d.arc(_box((x-7, 278, x+7, 330)), 235, 55, fill=(*metal,110), width=max(1,S))
+            for yy in (220, 285, 350):
+                d.polygon(_p([(x, yy-5), (x+1.8, yy-1.8), (x+5, yy),
+                              (x+1.8, yy+1.8), (x, yy+5), (x-1.8, yy+1.8),
+                              (x-5, yy), (x-1.8, yy-1.8)]), fill=(*metal,185))
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -724,13 +787,13 @@ def construir_overlay(*, raridade: str, faccao: str, tipo: str, fileira: str, es
     masc = _forma_moldura(raridade if raridade in ESTILOS else "Comum", est)
     _bisel_moldura(ov, masc, est)
     _decoracoes_moldura(ov, raridade if raridade in ESTILOS else "Comum", est)
+    _decoracoes_faccao(ov, faccao, est)
     # 3) HUD
     _medalhao_poder(ov, est, especial)
     _emblema_faccao(ov, est, faccao)
     _gema_elemento(ov, est, tipo)
     if not especial:
         _chip_fileira(ov, est, fileira)
-    _orbe_custo(ov, est)
     _placa_raridade(ov, est, largura_raridade)
     return ov
 

@@ -53,18 +53,18 @@ def _fingerprint_renderizador() -> str:
 
 # A versão explícita documenta releases; a impressão digital também invalida
 # automaticamente o cache quando o código/overlay/fonte muda sem bump manual.
-VERSAO_RENDERIZADOR = f"{VERSAO_ARTES}-{_fingerprint_renderizador()}"
+VERSAO_RENDERIZADOR = f"{VERSAO_ARTES}-V6-HERALDICA-ELDEN-{_fingerprint_renderizador()}"
 
 # Cor principal da moldura por raridade: as categorias e os tipos continuam
 # visualmente distintos dentro de cada faixa de raridade.
 CORES_RARIDADE = {
-    "Comum": ((35, 47, 59), (143, 163, 177)),
-    "Rara": ((17, 56, 76), (72, 190, 218)),
-    "Épica": ((54, 34, 83), (188, 119, 239)),
-    "Lendária": ((83, 52, 18), (246, 194, 83)),
-    "Mítica": ((62, 24, 75), (255, 105, 190)),
-    "Primordial": ((35, 28, 12), (255, 238, 145)),
-    "Singular": ((15, 58, 63), (103, 245, 226)),
+    "Comum": ((23, 29, 37), (166, 181, 194)),
+    "Rara": ((9, 29, 48), (77, 180, 226)),
+    "Épica": ((28, 15, 50), (183, 126, 239)),
+    "Lendária": ((39, 25, 10), (239, 185, 75)),
+    "Mítica": ((38, 10, 18), (205, 61, 75)),
+    "Primordial": ((34, 32, 25), (239, 224, 174)),
+    "Singular": ((9, 12, 24), (151, 143, 206)),
 }
 CORES_TIPO = {
     "Destreza": (75, 211, 177),
@@ -1037,13 +1037,13 @@ def _draw_card(card: dict[str, Any], width: int = LARGURA_PADRAO, height: int = 
     }
     top, mid, accent, metal = palettes.get(faction, palettes["Ordem Áurea"])
     rarity_colors = {
-        "Comum": ((79,88,88),(172,180,172)),
-        "Rara": ((30,82,105),(91,184,210)),
-        "Épica": ((75,43,103),(193,132,224)),
-        "Lendária": ((112,72,27),(236,187,91)),
-        "Mítica": ((78,32,91),(255,116,198)),
-        "Primordial": ((116,94,36),(255,229,151)),
-        "Singular": ((20,82,86),(118,255,230)),
+        "Comum": ((23, 29, 37), (166, 181, 194)),
+        "Rara": ((9, 29, 48), (77, 180, 226)),
+        "Épica": ((28, 15, 50), (183, 126, 239)),
+        "Lendária": ((39, 25, 10), (239, 185, 75)),
+        "Mítica": ((38, 10, 18), (205, 61, 75)),
+        "Primordial": ((34, 32, 25), (239, 224, 174)),
+        "Singular": ((9, 12, 24), (151, 143, 206)),
     }
     rdark, rlight = rarity_colors.get(rarity, rarity_colors["Comum"])
     sx, sy = width/420, height/620
@@ -1355,20 +1355,14 @@ def _draw_card(card: dict[str, Any], width: int = LARGURA_PADRAO, height: int = 
     txt((X(38),Y(518)),aname,f_hab,(*est["luz"],255),anchor="lm")
     # O texto usa o maior tamanho que couber em 3 linhas (12 → 9); só no mínimo aceita 4 linhas.
     for tam in (12, 11, 10, 9):
-        fonte_txt=_font(max(8,X(tam))); linhas_txt=_wrap(d,atext,fonte_txt,X(268))
+        fonte_txt=_font(max(8,X(tam))); linhas_txt=_wrap(d,atext,fonte_txt,X(342))
         if len(linhas_txt)<=3: break
     passo=tam+3.4 if len(linhas_txt)<=3 else 12.6
     for i,line in enumerate(linhas_txt[:4]):
         d.text((X(38),Y(538+i*passo)),line,font=fonte_txt,fill=(228,224,212,255),anchor="lm")
 
-    # Custo de deck.
-    cost=int(card.get("custo",0) or 0)
-    ox,oy=molduras_cartas.CENTRO_CUSTO
-    f_cost=_font(max(13,X(23)),True,serif=True)
-    d.text((X(ox),Y(oy-5)+max(1,X(1))),str(cost),font=f_cost,fill=(0,0,0,255),anchor="mm",
-           stroke_width=max(1,X(1.5)),stroke_fill=(0,0,0,255))
-    d.text((X(ox),Y(oy-5)),str(cost),font=f_cost,fill=(255,250,232,255),anchor="mm")
-    _texto_rastreado(d,(X(ox),Y(oy+13)),"CUSTO",_font(max(6,X(7)),True),(*est["luz"],255),X(.8),centro=True)
+    # O sistema atual não usa custo de carta/deck: o espaço inferior é reservado
+    # integralmente para o texto da habilidade.
     return im.convert("RGB")
 
 
@@ -1492,14 +1486,6 @@ def _draw_card_com_template(card: dict[str, Any], illustration_bytes: bytes) -> 
                    ROTULOS_FILEIRA.get(row, "UNIDADE"), maximo=22, minimo=12,
                    cor=suave, alinhamento="direita", margem=22, negrito=True)
 
-    # Custo: rótulo à esquerda, valor à direita.
-    custo = str(int(card.get("custo", 0) or 0))
-    cx1, cy1, cx2, cy2 = layout["custo"]
-    _texto_no_slot(draw, (cx1, cy1, cx1 + (cx2 - cx1) * 3 // 4, cy2), "CUSTO DE DECK", maximo=26, minimo=14,
-                   cor=suave, alinhamento="esquerda", margem=22)
-    _texto_no_slot(draw, (cx2 - 130, cy1, cx2, cy2), custo, maximo=44, minimo=22, cor=creme,
-                   alinhamento="direita", margem=22, contorno=2)
-
     # Habilidade: o guia reserva uma placa de 92 px. O título e até duas linhas
     # de descrição são dimensionados dentro da área segura, sem invadir o relevo.
     habilidade = HABILIDADES.get(str(card.get("habilidade", "")), {})
@@ -1539,7 +1525,7 @@ def desenhar_calibracao(imagem: Image.Image, raridade: str) -> Image.Image:
     saida = imagem.convert("RGBA")
     draw = ImageDraw.Draw(saida, "RGBA")
     cores = {"raridade": (240, 180, 60), "nome": (80, 160, 255), "arte": (60, 220, 120),
-             "tipo": (190, 120, 255), "custo": (255, 130, 90), "habilidade": (255, 90, 150)}
+             "tipo": (190, 120, 255), "habilidade": (255, 90, 150)}
     for campo, cor in cores.items():
         x1, y1, x2, y2 = layout[campo]
         draw.rectangle((x1, y1, x2, y2), outline=(*cor, 255), width=3)
