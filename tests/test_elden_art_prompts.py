@@ -54,6 +54,42 @@ class EldenRingArtPromptTests(unittest.TestCase):
         self.assertIn("CARD ART ONLY", prompt)
         self.assertIn("no card frame", prompt.lower())
 
+
+    def test_all_catalog_cards_receive_specific_elden_scenes(self):
+        from sistemas import cartas
+        from sistemas.atelie_coliseu import CENAS_ELDEN_POR_ID
+
+        catalog = cartas.CARTAS_POR_ID
+        self.assertEqual(len(CENAS_ELDEN_POR_ID), 89)
+        for card_id, card in catalog.items():
+            with self.subTest(card_id=card_id):
+                prompt = gerar_prompt_carta(card.para_dict())
+                self.assertIn("CARD-SPECIFIC VISUAL SCENE", prompt)
+                self.assertNotIn("No fixed scene exists", prompt)
+                self.assertNotIn("CARD-SPECIFIC CHARACTER CASTING", prompt)
+                self.assertNotIn("the randomized appearance profile is only a fallback", prompt.lower())
+
+    def test_canonical_characters_keep_their_actual_elden_ring_identity(self):
+        from sistemas import cartas
+        samples = {
+            "chefe_dama_vazio": ("four arms", "Ranni's Rise", "Dark Moon"),
+            "chefe_rei_afogado": ("Godfrey", "Serosh", "greataxe"),
+            "gwent_unidade_herdeiro_portao": ("Prince of Death", "Deeproot Depths", "not as a living"),
+            "gwent_unidade_senhor_cacada": ("Blaidd", "Half-Wolf", "greatsword"),
+            "primordial_eternidade": ("Maliketh", "Destined Death", "Crumbling Farum Azula"),
+        }
+        for card_id, phrases in samples.items():
+            with self.subTest(card_id=card_id):
+                prompt = gerar_prompt_carta(cartas.CARTAS_POR_ID[card_id].para_dict())
+                for phrase in phrases:
+                    self.assertIn(phrase.casefold(), prompt.casefold())
+
+    def test_faction_alignment_never_overwrites_canonical_character_design(self):
+        from sistemas import cartas
+        prompt = gerar_prompt_carta(cartas.CARTAS_POR_ID["chefe_dama_vazio"].para_dict())
+        self.assertIn("the three narabot factions are custom deck allegiances", prompt.lower())
+        self.assertIn("do not randomize face, age, gender, species", prompt.lower())
+
     def test_non_elden_origin_does_not_receive_lands_between_setting(self):
         card = self.make_card("", "Cavaleiro Errante", "Viaja por uma floresta antiga.")
         card["jogo_origem"] = "Universo Original"

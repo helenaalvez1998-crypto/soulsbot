@@ -42,42 +42,43 @@ CENTRO_RARIDADE = (210, 474)         # placa de raridade, a cavalo no painel
 # metal: sequência de tons (claro → escuro) varrida na diagonal.
 # luz/cor: realce e cor de destaque; esc: base escura das placas.
 ESTILOS: dict[str, dict] = {
-    # A raridade define o metal principal da moldura; a facção permanece como
-    # cor secundária nos emblemas, filetes e no painel de habilidade.
+    # Paletas inspiradas nos materiais e fenômenos de Elden Ring / Souls.
+    # A raridade controla o metal; a facção aparece como esmalte e gravação secundária.
     "Comum": dict(
-        metal=[(238, 242, 245), (160, 174, 186), (91, 104, 118), (190, 201, 210), (76, 88, 102)],
-        luz=(246, 249, 250), cor=(166, 181, 194), esc=(23, 29, 37),
+        metal=[(205, 207, 202), (112, 121, 124), (47, 54, 59), (151, 157, 154), (35, 40, 45)],
+        luz=(225, 224, 211), cor=(135, 145, 145), esc=(17, 21, 25),
         esp=8, brilho=0, vinheta=0.34),
     "Rara": dict(
-        metal=[(218, 245, 255), (76, 174, 220), (24, 83, 133), (104, 204, 239), (18, 62, 108)],
-        luz=(222, 248, 255), cor=(77, 180, 226), esc=(9, 29, 48),
-        esp=10, brilho=42, vinheta=0.36),
+        metal=[(205, 231, 241), (70, 139, 177), (25, 57, 82), (105, 177, 204), (14, 35, 55)],
+        luz=(218, 240, 246), cor=(79, 151, 188), esc=(8, 20, 32),
+        esp=9, brilho=38, vinheta=0.36),
     "Épica": dict(
-        metal=[(248, 229, 255), (178, 119, 235), (91, 48, 151), (204, 150, 250), (65, 31, 112)],
-        luz=(247, 230, 255), cor=(183, 126, 239), esc=(28, 15, 50),
-        esp=11, brilho=72, vinheta=0.38),
+        metal=[(225, 213, 244), (132, 99, 174), (54, 37, 83), (164, 132, 201), (31, 22, 52)],
+        luz=(239, 225, 250), cor=(145, 112, 190), esc=(20, 13, 34),
+        esp=10, brilho=62, vinheta=0.38),
     "Lendária": dict(
-        metal=[(255, 248, 211), (239, 185, 75), (145, 87, 24), (255, 218, 112), (112, 65, 18)],
-        luz=(255, 247, 205), cor=(239, 185, 75), esc=(39, 25, 10),
-        esp=13, brilho=92, vinheta=0.40),
+        metal=[(246, 224, 158), (177, 126, 43), (83, 54, 22), (215, 169, 77), (48, 31, 15)],
+        luz=(255, 239, 190), cor=(197, 151, 66), esc=(31, 22, 12),
+        esp=12, brilho=82, vinheta=0.40),
     "Mítica": dict(
-        metal=[(255, 225, 220), (202, 58, 68), (91, 18, 30), (239, 105, 104), (58, 12, 24)],
-        luz=(255, 226, 215), cor=(205, 61, 75), esc=(38, 10, 18),
-        esp=13, brilho=100, vinheta=0.41),
+        metal=[(239, 174, 143), (153, 57, 48), (66, 22, 26), (190, 82, 58), (38, 13, 20)],
+        luz=(255, 210, 177), cor=(177, 69, 57), esc=(29, 11, 16),
+        esp=12, brilho=94, vinheta=0.41),
     "Primordial": dict(
-        metal=[(255, 255, 248), (232, 224, 190), (139, 131, 103), (255, 248, 218), (105, 100, 82)],
-        luz=(255, 255, 245), cor=(239, 224, 174), esc=(34, 32, 25),
-        esp=14, brilho=112, vinheta=0.42),
+        metal=[(250, 244, 218), (184, 169, 126), (82, 77, 59), (218, 207, 169), (45, 43, 35)],
+        luz=(255, 250, 225), cor=(211, 194, 145), esc=(27, 26, 22),
+        esp=13, brilho=108, vinheta=0.42),
     "Singular": dict(
-        metal=[(238, 236, 255), (130, 117, 170), (34, 37, 62), (112, 206, 203), (17, 21, 38)],
-        luz=(248, 244, 255), cor=(151, 143, 206), esc=(9, 12, 24),
-        esp=14, brilho=125, vinheta=0.43),
+        metal=[(205, 218, 220), (77, 112, 119), (24, 39, 51), (113, 155, 158), (12, 20, 31)],
+        luz=(226, 241, 238), cor=(105, 150, 151), esc=(7, 13, 22),
+        esp=14, brilho=122, vinheta=0.44),
 }
 
 FACCOES: dict[str, dict] = {
-    "Ordem Áurea": dict(cor=(229, 187, 83), metal=(250, 235, 181), esc=(46, 36, 16)),
-    "Véu Carmesim": dict(cor=(190, 54, 68), metal=(246, 187, 184), esc=(43, 13, 18)),
-    "Lua Sombria": dict(cor=(139, 112, 214), metal=(224, 215, 255), esc=(18, 15, 39)),
+    # Esmaltes de facção: discretos o bastante para conviver com a raridade.
+    "Ordem Áurea": dict(cor=(184, 143, 57), metal=(242, 218, 153), esc=(38, 29, 15)),
+    "Véu Carmesim": dict(cor=(142, 42, 48), metal=(205, 139, 125), esc=(34, 12, 17)),
+    "Lua Sombria": dict(cor=(93, 111, 159), metal=(191, 202, 224), esc=(15, 20, 37)),
 }
 
 # Nomes antigos ainda podem existir em cartas salvas, decks e templates.
@@ -437,139 +438,58 @@ def _estrela_gema(ov, cx, cy, r, cor, luz, pontas=8):
 # Moldura por raridade
 # ---------------------------------------------------------------------------
 def _pontos_arquitetura_faccao(faccao: str, inset: float = 0) -> list[tuple[float, float]]:
-    """Silhueta externa própria de cada facção; o miolo da carta permanece intacto."""
-    f = normalizar_faccao(faccao)
-    # Os três perfis mudam a arquitetura do aro, não a janela da ilustração.
-    if f == "Ordem Áurea":
-        pts = [(3, 22), (22, 3), (174, 3), (210, 13), (246, 3), (398, 3),
-               (417, 22), (417, 598), (398, 617), (246, 617), (210, 607),
-               (174, 617), (22, 617), (3, 598)]
-    elif f == "Véu Carmesim":
-        pts = [(3, 12), (25, 3), (395, 3), (417, 12), (417, 150), (405, 170),
-               (417, 190), (417, 286), (402, 310), (417, 334), (417, 430),
-               (405, 450), (417, 470), (417, 608), (395, 617), (25, 617),
-               (3, 608), (3, 470), (15, 450), (3, 430), (3, 334), (18, 310),
-               (3, 286), (3, 190), (15, 170), (3, 150)]
-    else:  # Lua Sombria: arcos ogivais e perfil de observatório astral.
-        pts = [(3, 28), (24, 3), (158, 3), (184, 18), (210, 3), (236, 18),
-               (262, 3), (396, 3), (417, 28), (417, 592), (396, 617),
-               (262, 617), (236, 602), (210, 617), (184, 602), (158, 617),
-               (24, 617), (3, 592)]
-    # Escala em torno do centro para gerar o recorte interno com espessura uniforme.
-    fator = 1.0 - (inset / 420.0)
-    return [(210 + (x - 210) * fator, 310 + (y - 310) * fator) for x, y in pts]
+    """Retângulo vertical de cantos retos; a facção muda a heráldica, não o formato da carta.
+
+    O contorno externo permanece sempre 90° e com proporção de carta colecionável.
+    A identidade de cada facção é desenhada como gravação metálica dentro do aro.
+    """
+    normalizar_faccao(faccao)  # valida aliases legados sem alterar a geometria
+    x1, y1, x2, y2 = 3 + inset, 3 + inset, BASE_W - 3 - inset, BASE_H - 3 - inset
+    return [(x1, y1), (x2, y1), (x2, y2), (x1, y2)]
 
 
 def _forma_moldura(rar: str, est: dict, faccao: str = "Ordem Áurea") -> Image.Image:
-    """Máscara (255 = metal) do aro externo + ornamentos próprios de cada raridade."""
+    """Aro retangular vertical de cantos a 90°, com espessura uniforme.
+
+    Facção e raridade não deformam a silhueta: elas são comunicadas pelo metal,
+    pelos filetes e pelos ornamentos gravados na superfície do aro.
+    """
     t = est["esp"]
-    W, H = BASE_W, BASE_H
-    cx = W / 2
-
+    x1, y1, x2, y2 = 3, 3, BASE_W - 3, BASE_H - 3
     def fn(d):
-        # ---------- aro base: arquitetura determinada pela facção ----------
-        # O mesmo perfil é usado nas sete raridades; cada raridade acrescenta
-        # seus próprios metais, gemas e ornamentos sem apagar a identidade da facção.
-        d.polygon(_p(_pontos_arquitetura_faccao(faccao, 0)), fill=255)
-        d.polygon(_p(_pontos_arquitetura_faccao(faccao, t)), fill=0)
-
-        # ---------- ornamentos ----------
-        if rar == "Rara":
-            # aba superior/inferior com gema + cantoneiras em losango
-            for y0, s in ((3, 1), (H - 3, -1)):
-                d.polygon(_p([(cx - 30, y0), (cx + 30, y0), (cx + 22, y0 + s * 18),
-                              (cx, y0 + s * 26), (cx - 22, y0 + s * 18)]), fill=255)
-            for x, y in ((14, 14), (W - 14, 14), (14, H - 14), (W - 14, H - 14)):
-                d.polygon(_p([(x, y - 11), (x + 11, y), (x, y + 11), (x - 11, y)]), fill=255)
-            for x in (3 + t / 2, W - 3 - t / 2):
-                d.polygon(_p([(x, H / 2 - 24), (x + (7 if x < cx else -7), H / 2), (x, H / 2 + 24),
-                              (x - (7 if x < cx else -7), H / 2)]), fill=255)
-        elif rar == "Épica":
-            # estilhaços de cristal nos quatro cantos
-            for (px, py, sx, sy) in ((3, 3, 1, 1), (W - 3, 3, -1, 1), (3, H - 3, 1, -1), (W - 3, H - 3, -1, -1)):
-                for ang, comp in ((14, 46), (45, 34), (76, 46)):
-                    a = math.radians(ang)
-                    ux, uy = math.cos(a) * sx, math.sin(a) * sy
-                    nx, ny = -uy, ux
-                    bx, by = px + ux * 4, py + uy * 4
-                    d.polygon(_p([(bx + nx * 4.4, by + ny * 4.4), (bx - nx * 4.4, by - ny * 4.4),
-                                  (px + ux * comp, py + uy * comp)]), fill=255)
-            # espinhos centrais
-            for y0, s in ((3, 1), (H - 3, -1)):
-                d.polygon(_p([(cx - 26, y0), (cx + 26, y0), (cx + 8, y0 + s * 20), (cx, y0 + s * 34),
-                              (cx - 8, y0 + s * 20)]), fill=255)
-        elif rar == "Lendária":
-            # coroa no topo, pétalas nos cantos, volutas nas laterais
-            d.polygon(_p([(cx - 40, 3), (cx + 40, 3), (cx + 34, 22), (cx - 34, 22)]), fill=255)
-            d.polygon(_p([(cx - 40, 18), (cx - 34, 2), (cx - 18, 14), (cx, 0), (cx + 18, 14), (cx + 34, 2),
-                          (cx + 40, 18)]), fill=255)
-            for x, y in ((16, 16), (W - 16, 16), (16, H - 16), (W - 16, H - 16)):
-                d.ellipse(_box((x - 13, y - 13, x + 13, y + 13)), fill=255)
-                for k in range(8):
-                    a = k * math.pi / 4
-                    d.ellipse(_box((x + math.cos(a) * 14 - 4, y + math.sin(a) * 14 - 4,
-                                    x + math.cos(a) * 14 + 4, y + math.sin(a) * 14 + 4)), fill=255)
-            for sx in (1, -1):
-                bx = 3 + t / 2 if sx == 1 else W - 3 - t / 2
-                for y in (190, 300, 410):
-                    pts = []
-                    for k in range(-8, 9):
-                        u = k / 8
-                        pts.append((bx + 8.5 * (1 - u * u), y + u * 21))
-                    pts += [(bx - 8.5 * (1 - (k / 8) ** 2), y + (k / 8) * 21) for k in range(8, -9, -1)]
-                    d.polygon(_p(pts), fill=255)
-            for y0, s in ((H - 3, -1),):
-                d.polygon(_p([(cx - 44, y0), (cx + 44, y0), (cx + 32, y0 + s * 18), (cx - 32, y0 + s * 18)]), fill=255)
-        elif rar == "Mítica":
-            # órbita estelar: arco interno com contas, estrelas nos cantos
-            for x, y, rr in ((cx, 14, 15), (cx, H - 14, 15), (14, H / 2, 10), (W - 14, H / 2, 10)):
-                d.ellipse(_box((x - rr, y - rr, x + rr, y + rr)), fill=255)
-            for sx in (3 + t / 2, W - 3 - t / 2):
-                for y in range(100, H - 90, 54):
-                    if abs(y - H / 2) < 28:
-                        continue
-                    d.ellipse(_box((sx - 4, y - 4, sx + 4, y + 4)), fill=255)
-            for x, y in ((18, 18), (W - 18, 18), (18, H - 18), (W - 18, H - 18)):
-                d.polygon(_p([(x, y - 17), (x + 5, y - 5), (x + 17, y), (x + 5, y + 5), (x, y + 17),
-                              (x - 5, y + 5), (x - 17, y), (x - 5, y - 5)]), fill=255)
-        elif rar == "Primordial":
-            # discos solares no eixo, runas em losango nas laterais
-            for y in (11, H - 11):
-                d.ellipse(_box((cx - 21, y - 21, cx + 21, y + 21)), fill=255)
-            for sx in (3 + t / 2 + 1, W - 3 - t / 2 - 1):
-                for y in range(120, H - 100, 62):
-                    d.polygon(_p([(sx, y - 10), (sx + 7, y), (sx, y + 10), (sx - 7, y)]), fill=255)
-            for x, y in ((9, 9), (W - 9, 9), (9, H - 9), (W - 9, H - 9)):
-                d.ellipse(_box((x - 9, y - 9, x + 9, y + 9)), fill=255)
-        elif rar == "Singular":
-            # assinatura assimétrica: cunha superior-esquerda, circuito à direita
-            d.polygon(_p([(3, 3), (150, 3), (126, 22), (22, 22), (22, 130), (3, 154)]), fill=255)
-            d.polygon(_p([(W - 3, H - 3), (W - 150, H - 3), (W - 126, H - 22), (W - 22, H - 22),
-                          (W - 22, H - 130), (W - 3, H - 154)]), fill=255)
-            d.polygon(_p([(W - 3, 170), (W - 22, 186), (W - 22, 330), (W - 3, 346)]), fill=255)
-            for y in (210, 262, 314):
-                d.ellipse(_box((W - 15, y - 4, W - 7, y + 4)), fill=0)
-        elif rar == "Comum":
-            pass
-
+        d.rectangle(_box((x1, y1, x2, y2)), fill=255)
+        d.rectangle(_box((x1 + t, y1 + t, x2 - t, y2 - t)), fill=0)
     return _mascara(fn)
 
 
 def _bisel_moldura(ov, mascara, est):
-    """Pinta o metal da moldura com bisel (luz no topo-esquerda, sombra na base-direita)."""
-    # contorno escuro para destacar do fundo
+    """Metal envelhecido: bisel, pátina e microtextura de forja."""
+    # Contorno escuro profundo, como metal oxidado sob a luz.
     contorno = mascara.filter(ImageFilter.MaxFilter(5))
-    _compor(ov, contorno, [(6, 7, 10)], alpha=235)
+    _compor(ov, contorno, [(4, 5, 8)], alpha=245)
     _compor(ov, mascara, est["metal"], "diag")
+
+    # Microtextura determinística de metal martelado. A máscara impede que
+    # qualquer grão escape para a ilustração ou para fora da carta.
+    ruido = Image.effect_noise(mascara.size, 19).convert("L")
+    alpha_ruido = ruido.point(lambda v: max(0, min(24, int((v - 72) * .16))))
+    alpha_ruido = ImageChops.multiply(alpha_ruido, mascara)
+    textura = Image.new("RGBA", mascara.size, (*_mix(est["metal"][1], est["luz"], .38), 0))
+    textura.putalpha(alpha_ruido)
+    ov.alpha_composite(textura)
+
     d = max(1, int(S * 1.1))
     claro = ImageChops.subtract(mascara, ImageChops.offset(mascara, d, d))
     escuro = ImageChops.subtract(mascara, ImageChops.offset(mascara, -d, -d))
-    _compor(ov, claro, [est["luz"]], alpha=215)
-    _compor(ov, escuro, [(0, 0, 0)], alpha=140)
-    # brilho interno suave: um segundo anel mais fino dentro do metal
+    _compor(ov, claro, [est["luz"]], alpha=225)
+    _compor(ov, escuro, [(0, 0, 0)], alpha=155)
+
+    # Duplo filete: um bisel claro externo e uma gravação escura interna.
     interna = _erodir(mascara, 2.0)
     miolo = ImageChops.subtract(interna, _erodir(interna, 0.9))
-    _compor(ov, miolo, [est["luz"]], alpha=40)
+    _compor(ov, miolo, [est["luz"]], alpha=58)
+    grava = ImageChops.subtract(_erodir(mascara, 4.1), _erodir(mascara, 4.8))
+    _compor(ov, grava, [est["cor"]], alpha=42)
 
 
 def _decoracoes_moldura(ov, rar, est):
@@ -754,47 +674,178 @@ def _chip_fileira(ov, est, fileira):
 
 
 def _decoracoes_faccao(ov, faccao, est):
-    """Heráldica temática discreta: a facção aparece também nos cantos e filetes."""
+    """Gravuras heráldicas finas nas faixas do aro; nunca altera a silhueta.
+
+    O desenho externo, a janela da arte e as placas permanecem fixos.
+    A facção é reconhecida pela linguagem ornamental, não por trocar apenas a cor.
+    """
     faccao = normalizar_faccao(faccao)
     d = ImageDraw.Draw(ov)
-    cor = FACCOES[faccao]["cor"]
-    metal = FACCOES[faccao]["metal"]
-    # Desenho em coordenadas-base, ampliadas pelo supersampling.
-    def line(points, fill, width=1.0):
-        d.line(_p(points), fill=(*fill[:3], fill[3] if len(fill) > 3 else 150), width=max(1, int(width*S)), joint="curve")
-    def gem(x, y, r=2.2):
-        d.polygon(_p([(x,y-r*1.8),(x+r,y),(x,y+r*1.8),(x-r,y)]), fill=(*metal,185))
+    f = FACCOES[faccao]
+    cor, metal = f["cor"], f["metal"]
+    brilho = _mix(metal, (255, 250, 225), .28)
+    sombra = _mix(f["esc"], (5, 7, 12), .25)
+
+    def line(points, color=metal, width=.8, alpha=225):
+        d.line(_p(points), fill=(*color, alpha), width=max(1, int(width*S)), joint="curve")
+
+    def ellipse(box, outline=metal, width=.7, alpha=220, fill=None):
+        x1,y1,x2,y2=box
+        d.ellipse(_box((min(x1,x2),min(y1,y2),max(x1,x2),max(y1,y2))),
+                  fill=((*fill,alpha) if fill else None),
+                  outline=(*outline,alpha), width=max(1,int(width*S)))
+
+    def diamond(x,y,rx=1.5,ry=3.0,color=brilho,alpha=235):
+        d.polygon(_p([(x,y-ry),(x+rx,y),(x,y+ry),(x-rx,y)]),fill=(*color,alpha))
+
+    def star(x,y,r=2.0,color=brilho,alpha=235):
+        pts=[]
+        for i in range(8):
+            a=-math.pi/2+i*math.pi/4
+            rr=r if i%2==0 else r*.18
+            pts.append((x+math.cos(a)*rr,y+math.sin(a)*rr))
+        d.polygon(_p(pts),fill=(*color,alpha))
+
+    # As gravações ocupam somente o metal entre a borda externa e a janela.
+    # Quatro cartuchos de canto criam uma leitura heráldica sem arredondar os cantos.
+    for sx in (-1,1):
+        for sy in (-1,1):
+            x0 = 10.5 if sx < 0 else BASE_W-10.5
+            y0 = 14 if sy < 0 else BASE_H-14
+            if faccao == "Ordem Áurea":
+                # Pequenos frontões e colunas de catedral, como os relevos de Leyndell.
+                line([(x0-sx*5,y0+sy*7),(x0-sx*5,y0-sy*1),
+                      (x0,y0-sy*7),(x0+sx*5,y0-sy*1),(x0+sx*5,y0+sy*7)],metal,1.0,240)
+                line([(x0-sx*2.5,y0+sy*6),(x0-sx*2.5,y0-sy*1),
+                      (x0,y0-sy*4),(x0+sx*2.5,y0-sy*1),(x0+sx*2.5,y0+sy*6)],cor,.7,230)
+                diamond(x0,y0+sy*1.5,1.4,2.6,brilho,245)
+            elif faccao == "Véu Carmesim":
+                # Pontas de tridente e espinhos, remetendo aos ritos de Mohgwyn.
+                line([(x0-sx*5,y0+sy*7),(x0-sx*5,y0-sy*1),
+                      (x0,y0-sy*7),(x0+sx*5,y0-sy*1),(x0+sx*5,y0+sy*7)],metal,1.0,240)
+                line([(x0,y0-sy*6),(x0,y0+sy*4)],cor,1.0,240)
+                line([(x0,y0-sy*2),(x0-sx*3,y0-sy*5)],cor,.8,235)
+                line([(x0,y0-sy*2),(x0+sx*3,y0-sy*5)],cor,.8,235)
+                d.polygon(_p([(x0,y0+sy*1),(x0-sx*2,y0+sy*5),
+                              (x0,y0+sy*8),(x0+sx*2,y0+sy*5)]),fill=(*cor,245))
+            else:
+                # Astrolábio compacto: anéis, eixo e estrela polar.
+                ellipse((x0-6,y0-7,x0+6,y0+7),metal,.8,235)
+                ellipse((x0-3.7,y0-4.5,x0+3.7,y0+4.5),cor,.55,220)
+                line([(x0-sx*7,y0+sy*6),(x0+sx*7,y0-sy*6)],metal,.65,215)
+                star(x0,y0,2.2,brilho,250)
+
+    # Trilhos laterais: cada facção tem um ritmo visual próprio e medalhões distintos.
+    for side in (-1,1):
+        x=10.5 if side<0 else BASE_W-10.5
+        if faccao == "Ordem Áurea":
+            # Haste de ouro vivo com pares de folhas, brotos e sementes.
+            line([(x,188),(x,218),(x+side*.8,248),(x,278),(x,308),
+                  (x+side*.8,338),(x,368),(x,397)],metal,1.15,235)
+            line([(x+side*1.8,190),(x+side*1.8,397)],cor,.55,135)
+            for yy, direction in ((204,-1),(224,1),(246,-1),(268,1),(290,-1),
+                                  (312,1),(334,-1),(356,1),(380,-1)):
+                ex=x+side*4.0
+                ey=yy+direction*3.0
+                line([(x,yy),(ex,ey)],metal,.7,220)
+                ellipse((ex-1.3,ey-2.4,ex+1.3,ey+2.4),metal,.45,230,cor)
+                line([(ex,ey+1),(ex,ey+3)],brilho,.45,210)
+            for yy in (230,300,370):
+                ellipse((x-4.5,yy-8,x+4.5,yy+8),metal,.75,235)
+                line([(x,yy+5),(x,yy-5),(x-side*2.5,yy-7)],brilho,.8,245)
+                line([(x,yy-1),(x+side*2.7,yy-4)],brilho,.7,235)
+                diamond(x,yy,1.1,2.0,cor,245)
+
+        elif faccao == "Véu Carmesim":
+            # Coluna de espinhos com elos e gotas alongadas de sangue coagulado.
+            line([(x,188),(x,210),(x+side*2.7,228),(x-side*2.4,248),
+                  (x,270),(x,292),(x+side*2.7,310),(x-side*2.4,332),
+                  (x,354),(x,397)],cor,1.25,245)
+            line([(x-side*1.7,190),(x-side*1.7,397)],metal,.55,150)
+            for yy, direction in ((211,-1),(245,1),(291,-1),(329,1),(370,-1)):
+                line([(x,yy),(x+side*4.8,yy+direction*5.5),
+                      (x+side*3.0,yy+direction*1.3)],metal,.85,235)
+                d.polygon(_p([(x,yy+4),(x-side*1.6,yy+8),
+                              (x,yy+14),(x+side*1.6,yy+8)]),fill=(*cor,245))
+            for yy in (230,305,378):
+                ellipse((x-4.6,yy-8.5,x+4.6,yy+8.5),metal,.75,235)
+                ellipse((x-2.7,yy-5.7,x+2.7,yy+5.7),cor,.55,230)
+                d.polygon(_p([(x,yy-5),(x-2.2,yy+1),(x-1.5,yy+5),
+                              (x,yy+7),(x+1.5,yy+5),(x+2.2,yy+1)]),
+                          fill=(*brilho,235))
+                diamond(x,yy-7,1.0,1.8,cor,245)
+
+        else:
+            # Mapa celeste vertical: órbitas elípticas, nós estelares e crescentes.
+            nodes=[(x,198),(x+side*2.7,224),(x-side*2.5,250),
+                   (x,278),(x+side*2.7,306),(x-side*2.5,334),(x,362),(x,394)]
+            line(nodes,metal,.7,220)
+            line([(x-side*2.1,198),(x-side*2.1,394)],cor,.5,130)
+            for idx,(nx,ny) in enumerate(nodes):
+                if idx%2==0:
+                    star(nx,ny,2.2 if idx in (0,6) else 1.8,brilho,245)
+                else:
+                    ellipse((nx-1.35,ny-1.35,nx+1.35,ny+1.35),cor,.55,230,sombra)
+            for yy,direction in ((216,-1),(270,1),(324,-1),(380,1)):
+                ellipse((x-4.2,yy-6.0,x+4.2,yy+6.0),metal,.65,220)
+                # Crescente obtido por dois arcos deslocados.
+                ellipse((x-2.0,yy-4.5,x+3.2,yy+4.5),cor,.55,225)
+                d.ellipse(_box((x-.2,yy-4.2,x+4.6,yy+4.2)),fill=(*sombra,255))
+                star(x-side*1.2,yy,1.6,brilho,245)
+
+    # Fecho heráldico central no rodapé: sol, gota ou estrela polar.
     if faccao == "Ordem Áurea":
-        # Ramos dourados e pequenas folhas: iconografia da Térvore e do voto áureo.
-        for side in (-1, 1):
-            x = 13 if side < 0 else BASE_W-13
-            pts = [(x, 205), (x+side*5, 224), (x, 244), (x+side*5, 264), (x, 284),
-                   (x+side*5, 304), (x, 324), (x+side*5, 344), (x, 364)]
-            line(pts, (*cor,115), 1.1)
-            for yy in (230, 270, 310, 350):
-                d.ellipse(_box((x-3, yy-5, x+3, yy+1)), outline=(*metal,170), width=max(1,S))
-            gem(x, 185, 2.0)
+        ellipse((198,605,222,619),metal,.75,205)
+        for a in range(12):
+            ang=a*math.pi/6
+            line([(210+math.cos(ang)*4,612+math.sin(ang)*2.2),
+                  (210+math.cos(ang)*9,612+math.sin(ang)*5.2)],brilho,.65,220)
+        diamond(210,612,1.5,3.0,cor,245)
     elif faccao == "Véu Carmesim":
-        # Espinhos e gotas rituais, como um selo de sangue gravado no metal.
-        for side in (-1, 1):
-            x = 13 if side < 0 else BASE_W-13
-            for yy in (205, 250, 295, 340, 385):
-                line([(x,yy-15),(x+side*5,yy-5),(x,yy+4),(x+side*6,yy+13)], (*cor,135), 1.25)
-                line([(x+side*3,yy-5),(x+side*10,yy-12)], (*metal,135), .8)
-                d.polygon(_p([(x,yy+7),(x-2.2,yy+12),(x,yy+16),(x+2.2,yy+12)]), fill=(*cor,175))
-    elif faccao == "Lua Sombria":
-        # Órbitas lunares e estrelas de quatro pontas.
-        for side in (-1, 1):
-            x = 14 if side < 0 else BASE_W-14
-            d.arc(_box((x-9, 205, x+9, 250)), 65 if side < 0 else 115, 295 if side < 0 else 245,
-                  fill=(*cor,145), width=max(1,S))
-            d.arc(_box((x-7, 278, x+7, 330)), 235, 55, fill=(*metal,110), width=max(1,S))
-            for yy in (220, 285, 350):
-                d.polygon(_p([(x, yy-5), (x+1.8, yy-1.8), (x+5, yy),
-                              (x+1.8, yy+1.8), (x, yy+5), (x-1.8, yy+1.8),
-                              (x-5, yy), (x-1.8, yy-1.8)]), fill=(*metal,185))
+        ellipse((198,605,222,619),metal,.7,190)
+        for cx in (201,207,213,219):
+            ellipse((cx-2.3,607,cx+2.3,616),metal,.55,185)
+        d.polygon(_p([(210,605),(205,611),(207,616),(210,619),
+                      (213,616),(215,611)]),fill=(*cor,245),outline=(*brilho,230))
+    else:
+        ellipse((198,605,222,619),metal,.7,195)
+        ellipse((202,607,218,617),cor,.55,220)
+        star(210,612,3.1,brilho,250)
+        line([(210,603),(210,606)],metal,.7,210)
+        line([(210,618),(210,621)],metal,.7,210)
 
+    # Acabamento de ourivesaria: dois filetes internos e pequenas marcas de punção.
+    # Eles reforçam a leitura de metal trabalhado sem mudar o contorno nem invadir a arte.
+    for side in (-1, 1):
+        x_outer = 5.4 if side < 0 else BASE_W-5.4
+        x_inner = 16.1 if side < 0 else BASE_W-16.1
+        line([(x_outer, 34),(x_outer, 586)],metal,.65,115)
+        line([(x_inner, 188),(x_inner, 398)],cor,.55,145)
+        for yy in (178, 414, 454):
+            diamond(x_inner, yy, .9, 1.8, brilho, 185)
 
+    # Medalhões laterais mais legíveis em miniatura: cada facção usa um selo próprio.
+    for side in (-1, 1):
+        x = 10.5 if side < 0 else BASE_W-10.5
+        for yy in (230, 305, 380):
+            if faccao == "Ordem Áurea":
+                ellipse((x-5.0,yy-9.5,x+5.0,yy+9.5),metal,.9,245,sombra)
+                ellipse((x-3.6,yy-7.8,x+3.6,yy+7.8),cor,.55,230)
+                line([(x,yy+6),(x,yy-5),(x-side*2.0,yy-7)],brilho,.85,245)
+                line([(x,yy-1),(x+side*2.3,yy-4)],brilho,.75,240)
+                diamond(x,yy+1,1.0,2.0,metal,245)
+            elif faccao == "Véu Carmesim":
+                ellipse((x-5.0,yy-9.5,x+5.0,yy+9.5),metal,.9,245,sombra)
+                ellipse((x-3.6,yy-7.8,x+3.6,yy+7.8),cor,.55,235)
+                d.polygon(_p([(x,yy-6),(x-2.7,yy+1),(x-1.7,yy+5),
+                              (x,yy+7),(x+1.7,yy+5),(x+2.7,yy+1)]),
+                          fill=(*brilho,245))
+                line([(x,yy-7),(x,yy-9)],metal,.7,235)
+            else:
+                ellipse((x-5.0,yy-9.5,x+5.0,yy+9.5),metal,.9,245,sombra)
+                ellipse((x-3.6,yy-7.8,x+3.6,yy+7.8),cor,.55,230)
+                ellipse((x-2.1,yy-5.2,x+2.1,yy+5.2),metal,.5,220)
+                star(x,yy,2.0,brilho,250)
 
 
 # ---------------------------------------------------------------------------

@@ -17,17 +17,26 @@ TAMANHO_MAXIMO_UPLOAD = 8 * 1024 * 1024
 PIXELS_MAXIMOS = 18_000_000
 
 DIRECAO_ARTE = """
-NARABOT COLISEUM — GROUNDED, NARRATIVE DARK-FANTASY CARD ILLUSTRATION
+NARABOT COLISEUM — ELDEN RING WORLD ILLUSTRATION
 
-ART-DIRECTION REFERENCE
-Use the broad visual principles associated with premium European dark-fantasy
-collectible-card illustration: mature, grounded fantasy; painterly realism;
-rich environmental storytelling; expressive character acting; historically
-plausible materials and equipment; and a single-frame scene that feels like a
-small, complete story. This is an original NARABOT visual identity informed by
-those principles. Do not reproduce any existing GWENT card, Witcher character,
-recognizable costume, composition, creature design, location, heraldry, or
-individual artist's signature mannerisms.
+WORLD IDENTITY — THE LANDS BETWEEN, NOT GENERIC MEDIEVAL FANTASY
+The image must feel as though it belongs to Elden Ring: the Lands Between and,
+when the card explicitly belongs there, the Realm of Shadow. Build from the
+world's distinctive visual grammar: immense decayed sacred architecture,
+weathered golden stone, monumental bridges, erdtree roots, ancient statuary,
+Carian observatories, glintstone, subterranean Eternal Cities, volcanic manor
+stone, scarlet-rot wastelands, Farum Azula's broken sky-temples, and the
+uncanny solemnity of places touched by Outer Gods. Select only the architecture,
+materials, symbols, climate and geography that belong to THIS card. Never use
+an interchangeable European castle, generic tavern, random cathedral, D&D
+adventurer gear or stock fantasy ruins when a specific Elden Ring location or
+culture is known.
+
+This is a new, original card illustration set in the recognizable world and
+lore vocabulary of Elden Ring. Preserve the named character's canonical
+silhouette, equipment, species, proportions, attire, supernatural traits and
+known location. Do not recreate an existing promotional image, screenshot,
+loading screen, official card composition or another artist's exact painting.
 
 PAINTING LANGUAGE — HIGH REALISM, CONTROLLED BRUSHWORK
 Create a premium, realistic dark-fantasy illustration that looks observed from
@@ -75,18 +84,24 @@ weather and background activity to let the viewer infer what happened. Add
 symbolism only when it reinforces the card's documented identity. The image
 should reward a closer look without becoming visually confusing.
 
-CHARACTER AND WORLD DESIGN
-Favor believable, lived-in medieval and early-renaissance fantasy construction:
-layered garments, practical armor, hand-forged weapons, stitched repairs,
-weathered heraldic cloth, imperfect metalwork, functional straps, real weight
-and plausible construction. Faces should feel individual, emotionally legible
-and shaped by circumstance. Creatures and supernatural entities must have
-coherent anatomy, distinctive silhouettes and a clear relationship to the
-scene. Build environments from specific, tangible places—fortified courtyards,
-woodland roads, muddy encampments, ruined keeps, cramped interiors, riverbanks,
-mountain passes, shrines, workshops or siege lines—chosen for the actual card.
-Avoid interchangeable fantasy castles, random skulls, gratuitous dragons and
-unmotivated decorative clutter.
+CHARACTER AND WORLD DESIGN — ELDEN RING MATERIAL CULTURES
+Use the construction language of the specific Lands Between culture named by
+the card: Leyndell's gold-bronze plate, ivory cloth and royal stone; Carian
+silver-blue plate, crescent details and glintstone tools; Raya Lucaria's layered
+scholar robes, faceted crowns and academy stone; Redmane dark steel, crimson
+manes and battlefield repairs; Mohgwyn's black stone, ritual cloth and controlled
+bloodflame; Nox silver fabric, smooth masks and flowing silhouettes; Volcano
+Manor basalt, serpent-carved fittings and heat-scarred iron; Fire Monk crimson
+robes, black iron and heavy hoods; Haligtree pale plate, unalloyed-gold details
+and blossom-worn stone; Farum Azula dragon-scale masonry, ancient bronze and
+storm erosion. Select one coherent culture rather than mixing all of them.
+Armor must be functional and recognizable to its order; weapons must match the
+named person or archetype. Do not invent a random knight helmet, generic plate
+suit, medieval tunic or fantasy weapon when the card's identity establishes a
+specific silhouette. Creatures and supernatural entities must preserve their
+canonical anatomy. Build the background from the actual region: its stone,
+vegetation, water, sky, weather, architecture and scale. Every environmental
+object should help identify the location or explain the depicted event.
 
 COMPOSITION AND CAMERA
 Landscape 5:4 illustration, composed as a cropped view into a larger world.
@@ -161,6 +176,14 @@ frame or interface. The NARABOT renderer adds its own fixed frame, name, stats
 and ability separately. Keep faces, hands, weapons and essential story clues
 inside safe margins so the NARABOT frame never covers them.
 """.strip()
+
+# Para cartas fora do universo Elden Ring, preserva-se uma direção de fantasia
+# original e neutra; o direcionamento Elden Ring só entra quando a carta pertence
+# explicitamente a esse universo/facção.
+DIRECAO_ARTE_GERAL = DIRECAO_ARTE.replace(
+    "NARABOT COLISEUM — ELDEN RING WORLD ILLUSTRATION\n\nWORLD IDENTITY — THE LANDS BETWEEN, NOT GENERIC MEDIEVAL FANTASY\nThe image must feel as though it belongs to Elden Ring: the Lands Between and,\nwhen the card explicitly belongs there, the Realm of Shadow. Build from the\nworld's distinctive visual grammar: immense decayed sacred architecture,\nweathered golden stone, monumental bridges, erdtree roots, ancient statuary,\nCarian observatories, glintstone, subterranean Eternal Cities, volcanic manor\nstone, scarlet-rot wastelands, Farum Azula's broken sky-temples, and the\nuncanny solemnity of places touched by Outer Gods. Select only the architecture,\nmaterials, symbols, climate and geography that belong to THIS card. Never use\nan interchangeable European castle, generic tavern, random cathedral, D&D\nadventurer gear or stock fantasy ruins when a specific Elden Ring location or\nculture is known.\n\nThis is a new, original card illustration set in the recognizable world and\nlore vocabulary of Elden Ring. Preserve the named character's canonical\nsilhouette, equipment, species, proportions, attire, supernatural traits and\nknown location. Do not recreate an existing promotional image, screenshot,\nloading screen, official card composition or another artist's exact painting.",
+    "NARABOT COLISEUM — ORIGINAL GROUNDED DARK-FANTASY CARD ILLUSTRATION\n\nART-DIRECTION REFERENCE\nCreate an original, grounded dark-fantasy world with mature environmental storytelling, expressive character acting, plausible materials and a single-frame scene that feels like a complete story. Do not reproduce an existing game's characters, locations, costumes, compositions, heraldry or an individual artist's signature mannerisms."
+)
 
 DIRETRIZES_CATEGORIA = {
     "chefe": (
@@ -351,6 +374,458 @@ class ImagemNormalizada:
     formato: str = "JPEG"
 
 
+
+# Elden Ring visual bible: every fixed card receives a concrete subject, place,
+# costume/material, action and camera beat. These are original scene directions,
+# not generic faction overlays. Canonical characters override all randomized traits.
+CENAS_ELDEN_POR_ID = {
+    "chefe_guardiao_cinzas": (
+        "An original Erdtree Tree Sentinel-inspired mounted knight of the Golden Order, shown at the outer approach to Leyndell. "
+        "Use heavy sculpted gilt-bronze horse armor, a closed ornate helm, a long gilded halberd and a broad gold-inlaid shield; the horse is barded and muscular, not a fantasy unicorn. "
+        "The knight turns his mount across the causeway to intercept an intruder, halberd angled down and shield catching late afternoon light. Behind him: Leyndell's colossal pale walls, root-split paving and distant Erdtree canopy. Low three-quarter camera, strong horse-and-rider silhouette."
+    ),
+    "chefe_dama_vazio": (
+        "Ranni the Witch in her canonical blue doll body: four arms, blue skin, long red hair, a large dark witch hat and layered blue-white robes. "
+        "She stands on the moonlit rise of Ranni's Rise in Liurnia, one upper hand extending toward a cold, luminous Dark Moon while the lower hands hold a small gesture of measured sorcery. "
+        "Show the tower's Carian stonework, wet slate, distant lake mist and a restrained starfield through broken arches. Her four-armed silhouette and recognizable hat must remain unmistakable; no human random face, no generic wizard staff, no extra limbs beyond her canonical four."
+    ),
+    "chefe_cervo_sombrio": (
+        "A Bloodhound Knight in the recognizable dark, layered Bloodhound armor and beastlike closed helm, crouched in a low predatory guard on a rain-dark stone path near the Forlorn Hound Evergaol. "
+        "The curved greatsword is held close to the body, ready for a sudden counterstep; the armor is blackened steel, worn leather straps and ragged dark cloth, with no bright heraldic cape. "
+        "Broken standing stones and Limgrave grass frame the ambush. Ground-level three-quarter camera, wet reflections and a clear blade silhouette."
+    ),
+    "chefe_rei_afogado": (
+        "Godfrey, First Elden Lord, in his canonical first-lord aspect: a towering, broad warrior with long pale-gold hair, weathered face, heavy fur mantle and the massive greataxe. "
+        "Serosh, the spectral lion, rests visibly across his back and shoulders as a regal beast spirit, not a separate ordinary lion. Godfrey advances through the shattered royal audience approach in Leyndell, one boot crushing pale stone while the axe drags sparks from the paving. "
+        "Use monumental golden architecture and drifting dust; heroic low angle, but preserve his recognizable human silhouette and Serosh. Do not depict him underwater or as a drowned king."
+    ),
+    "chefe_oraculo_ruina": (
+        "Gurranq, Beast Clergyman, hunched and imposing inside the Bestial Sanctum in Dragonbarrow. "
+        "His dark, layered beast-cleric robes hang over a lean beastman frame; a bestial seal and rough stone reliquary sit near his clawed hands. He thrusts one hand forward as jagged bestial stone fragments tear from the ground, while the other grips his heavy cloth. "
+        "Show the sanctum's ancient dark masonry, beast statues and Caelid's red storm light beyond the doorway. Keep his animalistic muzzle, posture and austere black garments; no human wizard face or generic cathedral."
+    ),
+    "chefe_cacador_sem_rosto": (
+        "A Black Knife Assassin in close-fitting black hooded armor, layered dark leather and a concealed face, holding the short curved Black Knife whose edge carries the red-black trace of Destined Death. "
+        "The assassin slips from a shadowed arch at Ordina, Liturgical Town, one foot barely touching the frost-covered stone as the blade begins a silent upward cut. "
+        "Use cold blue night, pale snow, narrow Nox-like stone arches and a single distant lantern. The face stays hidden; the weapon and compact assassin silhouette carry the identity. No exposed bloody wounds."
+    ),
+    "chefe_vigia_cinzento": (
+        "A Leyndell Knight in gold-bronze plate with a closed crested helm, red-brown undercloth, round shield and long spear, standing guard on the broad outer ramparts of the Royal Capital. "
+        "He braces behind the shield as a hostile force strikes it; the impact sends dust from the pale stone but does not shatter the formation. "
+        "Show the capital's layered walls, carved balustrades, Erdtree-root growth and muted gold daylight. Practical, standardized royal armor; not a generic grey watchman and not a Tree Sentinel."
+    ),
+    "chefe_aparicao_veio": (
+        "A spectral Black Knife blade-bearer, a narrow hooded silhouette formed from dim ash and blackened steel, crossing a ruined stone bridge at the instant it phases from shadow into physical form. "
+        "A single dark curved blade catches a thin red-black glint; the body remains mostly solid and anatomically coherent, with only the trailing cloak dissolving into smoky strands. "
+        "Use a cold nocturnal setting with distant Erdtree light obscured by fog. Avoid a bedsheet ghost, skull face or unrelated wraith tropes."
+    ),
+    "arma_lamina_peregrino": (
+        "A duelist of House Hoslow wearing the house's distinctive polished silver plate, engraved floral-petal details, fitted gauntlets and a dark red-brown cape. "
+        "The fighter uses a pair of long, flexible thorned whips in a precise crossing guard on a manor courtyard of Volcano Manor, the metal links and barbs catching firelight. "
+        "Show the manor's volcanic stone, brass fittings and distant orange fissure glow. Elegant but dangerous fencing posture; do not replace the whips with ordinary swords."
+    ),
+    "arma_martelo_fornalha": (
+        "A Volcano Manor smith at a compact forge cut into Mount Gelmir's dark volcanic rock. "
+        "The craftsperson wears heat-scarred leather apron, soot-darkened work clothes, thick gloves and practical iron protection, striking a heavy unfinished weapon blank with a square blacksmith hammer. "
+        "Molten metal runs into a stone channel, sparks illuminate the rough basalt walls and a serpent-carved manor fitting is visible in the background. Focus on hammer, glowing metal and the smith's controlled motion; no generic medieval forge hall."
+    ),
+    "arma_cajado_marulho": (
+        "A Carian sorcerer in layered blue-grey academy robes and a pointed glintstone crown, holding a finely carved Carian staff with a crescent-shaped silver head. "
+        "The sorcerer traces a compact Carian sword-sorcery sigil above the staff, forming a translucent blue blade of glintstone beside the real weapon. "
+        "Place the scene in a moonlit Carian study overlooking Liurnia's flooded terraces; carved star maps, cold lake mist and polished dark stone identify the school. The staff must look like crafted wood and silver, not a generic wand."
+    ),
+    "arma_duas_luas": (
+        "A lone swordswoman at the Moonlight Altar beneath the distant Cathedral of Manus Celes, wielding a greatsword whose broad blade carries pale blue frost and moonlight. "
+        "She holds the weapon low after a clean, precise sweep; a thin arc of icy light hangs over the grass while frost crystals settle on the blade's fuller. "
+        "Use the high plateau's cold night air, moonlit stone and distant lake haze. The sword is the focal object; avoid dual-wielding or adding a second moon sword."
+    ),
+    "arma_grande_sino": (
+        "A Draconic Tree Sentinel guarding the approach to Leyndell, wearing massive dark bronze-gold dragon-scale armor and a closed horned helm. "
+        "The sentinel raises a heavy greataxe as red lightning crawls along its edge; a large shield bears weathered draconic relief. "
+        "Behind it, the capital's outer gate and storm-dark Altus sky frame the duel. Emphasize the armor's weight, red lightning reflected on metal and the mounted or foot sentinel's imposing silhouette; no bell or generic giant hammer."
+    ),
+    "arma_agulha_astro": (
+        "A stargazer of Sellia, Town of Sorcery, in restrained dark blue travelling robes, fingerless gloves and a small glintstone pendant, studying a brass astrolabe on a ruined rooftop. "
+        "A slender needle-like sorcery focus points toward one cold star above Sellia's domed rooftops; faint blue glintstone light reflects in the observer's eyes. "
+        "Show the town's distinctive low domes, sealed magical streets and Caelid's rust-red horizon. Intimate over-shoulder composition; no telescope observatory from a different region."
+    ),
+    "arma_lanca_fornalha": (
+        "A spear-bearing Leyndell soldier in disciplined gold-trimmed plate, red-brown cloth and a crested helmet holds a long gilded spear in a braced defensive stance on the capital's processional avenue. "
+        "The spearhead is polished gold steel with a narrow leaf-shaped profile; the soldier's shield is slung at the forearm and bears a restrained Erdtree relief. "
+        "Pale royal masonry, root-cracked paving and a line of distant soldiers establish Leyndell's military order. Keep the weapon a spear, not a halberd or bow."
+    ),
+    "arma_arco_peregrino": (
+        "A Volcano Manor recusant scout in dark fitted leather, weathered cloak and a serpent-marked shoulder clasp draws a compact recurved bow from a basalt ledge on Mount Gelmir. "
+        "The arrow is aimed down a narrow volcanic pass toward a distant patrol; the scout's posture is economical and concealed behind broken black rock. "
+        "Sulphurous haze, red lava glow far below and the manor's severe stone silhouette set the location. No modern tactical gear or oversized fantasy longbow."
+    ),
+    "magia_brasa_errante": (
+        "A Fire Monk of the Mountaintops, wearing layered crimson robes, dark iron plates and a heavy hood, holds a measured flame incantation in one gloved palm. "
+        "The flame is a compact orange-gold tongue that lights the monk's weathered mask and nearby snow, not a giant explosion. A brazier and fire-monk insignia stand beside a snow-buried stone stair. "
+        "Use the cold blue-white Mountaintops against controlled firelight; preserve the monk's practical cult attire."
+    ),
+    "magia_selo_vigilia": (
+        "A Golden Order Confessor in a dark fitted hood, layered black-brown leather, discreet gold stitching and a small sacred seal held in the left hand. "
+        "The confessor kneels beside a broken Erdtree shrine in Altus and casts a precise amber ward across a wounded companion's shield; the light forms a thin protective plane and illuminates engraved prayer marks on the seal. "
+        "Use restrained gold light, weathered limestone and root shadows. No nun habit, modern cross or oversized halo."
+    ),
+    "magia_trovao_oco": (
+        "An ancient dragon cultist on the storm-battered ramparts of Crumbling Farum Azula channels red lightning through a dragon communion seal. "
+        "The lightning follows a branching, controlled path around a weathered dragon-scale pillar and strikes the ground beyond the caster; the caster's dark robes and metal rings react to the electrical force. "
+        "Broken floating architecture, violent cloud currents and distant dragon silhouettes establish Farum Azula. The lightning is crimson, not generic blue thunder."
+    ),
+    "magia_nevoa_antiga": (
+        "An astrologer of Liurnia in layered indigo robes and a modest pointed hood stands on a flooded stone causeway, holding a brass star chart above the water. "
+        "A ribbon of pale mist parts into a narrow path between half-submerged pillars, revealing the silhouette of a Carian tower. "
+        "Use Liurnia's cold grey lake, reed beds, ruined academy masonry and soft moonlit haze. The magic is subtle, directional and tied to the star chart; no generic fog wizard."
+    ),
+    "magia_sol_negro": (
+        "A Godskin Apostle in the canonical pale, stretched Godskin robe, dark hood and blackened trim, wielding the long twinblade with a fluid, coiling stance. "
+        "A ribbon of black flame curls along the weapon and burns with a dark core and pale edge, illuminating the Apostle's mask-like face. "
+        "Place the scene at the Divine Tower of Caelid's weathered stone approach or the Windmill Village plateau, selecting one coherent location; use a sickly dusk sky and windblown cloth. No ordinary fireball or generic necromancer."
+    ),
+    "magia_fagulha": (
+        "A novice Carian student in practical blue-grey academy robes, a small glintstone crown and a wooden staff capped with a raw blue crystal practices a single Glintstone Pebble in a quiet Raya Lucaria cloister. "
+        "The pebble has just formed above the staff tip, casting a sharp cool reflection on wet flagstones and the student's focused face. "
+        "Show carved academy arches, scattered lecture tablets and distant lake light. Keep the spell small and technically controlled; no huge magical orb."
+    ),
+    "magia_orbe_eco": (
+        "A Raya Lucaria scholar in layered blue academy robes and a faceted glintstone crown studies a suspended glintstone crystal above a circular stone lectern. "
+        "Three faint concentric reflections repeat through the crystal, each echo reflecting a different spent sorcery trace; the scholar aligns a staff to capture the last resonance. "
+        "Use the Grand Library's scholarly stonework, books, brass instruments and cold blue light. The crystal is physical and faceted, not a generic glowing sphere."
+    ),
+    "magia_chama_fria": (
+        "A Carian cold sorceress in dark blue wool robes, silver fastenings and a narrow fur collar stands on the Moonlight Altar as a pale blue frost spell blooms between her hands. "
+        "The spell freezes falling droplets into small sharp crystals while a thin moonlit vapor curls around her sleeves; her expression is composed and scholarly. "
+        "Use a cold Liurnia night, dark stone and distant lunar light. No orange fire, no snow queen crown and no generic ice castle."
+    ),
+    "covenant_lobos_cinza": (
+        "A small mounted patrol of Redmane Knights in rust-red capes and dark steel armor advances across the scarlet-rot flats of Caelid. "
+        "Their horses wear practical barding; one knight raises a redmane standard while another braces a heavy weapon against a distant gravity-distorted threat. "
+        "Show Radahn's battlefield horizon, eroded stone and red dust. The group must read as disciplined Redmane soldiers, not ordinary wolves or a generic cavalry army."
+    ),
+    "covenant_lua_velada": (
+        "A sworn Carian retainer in blue-silver plate over dark cloth stands on the bridge approach to Caria Manor, one knee bent as they raise a curved moonlit blade in oath. "
+        "A pale lunar reflection runs along the blade and across the wet stone; the manor's spired roofs and Liurnia mist sit behind the figure. "
+        "Use restrained Carian heraldic geometry and cold silver-blue light. Do not portray the retainer as Ranni herself or add a random starfield."
+    ),
+    "covenant_sentinelas": (
+        "Two Sellian night sorcerers keep watch on a narrow street in Sellia, Town of Sorcery, their dark hoods and layered robes blending with the sealed city's shadows. "
+        "One sorcerer begins a Night Shard cast from a concealed hand while the other watches the roofline; the spell is almost invisible except for a thin blue distortion. "
+        "Show Sellia's domed roofs, magical barrier and rust-red Caelid sky. The scene is stealth and sorcery, not a generic guard patrol."
+    ),
+    "covenant_coroa_abismo": (
+        "A Sanguine Noble of Mohgwyn, wearing dark ceremonial robes, pale mask-like face covering and blood-red cloth accents, stands beside the underground blood lake. "
+        "A ritual spear is held upright as a controlled ribbon of bloodflame rises from the stone basin; the noble's posture is reverent and threatening rather than vampiric. "
+        "Show Mohgwyn Palace's dark arches, pale roots and crimson reflection on black water. No horns, fangs or Mohg's own body unless the card names him."
+    ),
+    "covenant_ultimos": (
+        "A pair of blood-sworn warriors in worn dark plate and deep crimson sashes hold a narrow passage inside the approach to Mohgwyn Palace. "
+        "One is exhausted but still raises a short ritual blade while the other covers the flank; faint bloodflame clings to the weapon edge without graphic injury. "
+        "Use underground black stone, pale roots and red reflected light. Their bond and last stand are the story, not a crowd of generic demons."
+    ),
+    "covenant_filhos_brasa": (
+        "Two Fire Monk disciples in crimson robes and black iron shoulder plates train beside a snowbound brazier in the Mountaintops. "
+        "One catches an incoming practice strike on a heavy iron staff while the second prepares a compact fire incantation; both wear practical hoods and weathered prayer cloth. "
+        "Cold mountain stone and orange brazier light establish the contrast. No flame giant or burning monastery."
+    ),
+    "covenant_peregrinos_nevoa": (
+        "A small procession of Nox pilgrims in flowing silver-grey garments and smooth pale masks crosses the subterranean bridge toward Nokron. "
+        "One carries a dim lantern while the others look toward the vast artificial night sky above the Eternal City; silver tears glimmer in the river far below. "
+        "Use dark polished stone, slender arches and blue-black underground atmosphere. Do not put them on a surface-world mountain pass."
+    ),
+    "covenant_irmandade_ferro": (
+        "A line of Leyndell guards in disciplined gold-bronze armor locks shields at a breach in the Royal Capital's outer wall. "
+        "The front guard braces against a heavy impact while the second rank keeps spears level over the shield line; each shield bears worn geometric gold relief, not a newly invented crest. "
+        "Show pale limestone, Erdtree roots breaking the masonry and dust caught in warm light. The formation itself is the subject."
+    ),
+    "gwent_especial_nevoa": (
+        "A Sellian Night Sorcery spreads low across one clearly defined street-level battle lane: dark blue-grey mist crawls between ruined pillars and hides the enemy line from sight. "
+        "The near soldiers remain sharply visible while the far end of that single lane disappears behind the magical haze; neighboring terrain is not swallowed. "
+        "Use Sellia's domed rooftops and its sealed, uncanny night atmosphere. No generic smoke bomb or card-game UI."
+    ),
+    "gwent_especial_geada": (
+        "Rennala's Full Moon sorcery manifests above a Liurnian battlefield: a vast pale moon sphere rises behind the Queen of the Full Moon's distant silhouette, washing all three battle lanes in cold silver light. "
+        "Frost forms on shields, spearheads and wet flagstones across the entire field; the moon's reflection repeats in the flooded ground. "
+        "Use the Grand Library's academy architecture and Liurnia's mist. Keep the full moon as one coherent magical source, not three separate panels."
+    ),
+    "gwent_especial_chuva": (
+        "A meteor shower associated with glintstone astrology crosses the night above a distant siege line near Sellia. "
+        "Several bright star-stones descend at steep angles toward siege engines and stone barricades, lighting their surfaces with cold blue-white flashes; the foreground infantry lane remains comparatively untouched. "
+        "Show a dark Caelid horizon and ancient masonry, with realistic meteor trails rather than a galaxy wallpaper."
+    ),
+    "gwent_especial_chifre": (
+        "Godfrey, First Elden Lord, unleashes a devastating warrior's roar on the broad stone approach to Leyndell. "
+        "His long pale-gold hair and fur mantle whip backward; Serosh's spectral lion form rises behind his shoulders as a visible shockwave ripples dust, banners and the allied line outward. "
+        "Use a low frontal camera and royal capital architecture. The roar is expressed through physical air pressure and synchronized soldiers, not sound-wave UI rings."
+    ),
+    "gwent_especial_medico": (
+        "A Sacred Tear being collected at a Church of Marika in Limgrave: a weathered stone statue of Marika stands beneath a small golden tree canopy while a pilgrim carefully lifts a glowing tear-shaped relic from the altar basin. "
+        "The light is warm, gentle and restorative, illuminating cracked stone, offerings and the pilgrim's worn gloves. "
+        "Keep the relic and altar central; do not depict a modern medic, hospital or potion bottle."
+    ),
+    "gwent_especial_queima": (
+        "Black Flame erupts between two elite combatants on a ruined plateau near the Divine Tower of Caelid. "
+        "The dark fire has a near-black core and pale ash-white edges, briefly swallowing the silhouettes of the two strongest fighters while lesser figures recoil beyond the flame. "
+        "A Godskin Apostle's twinblade and pale robe may be visible as the source if kept secondary. No orange bonfire, gore or random explosion."
+    ),
+    "gwent_especial_purificar": (
+        "The Golden Order incantation Law of Regression is cast in a quiet Leyndell courtyard. "
+        "A Confessor or Golden Order scholar extends a sacred seal; a precise ring of warm gold light passes over the paving and causes rain, frost and magical haze to unravel into clear air. "
+        "Show the spell's measured geometry and the physical weather clearing from banners and armor. No generic healing beam or giant explosion."
+    ),
+    "gwent_especial_execucao": (
+        "Maliketh's Black Blade is shown at the instant of a controlled execution strike in Crumbling Farum Azula. "
+        "The weapon's black-gold blade is wrapped in a thin red-black flame of Destined Death; a single weakened enemy silhouette is isolated in the foreground while the broken dragon-temple stones frame the strike. "
+        "If Maliketh is visible, preserve his beast-cleric body, dark armor and flowing mane. Keep the violence non-graphic; no generic executioner hood."
+    ),
+    "gwent_especial_vinculo": (
+        "A Crucible Knight and a second sworn warrior stand shoulder to shoulder in an ancient underground Crucible chamber. "
+        "Their battered bronze-gold armor carries restrained primordial reliefs; one raises a broad shield while the other sets a sword across the gap, forming a continuous defensive line. "
+        "Subtle red-gold Crucible light catches the stone roots and carved pillars. The image communicates an oath and linked defense, not a glowing UI bond."
+    ),
+    "gwent_especial_batedor": (
+        "A Bloodhound Knight performs the Bloodhound's Step across a rain-dark Limgrave causeway. "
+        "The armored figure vanishes from the starting point and reappears several paces ahead, shown by one restrained translucent motion echo and displaced rain droplets; the curved greatsword remains in a low ready position. "
+        "Keep the Evergaol stones and windswept grass readable. The effect is a precise evasive step, not teleportation portals or speed lines."
+    ),
+    "gwent_especial_muralha": (
+        "A monumental Leyndell defensive barricade built from overlapping gold-bronze shields and pale limestone rises across a narrow capital street. "
+        "Royal guards take position behind it as an incoming impact strikes the shield face; Erdtree roots grip the masonry and warm light runs along worn reliefs. "
+        "The wall is a physical structure with visible scale and construction, not a floating golden barrier or heraldic logo."
+    ),
+    "elden_especial_sangramento": (
+        "Mohg's bloodflame ritual is being performed above the underground lake of Mohgwyn Palace. "
+        "A ritualist in dark ceremonial robes raises a three-pronged spear while controlled crimson bloodflame marks appear as thin burning sigils across enemy armor in the middle distance; keep the effect symbolic and non-graphic. "
+        "Pale roots, black water, red reflections and the palace's oppressive stone arches identify the location. Do not depict generic vampires or splatter."
+    ),
+    "elden_especial_geada": (
+        "Rennala, Queen of the Full Moon, within the Grand Library of Raya Lucaria, conjures her immense luminous Full Moon above the flooded floor. "
+        "The sphere is pale blue-white with subtle lunar surface texture; cold radiance spreads outward and freezes droplets on the library's stone columns and scattered books. "
+        "Rennala's layered queenly robes and distinctive presence remain secondary to the moon spell. No generic snowstorm or unrelated witch."
+    ),
+    "elden_especial_podrida": (
+        "Malenia's Scarlet Aeonia blooms on the scarlet-rot battlefield of Caelid: a vast layered flower of red-pink petals opens around the armored swordswoman's lowered silhouette. "
+        "Rot spores drift close to the ground, the soil is cracked and rust-red, and nearby dead trees bend beneath the toxic atmosphere. "
+        "Preserve Malenia's red hair, prosthetic gold arm and ornate worn armor if her body is visible. The flower is the central shape; avoid ordinary roses or generic poison clouds."
+    ),
+    "elden_especial_loucura": (
+        "The Frenzied Flame erupts from a tortured stone altar in the Frenzied Flame Proscription beneath Leyndell. "
+        "A solitary figure marked by the Three Fingers receives branching yellow-gold flame from the altar; nearby stone and hanging cloth warp in the heat while the figure's eyes glow with restrained madness. "
+        "Use sickly amber, scorched stone and subterranean darkness. Do not depict ordinary fire, a demon army or random tentacles."
+    ),
+    "elden_especial_chama": (
+        "The Flame of the Fell God burns above the snowbound Forge of the Giants. "
+        "A vast burning eye-like sphere hangs over the giant's forge basin, casting orange light across ancient chains, black volcanic stone and blowing snow. "
+        "The fire is immense but controlled in shape, with the Mountaintops' cold blue-white storm surrounding it. No generic bonfire or modern furnace."
+    ),
+    "elden_especial_invocacao": (
+        "Three Lone Wolf spirit ashes materialize on a Limgrave hillside at dusk. "
+        "The translucent wolves have distinct lean canine anatomy, pale spectral fur and faint blue-white edges; they emerge beside a small spirit-calling bell held by a traveller's gloved hand. "
+        "Tall grass, a ruined stone wall and the distant golden Erdtree establish Limgrave. Show exactly three wolves, not a pack of random spectral animals or armored pets."
+    ),
+    "gwent_unidade_baluarte": (
+        "A Crucible Knight in ancient bronze-gold armor stands in a compact defensive formation inside the Siofra Aqueduct or an old Crucible ruin. "
+        "His heavy shield is planted against the ground; a brief primordial wing-like manifestation unfolds from his back, made of warm red-gold light and feathered energy rather than angel wings. "
+        "Show the knight's horned helm, layered plate and grounded stance. No generic paladin or oversized halo."
+    ),
+    "gwent_unidade_lamina_sem_juramento": (
+        "A lone recusant hunter of the Two Fingers moves through a narrow passage in Roundtable Hold's outer stone corridors, dressed in dark travel leathers and a weathered hood. "
+        "A slender hooked blade is held low; the hunter deliberately leaves the center of the corridor empty, watching a distant doorway for a solitary target. "
+        "Use candlelit stone, worn red carpets and restrained shadows. The figure is an original NARABOT archetype, not a named canonical NPC."
+    ),
+    "gwent_unidade_portaestandarte": (
+        "A Leyndell standard-bearer plants a tall gold-and-ivory royal banner beside a line of city guards. "
+        "The cloth carries a restrained Erdtree motif and is visibly weathered, with stitched repairs and heavy brass finials; nearby soldiers tighten their shield formation as the banner catches a warm updraft. "
+        "Show the capital's broad processional paving and root-split walls. No modern flagpole or invented lettering."
+    ),
+    "gwent_unidade_oraculo_clima": (
+        "A Liurnian astrologer-prophet stands on a half-submerged observatory terrace, wearing layered indigo robes, a modest hood and a small glintstone circlet. "
+        "They study the boundary between lake fog and sleet through a brass astrolabe, holding one hand inside a calm pocket of air as rain and ice pass around the terrace. "
+        "Use Liurnia's flooded stonework, distant academy roofs and cold diffuse light. No generic weather wizard tower."
+    ),
+    "gwent_unidade_eco": (
+        "A Raya Lucaria glintstone scholar in blue academy robes and a faceted stone crown gathers the fading residue of several sorceries above a worn lectern. "
+        "Thin blue-white arcs echo in sequence between three cracked glintstone fragments, each reflection smaller than the last; the scholar's staff guides the final arc into a crystal vessel. "
+        "Show the academy's carved lecture hall, old books and polished stone. Avoid random floating runes or a generic orb."
+    ),
+    "gwent_unidade_cavaleira": (
+        "A Carian Knightess in blue-silver plate, dark blue cape and a closed elegant helm duels on the rain-slick bridge outside Caria Manor. "
+        "She turns aside a predictable sword thrust with a narrow Carian blade-sorcery arc, the translucent blue blade following the real sword's path. "
+        "Use manor spires, cold lake mist and wet flagstones. The armor is practical Carian knight plate, not a generic female knight in gold."
+    ),
+    "gwent_unidade_gigante": (
+        "The Fire Giant stands in the frozen Mountaintops, an immense red-skinned giant with a heavy braided beard, long hair, a single great iron plate covering the chest and the enormous broken shackle at one ankle. "
+        "He braces the colossal circular forge-plate shield as snow whips around his legs; a contained flame glows from the giant's belly wound only if visible and never becomes a second face. "
+        "Use extreme low angle, snowfield scale and distant Forge of the Giants. Preserve the canonical proportions and equipment."
+    ),
+    "gwent_unidade_cartografa": (
+        "An explorer of Nokron in a fitted Nox silver robe, pale smooth mask and layered travel mantle studies an ancient star-map carved into a black stone balustrade. "
+        "One hand traces a route across the subterranean river while a dim lantern reveals a distant bridge and the vast false night sky above the Eternal City. "
+        "Use silver architecture, dark water and restrained blue starlight. No parchment map covered in readable text."
+    ),
+    "gwent_unidade_invocador": (
+        "A Godskin Apostle itinerant preacher stands in a ruined chapel near the Windmill Village, wearing the distinctive pale Godskin robe and dark hood. "
+        "The figure draws a ribbon of black flame from a sacred seal while the long twinblade rests across the body; the stretched cloth and pale mask-like face remain recognizable. "
+        "Use weathered windmill timbers, yellowed grass and an unsettling late-day sky. Do not turn the Apostle into a generic hooded wizard."
+    ),
+    "gwent_unidade_mestre_forja": (
+        "A master smith of Volcano Manor works at a basalt forge beneath Mount Gelmir, wearing soot-dark leather, a heavy apron, heat gloves and a practical iron shoulder guard. "
+        "A second Golden Order-aligned guard holds a glowing weapon blank steady while the smith strikes it, making the teamwork explicit. "
+        "Show serpent-carved manor stone, black volcanic rock, orange forge light and a narrow channel of molten metal."
+    ),
+    "gwent_unidade_dupla_veu": (
+        "Two Nox women of the Eternal City move in synchronized formation across a silver bridge in Nokstella. "
+        "They wear flowing silver-grey garments, smooth pale masks and fitted dark underlayers; one draws an enemy's attention while the other crosses behind with a narrow curved blade. "
+        "A subterranean starry ceiling and silver river make the location unmistakable. Keep exactly two figures and show coordinated movement rather than identical clones."
+    ),
+    "gwent_unidade_circulo": (
+        "A Raya Lucaria academy disciple in blue scholar robes and a faceted glintstone crown stands inside a circular lecture chamber. "
+        "Two fellow students' faint spell residues converge into a precise glintstone ring above a stone lectern as the disciple raises a staff to complete the pattern. "
+        "Use chalkless carved diagrams, old books, blue crystal lamps and the academy's cold stone architecture; no legible magical writing or sci-fi hologram."
+    ),
+    "gwent_unidade_sentinela_rubra": (
+        "A Redmane Knight in dark steel armor, red mane-like plume and weathered crimson cape guards a narrow Caelid approach. "
+        "The knight plants a broad shield and angles a heavy spear toward an incoming beast; red dust and gravity-distorted debris move behind the defensive stance. "
+        "Use the ruined battlefield near Redmane Castle, rust-red sky and distant siege remains. No lion head costume or generic barbarian."
+    ),
+    "gwent_unidade_veterano_cercos": (
+        "A Draconic Tree Sentinel in dark bronze dragon-scale plate stands on a shattered stone bridge in the storm outside Leyndell. "
+        "Red lightning crawls across the greataxe and shield as the veteran turns to face a distant threat; the armor shows old dents, scale relief and repaired straps. "
+        "Use storm clouds, pale capital walls and the bridge's steep drop. Keep the draconic armor and red lightning distinct from ordinary Leyndell knights."
+    ),
+    "gwent_unidade_herdeiro_portao": (
+        "Godwyn the Golden is represented as the Prince of Death beneath Leyndell, not as a living generic knight: his vast, pale, fishlike corpse is fused into the roots below the capital, with long golden hair and a solemn human upper face. "
+        "Black-gold deathroot spreads through the surrounding stone while a faint golden memory of his former princely radiance lingers above the roots. "
+        "Use the Deeproot Depths' immense roots and subterranean gloom. Do not depict him standing alive in armor or wielding a sword."
+    ),
+    "gwent_unidade_carniceiro_forja": (
+        "A Volcano Manor executioner in dark iron plate and a heavy leather apron drags a hooked butcher's blade across the basalt floor of a manor service hall. "
+        "The blade catches a faint orange reflection from a nearby lava fissure; discarded armor pieces and broken weapons suggest scavenging after a duel, without gore. "
+        "Use serpent-carved stone, smoke-darkened pillars and practical heavy equipment. The executioner is an original recusant, not Rykard."
+    ),
+    "gwent_unidade_intendente": (
+        "A travelling Nomadic Merchant in layered earth-toned robes, a broad hood and a weathered pack sits beside a small campfire on a Limgrave roadside. "
+        "A sturdy pack animal and carefully wrapped wares rest nearby; the merchant counts a few coins while watching the road, with a stringed instrument secured to the pack. "
+        "Use a broken stone bridge, grass, scattered merchant goods and the distant golden Erdtree. No modern shop stall or readable price signs."
+    ),
+    "gwent_unidade_cacadora_fantasma": (
+        "An original Ravenmount-style assassin in black feathered mantle, close-fitting dark armor and a beaked shadowed hood perches on a ruined battlement in Limgrave. "
+        "The assassin is half-hidden in drifting fog, one narrow blade ready while a second silhouette begins to emerge from the mist behind the first. "
+        "Use wet stone, crows on the parapet and a cold dawn. The feather mantle is the defining silhouette; do not turn the figure into a literal bird monster."
+    ),
+    "gwent_unidade_cantora_lamentos": (
+        "Fia, Deathbed Companion, in her canonical dark hooded cloak and layered black garments, sits in the Deeproot Depths beside the immense roots surrounding Godwyn's body. "
+        "Her pale hands rest gently over a small deathbed embrace ritual; faint blue-white motes of Those Who Live in Death drift between her and the roots. "
+        "Use solemn subterranean light, tangled roots and still water. Preserve Fia's human, composed appearance; no necromancer skull staff or generic undead horde."
+    ),
+    "gwent_unidade_senhor_cacada": (
+        "Blaidd the Half-Wolf stands at the moonlit entrance to Ranni's Rise: a towering wolf-headed warrior with grey fur, pointed ears, heavy dark armor, a thick fur mantle and an enormous greatsword. "
+        "His posture is protective and tense, the blade lowered but ready as cold moonlight catches the fur and steel. "
+        "Use Carian tower stonework, blue night haze and sparse stars. Preserve his lupine muzzle and recognizable armor; do not humanize his head or add a second wolf companion."
+    ),
+    "gwent_unidade_saqueadora_veu": (
+        "An original Nox scavenger in a flowing silver-grey robe and pale smooth mask slips through a collapsed side passage in Nokron. "
+        "A small relic case is secured beneath the cloak while the figure reaches toward a silver tear fragment embedded in old masonry; the other hand keeps a narrow curved blade low. "
+        "Use black stone, underground river reflections and the Eternal City's artificial night sky. No surface-world forest or generic rogue hood."
+    ),
+    "gwent_unidade_contrabandista": (
+        "A Volcano Manor recusant in dark travel leathers and a weathered cloak crouches beside a narrow lava-lit service tunnel, concealing a sealed red letter beneath the coat. "
+        "A serpent-carved door and a discarded manor mask suggest the hidden route; the figure looks back toward an approaching patrol. "
+        "Use black basalt, sulphurous haze and restrained crimson accents. No modern contraband crates or pirate imagery."
+    ),
+    "gwent_unidade_guardiao_runas": (
+        "A Golden Order guardian in disciplined ivory-and-gold robes with a practical bronze chestplate holds a sacred seal before a carved stone prayer tablet in Leyndell. "
+        "A thin golden ward bends an incoming glintstone bolt away from the guardian's shoulder, leaving a bright reflection on the tablet's circular geometric relief. "
+        "Use pale limestone, root shadows and warm sacred light. Do not cover the body in random glowing runes or give the guardian a wizard hat."
+    ),
+    "gwent_unidade_necromante": (
+        "A servant of Those Who Live in Death stands among blackened roots in the graveyard of the Deeproot Depths, wearing a tattered dark pilgrim robe and carrying a weathered sacred seal. "
+        "Two skeletal nobles rise slowly from shallow root-bound graves as pale blue death flame gathers around their joints; the summoner remains clearly visible and physically grounded. "
+        "Use deathroot, damp stone and subdued blue-white light. No generic lich crown, green poison or gore."
+    ),
+    "gwent_unidade_detonador": (
+        "A warrior touched by the Frenzied Flame stands in the ruined village near the Frenzied Flame Tower, wearing scorched travel armor and a ragged yellow-brown cloak. "
+        "At the instant of defeat, a contained burst of chaotic yellow flame breaks from the chest and eyes, scorching the nearby stone but leaving the body silhouette readable. "
+        "Use the tower's oppressive architecture, burned thatch and sickly amber sky. No explosive barrel, modern bomb or orange fireball."
+    ),
+    "gwent_unidade_devorador_mana": (
+        "A blood knight serving Mohg kneels at a ritual basin in Mohgwyn Palace, wearing dark iron armor beneath a crimson ceremonial mantle and a pale cloth mask. "
+        "The knight draws a thin ribbon of bloodflame from a fallen ritual vessel into a spearhead, visibly feeding the weapon rather than consuming a living ally. "
+        "Use black stone arches, pale roots and red water reflections. No vampiric fangs or graphic blood."
+    ),
+    "gwent_unidade_bibliotecaria": (
+        "A Raya Lucaria librarian in blue academy robes and a faceted glintstone crown carries a stack of weathered spell folios through the Grand Library. "
+        "One open folio catches the pale blue residue of a recently cast sorcery; the librarian compares it with a crystal lens while students move softly in the background. "
+        "Use towering shelves, carved academy columns and cold window light. No modern spectacles, printed text or generic wizard tower."
+    ),
+    "gwent_especial_egide": (
+        "A golden protective blessing descends at a Minor Erdtree roadside shrine in the Lands Between. "
+        "A single Leyndell guard kneels as a thin amber-gold shell settles over the shield and shoulder plates; fine leaf-like motes drift from the shrine's roots. "
+        "Use old stone, weathered Erdtree branches and warm light. The shield is a physical object protected by a subtle blessing, not a floating UI bubble."
+    ),
+    "gwent_especial_requiem": (
+        "A deathbed rite in the Deeproot Depths: Fia's pale hands extend over a root-covered stone bier as the spirit of a fallen warrior gathers back into a coherent silhouette. "
+        "The returning figure is formed from restrained blue-white death mist and black-gold root filaments, with its armor and weapon reappearing in the correct physical order. "
+        "Use Godwyn's vast roots in the background and a solemn, quiet composition. No zombie horde or green necromancy."
+    ),
+    "gwent_especial_passo": (
+        "A Bloodhound Knight uses Bloodhound's Step to cross between two broken stones on a Limgrave causeway. "
+        "The original position remains as a faint transparent afterimage while the armored figure reappears several strides away, curved greatsword low and body leaning into the evasive movement. "
+        "Rain droplets and loose grass show the direction of displacement. Keep the effect subtle and physical; no portal ring."
+    ),
+    "gwent_mitica_coroa": (
+        "A Haligtree Knight in pale ivory plate with clean gold trim, a white-gold tree insignia and a long pale cloak guards a suspended walkway in Elphael. "
+        "The knight raises a broad shield beneath pale branches and soft blossom fall; a faint unalloyed-gold light runs along the armor seams. "
+        "Use the Haligtree's immense pale boughs, carved sacred stone and quiet decayed grandeur. Do not give the knight Mohgwyn blood motifs or ordinary Leyndell red cloth."
+    ),
+    "gwent_singular_primeiro": (
+        "The Crucible Knight's primordial oath is represented by a single ancient bronze-gold greatshield resting against a weathered stone altar in an underground Crucible chamber. "
+        "A restrained red-gold manifestation of a spectral wing and tail curls behind the shield as dust rises from carved reliefs; no readable inscription is present. "
+        "The artifact and its age are central, with the chamber's roots and eroded pillars providing scale. Do not invent a new named knight."
+    ),
+    "gwent_singular_intocavel": (
+        "The Black Knife itself lies diagonally across a dark stone reliquary in the hidden chamber beneath the Royal Capital. "
+        "Its short curved blade is blackened steel with a narrow red-black Destined Death sheen along the edge; the grip is worn and practical, the guard compact. "
+        "A faint shadow of a hooded assassin falls across the stone but the weapon remains the subject. No ornate fantasy dagger with oversized gems."
+    ),
+    "gwent_singular_nivel1": (
+        "Marika's shattered hammer rests on a pale stone floor beneath the Erdtree, its heavy head split and its shaft worn from the breaking of the Elden Ring. "
+        "Thin golden fractures of light run through the cracks in the stone around it; a distant, indistinct female silhouette with long golden hair is visible only as a memory, not a new portrait. "
+        "Use the Erdtree's inner sanctum, immense pale roots and solemn gold light. The hammer is central; no numeric level or text."
+    ),
+    "gwent_singular_cacador_chefes": (
+        "A crown associated with Godfrey, First Elden Lord, rests on a weathered royal stone throne in Leyndell. "
+        "The crown's worn gold and pale metal catch the light of the Erdtree; a massive greataxe and a faint lion-shaped shadow lie behind it as restrained references to Godfrey and Serosh. "
+        "The relic is the focal object, with royal avenue architecture fading into dust. No readable runes, jewel overload or generic king crown."
+    ),
+    "primordial_origem": (
+        "The Elden Beast, vassal of the Greater Will, glides through the vast luminous interior of the Erdtree's cosmic arena. "
+        "Its immense serpentine, star-filled body carries flowing golden constellations and a radiant sword-like appendage; the water beneath reflects the creature's moving silhouette. "
+        "Use deep black-gold space, sacred water and the monumental fractured Elden Ring light behind it. Preserve the creature's aquatic, otherworldly anatomy; no ordinary dragon wings or humanoid armor."
+    ),
+    "primordial_trono": (
+        "Queen Marika the Eternal stands within the Erdtree's inner sanctum at the moment before the Elden Ring is shattered. "
+        "She has long pale-gold hair, a regal ivory-and-gold robe and a composed, burdened expression; the sacred hammer is held in both hands before the fractured golden ring. "
+        "The background is the immense luminous root architecture of the Erdtree, with fine golden fragments suspended in the air. Do not depict her as a generic armored warrior or add a crown of unrelated design."
+    ),
+    "primordial_tempestade": (
+        "Dragonlord Placidusax coils within the storm beyond time at the heart of Crumbling Farum Azula. "
+        "Show the ancient two-headed dragonlord with the remaining heads, immense weathered scales, torn wings and red-gold lightning gathering around the necks; ruined dragon-temple pillars float in the temporal storm. "
+        "Use a dramatic wide low angle and violent cloud currents. Do not add extra heads or depict a conventional four-legged dragon."
+    ),
+    "primordial_abismo": (
+        "The Formless Mother is represented indirectly as an unseen Outer God: a vast, wound-like crimson presence beyond the dark void above Mohgwyn Palace, never a humanoid monster. "
+        "Below, a small ritual altar and Mohg's bloodflame spear point toward the impossible red fissure; black water and pale roots reflect its distant glow. "
+        "Keep the entity abstract, ancient and incomprehensible, with no face, limbs, tentacles or generic demon body."
+    ),
+    "primordial_eternidade": (
+        "Maliketh, the Black Blade, stands on the broken arena of Crumbling Farum Azula in his beast-cleric form: lean beastman anatomy, dark layered armor, flowing mane and a massive black-gold blade. "
+        "Destined Death burns along the weapon in red-black ribbons as he turns into a decisive strike; ancient dragon-scale stone and violent golden storm light frame the silhouette. "
+        "Preserve Maliketh's beastlike face, armor and blade; do not replace him with a generic knight or skeleton."
+    ),
+}
+
 def _valor_prompt(valor: Any, limite: int) -> str:
     texto = " ".join(str(valor or "").split())
     texto = "".join(ch for ch in texto if ch.isprintable())
@@ -529,7 +1004,8 @@ def gerar_prompt_carta(carta: dict[str, Any]) -> str:
     habilidade_nome = _valor_prompt(habilidade.get("nome") or habilidade_id or "Sem habilidade", 80)
     habilidade_regra = _valor_prompt(habilidade.get("texto") or "", 240)
     jogo_origem = _valor_prompt(carta.get("jogo_origem") or "", 100)
-    cena = CENAS_POR_CARTA.get(card_id, "")
+    origem_elden = "elden ring" in jogo_origem.casefold() or faccao in {"Ordem Áurea", "Véu Carmesim", "Lua Sombria"}
+    cena = CENAS_ELDEN_POR_ID.get(card_id, "") if origem_elden else CENAS_POR_CARTA.get(card_id, "")
     if not cena and card_id.startswith("patente_"):
         nivel = "unrecorded"
         import re
@@ -537,15 +1013,34 @@ def gerar_prompt_carta(carta: dict[str, Any]) -> str:
         if match_nivel:
             nivel = match_nivel.group(1)
         estagio = {
-            "Recruta da Ordem": "newly sworn recruit in practical, lightly worn training clothing; posture attentive and still learning discipline",
-            "Escudeiro da Ordem": "field-proven squire in repaired, serviceable clothing and armor appropriate to the canonical scene; stance shows growing confidence and responsibility",
-            "Veterano da Ordem": "seasoned veteran in layered, visibly repaired field clothing and armor; posture controlled and experienced",
-            "Marechal da Ordem": "senior marshal in distinguished but functional command attire; authority comes from command presence, not excessive jewels or invented regalia",
-        }.get(nome, "ranked member whose clothing and bearing communicate the named level of service without adding undocumented equipment or insignia")
+            "Recruta da Ordem": "newly sworn recruit, light practical armor, plain cloak, visibly serviceable equipment and an attentive but untested stance",
+            "Escudeiro da Ordem": "field-tested squire, repaired medium armor, a practical travel cloak and a stance beginning to show disciplined confidence",
+            "Veterano da Ordem": "seasoned veteran, layered armor with repairs from real campaigns, weathered gloves and a controlled experienced stance",
+            "Marechal da Ordem": "senior field commander, distinguished but functional armor, a heavy command mantle and authority conveyed through posture rather than jewels",
+        }.get(nome, "ranked Lands Between fighter whose clothing, armor and posture communicate the exact named service stage")
+        sufixo = nome.casefold()
+        if "leyndell" in sufixo or "graça perdida" in sufixo:
+            ambiente = "a Leyndell outer muster court: pale limestone paving, colossal gold-bronze gates, Erdtree roots splitting the retaining wall and distant warm canopy light"
+        elif "mohgwyn" in sufixo or "sanguíneo" in sufixo or "palácio de mohgwyn" in sufixo:
+            ambiente = "a Mohgwyn Palace ritual approach: black underground stone, pale hanging roots, a still crimson lake reflection and severe ceremonial arches"
+        elif "cariano" in sufixo or "raya lucaria" in sufixo or "lua negra" in sufixo:
+            ambiente = "a Carian or Raya Lucaria training terrace: blue-grey carved stone, glintstone lamps, cold Liurnia mist and distant moonlit towers"
+        elif "noite dos punhais" in sufixo:
+            ambiente = "a moonless Limgrave watch post on the Night of the Black Knives: wet black stone, extinguished braziers and a distant faint red-black trace of Destined Death"
+        elif "farum azula" in sufixo:
+            ambiente = "a broken Farum Azula sky-bridge: ancient dragon-scale stone, floating ruins, violent cloud currents and pale lightning beyond the parapet"
+        else:
+            ambiente = "a weathered Lands Between roadside muster: cracked flagstones, eroded statues, wind-shaped grass and a distant landmark appropriate to the named faction"
+        equipamento = {
+            "Força": "Golden Order or Leyndell-style practical plate, bronze-gold fittings, a serviceable shield or spear only if the card's role supports it",
+            "Destreza": "light dark-leather or silver-grey field armor, fitted gloves, a compact blade or bow only if the card's role supports it",
+            "Magia": "Carian or Raya Lucaria layered robes, a modest glintstone detail and a crafted staff or sacred seal only if the card's role supports it",
+        }.get(tipo, "practical regional equipment explicitly supported by the card")
         cena = (
-            f"Depict {estagio}. The card represents Gwent progression milestone level {nivel}; communicate advancement through a believable ceremonial or field moment, "
-            "with a restrained training ground or mustering courtyard only if consistent with the supplied description. Use the card's faction, type and ability for controlled visual accents. "
-            "Do not invent weapons, shields, medals, titles, numeric inscriptions, heraldry or other rank insignia not supplied by the card facts."
+            f"Depict {estagio}. This is a specific Elden Ring Lands Between progression card at level {nivel}, not a generic medieval rank portrait. "
+            f"Use {ambiente}. The recruit's visual culture follows {equipamento}; the faction/type determines only the appropriate regional material language and must not invent canonical membership. "
+            "Show one concrete milestone action: receiving a weathered field token, taking a watch position, being entrusted with a gate or standing before a commander after service. "
+            "Keep the character's silhouette and equipment plausible for the named rank; do not add medals, readable writing, modern insignia or unrelated weapons."
         )
     elif not cena and card_id.startswith("jogo_"):
         marco = "platinum mastery" if card_id.endswith("_platina") else "completed journey"
@@ -574,12 +1069,12 @@ def gerar_prompt_carta(carta: dict[str, Any]) -> str:
 
     diretrizes_faccao = {
         "Ordem Áurea": (
-            "FACTION IDENTITY — ORDEM ÁUREA (LIGHT, LAW AND FAITH): draw from the visual language of the Golden Order in the Lands Between: "
+            "FACTION IDENTITY — ORDEM ÁUREA (LIGHT, LAW AND FAITH): this is the card's NARABOT deck affiliation, not proof of canonical membership in the Golden Order. Draw from the visual language of the Golden Order in the Lands Between: "
             "warm Erdtree gold, aged ivory, pale brass, sunlit stone, fine gold leaf, sacred circular geometry and restrained tree-root motifs. "
             "When appropriate to the named subject, use the monumental stonework, processional avenues, colonnades, statues and fortified grandeur associated with Leyndell and the Altus Plateau. "
             "Armor and clothing may use disciplined gold-trimmed plate, ivory cloth, devotional seals and practical ceremonial details, but only when the card's identity supports them. "
             "Show faith and law through ordered composition, protective light, vows, sacred rites or an imposing but believable institution. "
-            "Do not turn every member into a knight, do not add a giant Erdtree to every background, and do not replace the named character's canonical equipment or silhouette. "
+            "Do not turn every member into a knight, do not add a giant Erdtree to every background, and do not replace the named character's canonical equipment or silhouette. Faction affiliation may appear only as a restrained color/material influence when it conflicts with the subject's canonical design. "
             "Avoid generic angel wings, modern church imagery, excessive halos and flat gold color filters."
         ),
         "Véu Carmesim": (
@@ -624,11 +1119,6 @@ def gerar_prompt_carta(carta: dict[str, Any]) -> str:
     # carta realmente apontam para elas. A facção orienta a estética, não inventa
     # uma filiação canônica nem força o mesmo cenário em toda a coleção.
     texto_mundo = " ".join((nome, descricao, habilidade_nome, habilidade_regra, jogo_origem, cena)).casefold()
-    origem_elden = "elden ring" in jogo_origem.casefold() or faccao in {"Ordem Áurea", "Véu Carmesim", "Lua Sombria"}
-    if origem_elden:
-        # Não reaproveitar storyboards antigos do cenário genérico: vários foram
-        # escritos antes da conversão para Elden Ring e contradizem nomes canônicos.
-        cena = ""
     jogo_origem_prompt = jogo_origem or ("Elden Ring — Terras Intermédias" if origem_elden else "not specified")
     diretriz_mundo = ""
     if origem_elden:
@@ -685,7 +1175,7 @@ def gerar_prompt_carta(carta: dict[str, Any]) -> str:
         contexto += f'\nCANONICAL CARD DESCRIPTION: "{descricao}".'
 
     blocos = [
-        DIRECAO_ARTE,
+        DIRECAO_ARTE if origem_elden else DIRECAO_ARTE_GERAL,
         origem,
         "CANONICAL CARD BRIEFING\n" + contexto,
         (
@@ -722,7 +1212,6 @@ def gerar_prompt_carta(carta: dict[str, Any]) -> str:
             "The scene's protagonist, action and setting must be explainable from these facts. If no description exists, "
             "the card name plus ability rule still define the scene; do not pad missing lore with random backstory."
         ),
-        _perfil_facial_carta(card_id, nome),
         (
             "CANONICAL IDENTITY AND STORY OVERRIDE — ABSOLUTE PRIORITY: the card name, full "
             "canonical description, ability name and ability rule together define WHO or WHAT "
@@ -733,17 +1222,12 @@ def gerar_prompt_carta(carta: dict[str, Any]) -> str:
             "visually tell that card's story through action, expression, gesture, objects, setting "
             "and consequence. Do not invent biography or plot facts absent from the card data. "
             "Every visual choice must be traceable to the name, description, ability or established "
-            "faction identity. The randomized appearance profile is ONLY a fallback for details the "
-            "card does not specify. It must NEVER change the named identity, canonical gender or "
-            "sex presentation, species, age, role, status, equipment, powers, injuries, allegiance "
-            "or story circumstances. If any randomized trait conflicts with the name or card facts, "
-            "discard that trait. If the name or description establishes a woman, use coherent "
-            "female facial presentation, no beard or moustache, and naturally varied feminine "
-            "anatomy; if it establishes a man, preserve coherent masculine presentation; if it "
-            "establishes a non-human being, object, spirit or group, follow that identity instead "
-            "of forcing a human body. Never assign gender from randomness when the card does not "
-            "specify it. The scene must feel like a meaningful moment from THIS card's story, not "
-            "a generic fantasy portrait."
+            "faction identity. No randomized appearance profile is supplied for Elden Ring cards. "
+            "Unspecified physical details must remain restrained and compatible with the named identity. "
+            "Never change canonical gender, species, age, role, status, equipment, powers, injuries, "
+            "allegiance or story circumstances. If the subject is a non-human being, object, spirit "
+            "or group, follow that identity instead of forcing a human body. The scene must feel like "
+            "a meaningful moment from THIS card's story, not a generic fantasy portrait."
         ),
         diretrizes_faccao.get(faccao, "FACTION IDENTITY: not specified. Do not invent faction insignia, uniforms, heraldry or faction-specific lore; use neutral, practical materials and colors."),
         diretriz_mundo,
@@ -752,6 +1236,14 @@ def gerar_prompt_carta(carta: dict[str, Any]) -> str:
         raridade_prompt,
         diretriz_limpeza,
     ]
+    if not origem_elden:
+        blocos.insert(5, _perfil_facial_carta(card_id, nome))
+    else:
+        blocos.append(
+            "ELDEN RING CANONICAL CHARACTER LOCK: do not randomize face, age, gender, species, body plan, hair, skin, clothing, armor, weapon, magical anatomy or signature silhouette. "
+            "For a named canonical character, reproduce the recognizable in-world identity described by the card-specific scene. For an original NARABOT archetype, use only the specific equipment, culture and location written in that scene. "
+            "Never let faction palette or rarity intensity overwrite canonical character design."
+        )
     if habilidade_prompt:
         blocos.append(f"ABILITY VISUAL STORYTELLING: {habilidade_prompt} This is a visual metaphor only; do not add text or symbols that resemble UI.")
     if habilidade_id in HABILIDADE_TEXTO_VISUAL:

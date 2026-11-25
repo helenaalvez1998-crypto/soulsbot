@@ -53,7 +53,7 @@ def _fingerprint_renderizador() -> str:
 
 # A versão explícita documenta releases; a impressão digital também invalida
 # automaticamente o cache quando o código/overlay/fonte muda sem bump manual.
-VERSAO_RENDERIZADOR = f"{VERSAO_ARTES}-V8-ARQUITETURA-FACCOES-{_fingerprint_renderizador()}"
+VERSAO_RENDERIZADOR = f"{VERSAO_ARTES}-V12-ACABAMENTO-SOULS-ELDEN-{_fingerprint_renderizador()}"
 
 # Cor principal da moldura por raridade: as categorias e os tipos continuam
 # visualmente distintos dentro de cada faixa de raridade.
