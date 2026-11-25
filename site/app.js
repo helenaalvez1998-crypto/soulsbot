@@ -265,7 +265,7 @@ function applyGwentLeaders(byFaction) {
   if (!byFaction) return;
   Object.entries(byFaction).forEach(([faction, list]) => {
     if (!Array.isArray(list) || !list.length || !gwentFactionInfo[faction]) return;
-    gwentFactionInfo[faction].leaders = list.map(l => [l.id, l.name, l.description]);
+    gwentFactionInfo[faction].leaders = list.map(l => [l.id, l.name, l.description, l.art_url || '', l.default_art_url || '']);
   });
 }
 function renderGwentLeaderOptions(selected = '') {
@@ -284,7 +284,9 @@ function renderGwentLeaderOptions(selected = '') {
     const sigils = {'Ordem Áurea':'✧','Véu Carmesim':'♜','Lua Negra':'☾'};
     const portraits = {Godfrey:'godfrey',Morgott:'morgott',Radagon:'radagon',Mohg:'mohg',Rykard:'rykard',Esgar:'esgar',Rennala:'rennala',Astel:'astel',Loretta:'loretta'};
     const portrait = portraits[leader[1]] || 'godfrey';
-    preview.innerHTML = `<div class="gwent-leader-relic v52-leader-card faction-${faction === 'Ordem Áurea' ? 'gold' : faction === 'Véu Carmesim' ? 'blood' : 'moon'}" style="--leader-art:url('assets/leaders/${portrait}.webp')"><div class="leader-relic-sigil">${sigils[faction] || '✦'}</div><small>${escapeHTML(faction)}</small><strong>${escapeHTML(leader[1])}</strong><p>${escapeHTML(leader[2])}</p><em>LÍDER · CARTA DE COMANDO</em></div>`;
+    const hasCustomArt = !!leader[3];
+    const artUrl = leader[3] || leader[4] || `assets/leaders/${portrait}.webp`;
+    preview.innerHTML = `<div class="gwent-leader-relic v52-leader-card faction-${faction === 'Ordem Áurea' ? 'gold' : faction === 'Véu Carmesim' ? 'blood' : 'moon'} ${hasCustomArt ? 'has-custom-leader-art' : ''}" style="--leader-art:url('${escapeHTML(artUrl)}')"><div class="leader-art-backdrop" aria-hidden="true"></div><div class="leader-relic-sigil">${sigils[faction] || '✦'}</div><small>${escapeHTML(faction)}</small><strong>${escapeHTML(leader[1])}</strong><p>${escapeHTML(leader[2])}</p><em>LÍDER · CARTA DE COMANDO</em></div>`;
   }
 }
 function renderGwentBuilder() {
@@ -463,10 +465,122 @@ async function loadAtelierReviewQueue() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Falha ao consultar a fila.');
     panel.hidden = false;
+    await loadAtelierLeaderArtAdmin();
     $('#atelier-review-queue').innerHTML = (data.pending || []).map(item =>
       `<article class="atelier-review-item"><img src="/api/gwent/atelier/submission/${Number(item.id)}/image" alt="Arte submetida"><div><b>${escapeHTML(item.card_id)}</b><small>Artista: ${escapeHTML(item.artist_name || `Discord ${item.user_id}`)}</small><small>${escapeHTML(item.created_at || '')}</small><div class="atelier-review-actions"><button class="primary" type="button" data-atelier-approve="${Number(item.id)}">Aprovar</button><button class="secondary" type="button" data-atelier-reject="${Number(item.id)}">Rejeitar</button></div></div></article>`
     ).join('') || '<p class="muted">Nenhuma arte aguardando aprovação.</p>';
   } catch (error) { panel.hidden = true; showNotice(error.message, 'error'); }
+}
+
+let atelierAdminLeaderArts = [];
+
+function selectedAdminLeaderArt() {
+  const id = $('#atelier-leader-art-select')?.value || '';
+  return atelierAdminLeaderArts.find(item => item.id === id) || null;
+}
+
+function updateAtelierLeaderArtPreview() {
+  const leader = selectedAdminLeaderArt();
+  const preview = $('#atelier-leader-art-preview');
+  const empty = $('#atelier-leader-art-empty');
+  const remove = $('#atelier-leader-art-remove');
+  const upload = $('#atelier-leader-art-upload');
+  if (!leader) {
+    if (preview) preview.hidden = true;
+    if (empty) { empty.hidden = false; empty.textContent = 'Selecione um líder.'; }
+    if (remove) remove.hidden = true;
+    if (upload) upload.disabled = true;
+    return;
+  }
+  const source = leader.art_url || leader.default_art_url || '';
+  if (source && preview) {
+    preview.src = source;
+    preview.hidden = false;
+  } else if (preview) preview.hidden = true;
+  if (empty) empty.hidden = !!source;
+  if (remove) remove.hidden = !leader.has_art;
+  if (upload) upload.disabled = false;
+  const status = $('#atelier-leader-art-status');
+  if (status) status.textContent = leader.has_art
+    ? `Arte personalizada ativa${leader.artist_name ? ` · crédito: ${leader.artist_name}` : ''}. Uma nova imagem substituirá a atual.`
+    : 'Retrato padrão em uso. Envie uma imagem para aplicar uma arte personalizada.';
+}
+
+async function loadAtelierLeaderArtAdmin() {
+  const select = $('#atelier-leader-art-select');
+  if (!select) return;
+  const response = await fetch('/api/gwent/atelier/leaders', {credentials:'same-origin', cache:'no-store'});
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Não foi possível carregar as cartas de líder.');
+  atelierAdminLeaderArts = data.leaders || [];
+  const previous = select.value;
+  select.innerHTML = atelierAdminLeaderArts.map(leader =>
+    `<option value="${escapeHTML(leader.id)}">${escapeHTML(leader.name)} · ${escapeHTML(leader.faction)}${leader.has_art ? ' · arte personalizada' : ''}</option>`
+  ).join('');
+  if (atelierAdminLeaderArts.some(leader => leader.id === previous)) select.value = previous;
+  else if (atelierAdminLeaderArts.length) select.value = atelierAdminLeaderArts[0].id;
+
+  const byFaction = {};
+  atelierAdminLeaderArts.forEach(leader => {
+    if (!byFaction[leader.faction]) byFaction[leader.faction] = [];
+    byFaction[leader.faction].push({id:leader.id,name:leader.name,description:leader.description,art_url:leader.art_url,default_art_url:leader.default_art_url});
+  });
+  applyGwentLeaders(byFaction);
+  if ($('#gwent-leader')) renderGwentLeaderOptions($('#gwent-leader').value);
+  updateAtelierLeaderArtPreview();
+}
+
+async function uploadAtelierLeaderArt() {
+  const leader = selectedAdminLeaderArt();
+  const file = $('#atelier-leader-art-file')?.files?.[0];
+  const status = $('#atelier-leader-art-status');
+  const button = $('#atelier-leader-art-upload');
+  if (!leader) return;
+  if (!file) { if (status) status.textContent = 'Selecione uma imagem antes de aplicar.'; return; }
+  const form = new FormData();
+  form.append('image', file);
+  form.append('artist_name', $('#atelier-leader-art-credit')?.value || '');
+  if (button) { button.disabled = true; button.textContent = 'Aplicando arte…'; }
+  try {
+    const response = await fetch(`/api/gwent/atelier/leaders/${encodeURIComponent(leader.id)}/art`, {
+      method:'POST', credentials:'same-origin', body:form
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Não foi possível aplicar a arte ao líder.');
+    if (status) status.textContent = `${data.message} ${data.width} × ${data.height}px.`;
+    $('#atelier-leader-art-file').value = '';
+    await loadAtelierLeaderArtAdmin();
+    showNotice(`Arte de ${leader.name} atualizada para todos os jogadores.`, 'success');
+  } catch (error) {
+    if (status) status.textContent = error.message;
+    showNotice(error.message, 'error');
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Aplicar arte ao líder'; }
+    updateAtelierLeaderArtPreview();
+  }
+}
+
+async function removeAtelierLeaderArt() {
+  const leader = selectedAdminLeaderArt();
+  if (!leader || !leader.has_art) return;
+  if (!window.confirm(`Restaurar a arte padrão de ${leader.name}? A imagem personalizada deixará de aparecer na carta de líder.`)) return;
+  const button = $('#atelier-leader-art-remove');
+  if (button) { button.disabled = true; button.textContent = 'Restaurando…'; }
+  try {
+    const response = await fetch(`/api/gwent/atelier/leaders/${encodeURIComponent(leader.id)}/art`, {
+      method:'DELETE', credentials:'same-origin', headers:{'Content-Type':'application/json'}
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Não foi possível restaurar a arte padrão.');
+    await loadAtelierLeaderArtAdmin();
+    showNotice(`Retrato padrão de ${leader.name} restaurado.`, 'success');
+  } catch (error) {
+    const status = $('#atelier-leader-art-status');
+    if (status) status.textContent = error.message;
+    showNotice(error.message, 'error');
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Restaurar arte padrão'; }
+  }
 }
 
 async function removeAllAtelierArts() {
@@ -1278,6 +1392,14 @@ $('#gwent-filter-rarity').addEventListener('change', renderGwentBuilder);
 $('#gwent-save-deck').addEventListener('click', saveGwentDeck);
 $('#gwent-reset-deck').addEventListener('click', resetGwentDeck);
 $('#atelier-remove-all-art')?.addEventListener('click', removeAllAtelierArts);
+$('#atelier-leader-art-select')?.addEventListener('change', updateAtelierLeaderArtPreview);
+$('#atelier-leader-art-file')?.addEventListener('change', () => {
+  const file = $('#atelier-leader-art-file')?.files?.[0];
+  const status = $('#atelier-leader-art-status');
+  if (file && status) status.textContent = `${file.name} selecionado · ${Math.max(1, Math.round(file.size / 1024))} KB. A imagem será normalizada para 1200 × 960 px (5:4).`;
+});
+$('#atelier-leader-art-upload')?.addEventListener('click', uploadAtelierLeaderArt);
+$('#atelier-leader-art-remove')?.addEventListener('click', removeAtelierLeaderArt);
 $('#gwent-create-match').addEventListener('click', createGwentMatch);
 $('#gwent-solo-match')?.addEventListener('click', createGwentSoloMatch);
 $('#gwent-open-pack').addEventListener('click', buyGwentPack);

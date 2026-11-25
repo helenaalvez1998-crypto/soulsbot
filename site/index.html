@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#07080d"><title>NARABOT — Comunidade e Gwent do Coliseu</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800;900&family=Cormorant+Garamond:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css?v=gwent-experience-v26">
+  <link rel="stylesheet" href="/style.css?v=gwent-leader-art-v73">
 <link rel="stylesheet" href="/elden-ui.css?v=v49">
 <script>try{const v=JSON.parse(localStorage.getItem('vis')||'{}'),r=document.documentElement;r.dataset.theme=v.tema||'cinzas';if(/^#[0-9a-f]{6}$/i.test(v.cor||'')){r.style.setProperty('--gold',v.cor);r.style.setProperty('--gold-bright','color-mix(in srgb,'+v.cor+' 70%,#fff)')}}catch(e){}</script>
 
@@ -145,7 +145,25 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
       <small class="muted">Mínimo 512 × 512, proporção horizontal 5:4 após normalização, máximo 8 MB. Até 3 pendentes por conta.</small></div>
   </div>
   <div class="atelier-lower"><div><h4>Minhas submissões</h4><div id="atelier-history" class="atelier-history"><p class="muted">Entre com Discord para consultar.</p></div></div>
-  <div id="atelier-review-panel" hidden><h4>Fila de aprovação</h4><div class="atelier-maintenance"><div><b>Manutenção das artes oficiais</b><small>Retira das cartas todas as ilustrações comunitárias atualmente aprovadas. O histórico, os créditos e os arquivos enviados serão preservados.</small></div><button id="atelier-remove-all-art" class="danger" type="button">Remover todas as artes aplicadas</button></div><div id="atelier-review-queue" class="atelier-history"></div></div></div>
+  <div id="atelier-review-panel" hidden>
+  <h4>Ferramentas administrativas do Ateliê</h4>
+  <div class="atelier-maintenance"><div><b>Manutenção das artes oficiais</b><small>Retira das cartas todas as ilustrações comunitárias atualmente aprovadas. O histórico, os créditos e os arquivos enviados serão preservados.</small></div><button id="atelier-remove-all-art" class="danger" type="button">Remover todas as artes aplicadas</button></div>
+  <section class="atelier-leader-art-admin" aria-labelledby="atelier-leader-art-title">
+    <div><small class="eyebrow">IDENTIDADE DOS LÍDERES</small><h4 id="atelier-leader-art-title">Aplicar arte nas cartas de líder</h4></div>
+    <p class="muted">Escolha um dos nove líderes, envie uma ilustração horizontal 5:4 e aplique-a à carta de comando. A arte será armazenada no banco e ficará visível para todos os jogadores. Apenas administradores podem alterar ou restaurar essas imagens.</p>
+    <div class="atelier-leader-art-grid">
+      <div class="atelier-leader-art-form">
+        <label for="atelier-leader-art-select">Líder<select id="atelier-leader-art-select"><option value="">Carregando líderes…</option></select></label>
+        <label for="atelier-leader-art-file">Nova ilustração (PNG, JPG ou WEBP)<input id="atelier-leader-art-file" type="file" accept="image/png,image/jpeg,image/webp"></label>
+        <label for="atelier-leader-art-credit">Crédito do artista (opcional)<input id="atelier-leader-art-credit" type="text" maxlength="100" placeholder="Nome artístico"></label>
+        <div class="row"><button id="atelier-leader-art-upload" class="primary" type="button" disabled>Aplicar arte ao líder</button><button id="atelier-leader-art-remove" class="danger" type="button" hidden>Restaurar arte padrão</button></div>
+        <p id="atelier-leader-art-status" class="muted" role="status">Selecione um líder para gerenciar sua ilustração.</p>
+      </div>
+      <div class="atelier-leader-art-preview-wrap"><small class="muted">PRÉVIA ATUAL</small><img id="atelier-leader-art-preview" class="atelier-leader-art-preview" alt="Prévia da arte do líder" hidden><div id="atelier-leader-art-empty" class="empty-state">Selecione um líder.</div></div>
+    </div>
+  </section>
+  <h4>Fila de aprovação comunitária</h4><div id="atelier-review-queue" class="atelier-history"></div>
+</div></div>
 </section></div>
   <div class="tab" id="tab-portal" data-title="Meu Portal"><div class="pt-nav"><button class="pt-pill on" data-p="profile" type="button">👤 Perfil</button><button class="pt-pill" data-p="sanctuary" type="button">🏛 Santuário</button><button class="pt-pill" data-p="store" type="button">🛒 Loja</button><button class="pt-pill" data-p="submit" type="button">📤 Envios</button><button class="pt-pill" data-p="contrib" type="button">✍ Contribuições</button><button class="pt-pill" data-p="notif" type="button">🔔 Notificações</button></div>
 <section class="pt-pane" data-p="profile" id="pt-profile"></section><section class="pt-pane" data-p="sanctuary" id="pt-sanctuary" hidden></section><section class="pt-pane" data-p="store" id="pt-store" hidden></section>
@@ -166,7 +184,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
     <footer>NARABOT · GWENT DO COLISEU <span>Jogo principal · conectado ao servidor oficial</span></footer>
   </main>
 </div>
-<script src="/app.js?v=maintenance-actions-v72" defer></script>
+<script src="/app.js?v=gwent-leader-art-v73" defer></script>
 <script>
 (()=>{const io=new IntersectionObserver(e=>e.forEach(x=>{if(x.isIntersecting){x.target.classList.add('in');io.unobserve(x.target)}}),{threshold:.12});
 const sc=()=>document.querySelectorAll('.reveal:not(.in),.gwent-store,.atelier-panel,.gwent-drop-history,.challenge-panel').forEach(el=>{if(!el.dataset.o){el.dataset.o=1;el.classList.add('reveal');io.observe(el)}});sc();

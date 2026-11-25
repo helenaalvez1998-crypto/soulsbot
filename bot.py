@@ -761,6 +761,9 @@ class NaraBot(commands.Bot):
         app.router.add_get("/elden-ui.css", elden_ui_css)
         app.router.add_get("/narabot-visual-v59.css", narabot_visual_css)
         app.router.add_get("/app.js", script_site)
+        assets_dir = site_dir / "assets"
+        if assets_dir.is_dir():
+            app.router.add_static("/assets/", str(assets_dir), show_index=False)
         app.router.add_get("/api/status", status_api)
         app.router.add_get("/auth/discord/login", self._oauth_login)
         app.router.add_get("/auth/discord/callback", self._oauth_callback)
@@ -782,6 +785,10 @@ class NaraBot(commands.Bot):
         app.router.add_get("/api/gwent/atelier/art/{card_id}", self._api_gwent_atelier_official_art)
         app.router.add_get("/api/gwent/atelier/official/{card_id}", self._api_gwent_atelier_official_metadata)
         app.router.add_post("/api/gwent/atelier/remove-all-art", self._api_gwent_atelier_remove_all_arts)
+        app.router.add_get("/api/gwent/atelier/leaders", self._api_gwent_atelier_leaders_list)
+        app.router.add_post("/api/gwent/atelier/leaders/{leader_id}/art", self._api_gwent_atelier_leader_art_upload)
+        app.router.add_delete("/api/gwent/atelier/leaders/{leader_id}/art", self._api_gwent_atelier_leader_art_remove)
+        app.router.add_get("/api/gwent/leaders/{leader_id}/art", self._api_gwent_leader_art)
         app.router.add_get("/api/gwent/store", self._api_gwent_store)
         app.router.add_post("/api/gwent/store/pack", self._api_gwent_store_pack)
         app.router.add_get("/api/gwent/deck", self._api_gwent_deck)
@@ -1085,17 +1092,31 @@ class NaraBot(commands.Bot):
         leader_id = str(row["leader_id"] or "") if row else ""
         if leader_id not in LEADERS or LEADERS[leader_id]["faction"] != faction:
             leader_id = DEFAULT_LEADERS[faction]
-        leaders = [{"id": key, "name": value["name"], "description": value["description"],
-                     "visual_only": True, "power": None, "cost": None, "rarity": "Lendária",
-                     "card_type": "Líder"}
-                    for key, value in LEADERS.items() if value["faction"] == faction]
+        leader_art_rows = await self.db.coliseu_gwent_lideres_artes_listar()
+        leader_art_map = {str(item["leader_id"]): dict(item) for item in leader_art_rows}
+        default_leader_assets = {
+            "comandante_fornalha": "godfrey", "bastiao_ancestral": "morgott",
+            "juiz_cerco": "radagon", "mestre_veu": "mohg",
+            "sombra_caminhante": "rykard", "voz_caidos": "esgar",
+            "arquimaga_eclipse": "rennala", "mestre_eclipse": "astel",
+            "oraculo_tempestade": "loretta",
+        }
+        def leader_payload(key, value):
+            art = leader_art_map.get(key)
+            version = str(art.get("revision", "") if art else "")[:20]
+            return {
+                "id": key, "name": value["name"], "description": value["description"],
+                "visual_only": True, "power": None, "cost": None, "rarity": "Lendária",
+                "card_type": "Líder",
+                "art_url": f"/api/gwent/leaders/{key}/art?v={version}" if art else "",
+                "default_art_url": f"/assets/leaders/{default_leader_assets.get(key, 'godfrey')}.webp",
+            }
+        leaders = [leader_payload(key, value) for key, value in LEADERS.items() if value["faction"] == faction]
         return web.json_response({
             "deck": cards, "faction": faction, "leader_id": leader_id,
             "leaders": leaders,
             "leaders_by_faction": {
-                name: [{"id": key, "name": value["name"], "description": value["description"],
-                          "visual_only": True, "power": None, "cost": None, "rarity": "Lendária",
-                          "card_type": "Líder"}
+                name: [leader_payload(key, value)
                        for key, value in LEADERS.items() if value["faction"] == name]
                 for name in DEFAULT_LEADERS},
             "factions": [{"name": name, "preferred_type": kind,
@@ -2168,6 +2189,150 @@ class NaraBot(commands.Bot):
         result = await self.db.coliseu_atelie_remover_todas_as_artes_ativas()
         return web.json_response({"ok": True, **result,
                                   "message": "As artes oficiais foram retiradas das cartas. O histórico foi preservado."})
+
+    async def _api_gwent_atelier_leaders_list(self, request: web.Request) -> web.Response:
+        """Lista os líderes e suas artes aplicadas; somente a administração pode acessar o painel."""
+        user_id = self._api_user_id(request)
+        if user_id is None:
+            return web.json_response({"error": "Autenticação necessária."}, status=401)
+        if not self._atelier_is_admin(user_id):
+            return web.json_response({"error": "Acesso restrito à administração do Ateliê."}, status=403)
+
+        from sistemas.gwent import LEADERS
+        metadata = await self.db.coliseu_gwent_lideres_artes_listar()
+        active = {str(row["leader_id"]): dict(row) for row in metadata}
+        default_assets = {
+            "comandante_fornalha": "godfrey", "bastiao_ancestral": "morgott",
+            "juiz_cerco": "radagon", "mestre_veu": "mohg",
+            "sombra_caminhante": "rykard", "voz_caidos": "esgar",
+            "arquimaga_eclipse": "rennala", "mestre_eclipse": "astel",
+            "oraculo_tempestade": "loretta",
+        }
+        leaders = []
+        for leader_id, value in LEADERS.items():
+            row = active.get(leader_id)
+            version = str(row.get("revision", "") if row else "")[:20]
+            leaders.append({
+                "id": leader_id,
+                "name": value["name"],
+                "faction": value["faction"],
+                "description": value["description"],
+                "has_art": bool(row),
+                "artist_name": str(row.get("artist_name", "") if row else ""),
+                "updated_at": str(row.get("updated_at", "") if row else ""),
+                "art_url": f"/api/gwent/leaders/{leader_id}/art?v={version}" if row else "",
+                "default_art_url": f"/assets/leaders/{default_assets.get(leader_id, 'godfrey')}.webp",
+            })
+        return web.json_response({"leaders": leaders})
+
+    async def _api_gwent_atelier_leader_art_upload(self, request: web.Request) -> web.Response:
+        """Upload administrativo de arte oficial para uma carta de líder."""
+        user_id = self._api_user_id(request)
+        if user_id is None:
+            return web.json_response({"error": "Autenticação necessária."}, status=401)
+        if not self._api_origin_ok(request):
+            return web.json_response({"error": "Origem não autorizada."}, status=403)
+        if not self._atelier_is_admin(user_id):
+            return web.json_response({"error": "Acesso restrito à administração do Ateliê."}, status=403)
+
+        from sistemas.gwent import LEADERS
+        from sistemas.atelie_coliseu import normalizar_imagem_carta, ArteInvalida, TAMANHO_MAXIMO_UPLOAD
+        leader_id = str(request.match_info.get("leader_id", "")).strip()[:80]
+        if leader_id not in LEADERS:
+            return web.json_response({"error": "Líder não encontrado no catálogo."}, status=404)
+        if request.content_length and request.content_length > TAMANHO_MAXIMO_UPLOAD + 1024 * 1024:
+            return web.json_response({"error": "O envio ultrapassa o limite de 8 MB."}, status=413)
+
+        image_data = b""
+        artist_name = ""
+        try:
+            reader = await request.multipart()
+            while True:
+                field = await reader.next()
+                if field is None:
+                    break
+                if field.name == "image":
+                    chunks = []
+                    total = 0
+                    while True:
+                        chunk = await field.read_chunk(size=256 * 1024)
+                        if not chunk:
+                            break
+                        total += len(chunk)
+                        if total > TAMANHO_MAXIMO_UPLOAD:
+                            return web.json_response({"error": "A imagem ultrapassa 8 MB."}, status=413)
+                        chunks.append(chunk)
+                    image_data = b"".join(chunks)
+                elif field.name == "artist_name":
+                    artist_name = (await field.text()).strip()[:100]
+        except (ValueError, RuntimeError):
+            return web.json_response({"error": "Formulário de envio inválido."}, status=400)
+
+        if not image_data:
+            return web.json_response({"error": "Selecione uma imagem para o líder."}, status=400)
+        try:
+            normalized = await asyncio.to_thread(normalizar_imagem_carta, image_data)
+        except ArteInvalida as exc:
+            return web.json_response({"error": str(exc)}, status=400)
+
+        saved = await self.db.coliseu_gwent_lider_arte_salvar(
+            leader_id, normalized.dados, "image/jpeg", artist_name, user_id
+        )
+        version = str(saved["revision"] or "")[:20]
+        return web.json_response({
+            "ok": True, "leader_id": leader_id, "leader_name": LEADERS[leader_id]["name"],
+            "artist_name": str(saved["artist_name"] or ""),
+            "width": normalized.largura, "height": normalized.altura,
+            "art_url": f"/api/gwent/leaders/{leader_id}/art?v={version}",
+            "message": "Arte do líder salva e aplicada ao construtor de deck.",
+        })
+
+    async def _api_gwent_atelier_leader_art_remove(self, request: web.Request) -> web.Response:
+        """Remove a arte personalizada e restaura o retrato padrão do líder."""
+        user_id = self._api_user_id(request)
+        if user_id is None:
+            return web.json_response({"error": "Autenticação necessária."}, status=401)
+        if not self._api_origin_ok(request):
+            return web.json_response({"error": "Origem não autorizada."}, status=403)
+        if not self._atelier_is_admin(user_id):
+            return web.json_response({"error": "Acesso restrito à administração do Ateliê."}, status=403)
+        from sistemas.gwent import LEADERS
+        leader_id = str(request.match_info.get("leader_id", "")).strip()[:80]
+        if leader_id not in LEADERS:
+            return web.json_response({"error": "Líder não encontrado no catálogo."}, status=404)
+        removed = await self.db.coliseu_gwent_lider_arte_remover(leader_id)
+        return web.json_response({"ok": True, "removed": removed,
+                                  "message": "Retrato padrão do líder restaurado."})
+
+    async def _api_gwent_leader_art(self, request: web.Request) -> web.Response:
+        """Entrega a ilustração oficial do líder aos jogadores autenticados."""
+        user_id = self._api_user_id(request)
+        if user_id is None:
+            raise web.HTTPUnauthorized(text="Faça login com o Discord.")
+        from sistemas.gwent import LEADERS
+        leader_id = str(request.match_info.get("leader_id", "")).strip()[:80]
+        if leader_id not in LEADERS:
+            raise web.HTTPNotFound(text="Líder não encontrado.")
+        art = await self.db.coliseu_gwent_lider_arte_obter(leader_id)
+        if not art:
+            raise web.HTTPNotFound(text="Este líder utiliza o retrato padrão.")
+        dados_arte = bytes(art["image_data"])
+        from sistemas.arte_cartas import detectar_mime_imagem
+        mime_real = await asyncio.to_thread(detectar_mime_imagem, dados_arte)
+        if mime_real != "image/jpeg":
+            raise web.HTTPUnprocessableEntity(text="A arte do líder armazenada está inválida.")
+        version = str(art["revision"] or "")
+        etag = hashlib.sha256(f"gwent-leader-art:{leader_id}:{version}".encode("utf-8")).hexdigest()
+        headers = {
+            "Cache-Control": "private, no-cache, must-revalidate",
+            "ETag": f'"{etag}"',
+            "X-Content-Type-Options": "nosniff",
+            "Vary": "Cookie",
+        }
+        incoming = request.headers.get("If-None-Match", "")
+        if any(token.strip() in ("*", headers["ETag"], f"W/{headers['ETag']}") for token in incoming.split(",")):
+            return web.Response(status=304, headers=headers)
+        return web.Response(body=dados_arte, content_type=mime_real, headers=headers)
 
     async def _api_gwent_atelier_official_metadata(self, request: web.Request) -> web.Response:
         user_id = self._api_user_id(request)

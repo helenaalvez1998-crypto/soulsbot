@@ -5511,3 +5511,33 @@ body.gwent-match-active .gwent-row.has-entering {
 .atelier-maintenance>div b{color:#f0dfd2;font:600 13px/1.4 Cinzel,serif}
 .atelier-maintenance>div small{color:var(--muted);font-size:11px;line-height:1.5;max-width:620px}
 @media(max-width:600px){.gwent-deck-actions{display:grid;grid-template-columns:1fr}.atelier-maintenance{align-items:stretch}.atelier-maintenance .danger{width:100%}}
+
+/* V73 — administração de artes dos líderes do Gwent */
+.atelier-leader-art-admin{
+  margin:18px 0;padding:18px;border:1px solid rgba(198,166,107,.28);
+  border-radius:12px;background:linear-gradient(145deg,rgba(31,28,35,.96),rgba(17,19,24,.96));
+}
+.atelier-leader-art-admin h4{margin:5px 0 8px;color:var(--gold-bright,#d6b66d)}
+.atelier-leader-art-admin>p{max-width:850px;font-size:12px;line-height:1.6}
+.atelier-leader-art-grid{display:grid;grid-template-columns:minmax(260px,1fr) minmax(220px,.72fr);gap:18px;align-items:start;margin-top:14px}
+.atelier-leader-art-form{display:grid;gap:11px;min-width:0}
+.atelier-leader-art-form label{display:grid;gap:6px;font-size:12px;color:var(--text,#eee)}
+.atelier-leader-art-form select,.atelier-leader-art-form input{width:100%;min-height:42px;background:#101218;color:#f2f3f5;border:1px solid var(--line,#343945);border-radius:8px;padding:10px}
+.atelier-leader-art-form .row{display:flex;gap:8px;flex-wrap:wrap}
+.atelier-leader-art-form .row button{flex:1;min-width:150px}
+.atelier-leader-art-preview-wrap{display:grid;gap:8px;min-width:0}
+.atelier-leader-art-preview{display:block;width:100%;max-width:460px;aspect-ratio:5/4;object-fit:cover;border:1px solid rgba(198,166,107,.4);border-radius:10px;background:#0b0c10}
+.atelier-leader-art-preview-wrap .empty-state{min-height:160px;display:grid;place-items:center}
+@media(max-width:700px){.atelier-leader-art-grid{grid-template-columns:1fr}.atelier-leader-art-preview{max-width:100%}}
+
+/* V73 — exibe arte 5:4 do líder sem distorção; retratos antigos mantêm o fallback original. */
+.gwent-leader-relic .leader-art-backdrop{display:none}
+.gwent-leader-relic.has-custom-leader-art{
+  background-image:radial-gradient(ellipse at 50% 28%,rgba(184,151,82,.18),transparent 58%),
+    linear-gradient(145deg,#171713,#29251d 58%,#11110f)!important;
+}
+.gwent-leader-relic.has-custom-leader-art .leader-art-backdrop{
+  display:block;position:absolute;inset:0 0 28%;z-index:0;
+  background-image:linear-gradient(180deg,rgba(8,8,8,.03) 0%,rgba(8,8,8,.08) 55%,rgba(12,10,8,.92) 100%),var(--leader-art);
+  background-size:100% 100%,cover;background-position:center,center top;background-repeat:no-repeat;
+}

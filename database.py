@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import os
 from contextlib import asynccontextmanager
 import aiosqlite
@@ -580,6 +581,18 @@ CREATE INDEX IF NOT EXISTS idx_atelie_submissoes_queue
     ON cartas_atelie_submissoes(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_atelie_submissoes_card
     ON cartas_atelie_submissoes(card_id, status, created_at);
+CREATE TABLE IF NOT EXISTS cartas_gwent_lideres_artes (
+    leader_id TEXT PRIMARY KEY,
+    image_data BLOB NOT NULL,
+    mime_type TEXT NOT NULL DEFAULT 'image/jpeg',
+    artist_name TEXT NOT NULL DEFAULT '',
+    uploaded_by INTEGER NOT NULL,
+    revision TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_gwent_lideres_artes_updated
+    ON cartas_gwent_lideres_artes(updated_at);
 CREATE INDEX IF NOT EXISTS idx_cartas_atelie_user_card_status
     ON cartas_atelie_artes(user_id, card_id, status, created_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cartas_atelie_pending_unique
@@ -944,6 +957,13 @@ class Database:
         await self.conn.execute("PRAGMA cache_size = -20000")  # ~20 MB de cache de páginas
         await self.conn.executescript(SCHEMA)
         await self.conn.executescript(SCHEMA_CARTAS)
+        # Migração incremental do armazenamento de arte de líderes, caso exista
+        # uma instalação de pré-lançamento sem o token de revisão SHA-256.
+        leader_art_cols = {r["name"] for r in await self._all("PRAGMA table_info(cartas_gwent_lideres_artes)")}
+        if leader_art_cols and "revision" not in leader_art_cols:
+            await self.conn.execute(
+                "ALTER TABLE cartas_gwent_lideres_artes ADD COLUMN revision TEXT NOT NULL DEFAULT ''"
+            )
         # Migrações incrementais para bancos já existentes.
         cols = [r["name"] for r in await self._all("PRAGMA table_info(platinas)")]
         if "proof_msg_id" not in cols:
@@ -3788,6 +3808,49 @@ class Database:
                ORDER BY id DESC LIMIT ?""", (int(user_id), max(1, min(int(limite), 100))),
         )
         return [dict(row) for row in rows]
+
+    async def coliseu_gwent_lideres_artes_listar(self):
+        """Lista metadados das artes personalizadas dos líderes, sem carregar BLOBs."""
+        rows = await self._all(
+            """SELECT leader_id,artist_name,uploaded_by,revision,created_at,updated_at,
+                      length(image_data) AS image_size
+               FROM cartas_gwent_lideres_artes ORDER BY leader_id"""
+        )
+        return [dict(row) for row in rows]
+
+    async def coliseu_gwent_lider_arte_obter(self, leader_id: str):
+        return await self._one(
+            """SELECT leader_id,image_data,mime_type,artist_name,uploaded_by,revision,created_at,updated_at
+               FROM cartas_gwent_lideres_artes WHERE leader_id=?""",
+            (str(leader_id),),
+        )
+
+    async def coliseu_gwent_lider_arte_salvar(
+        self, leader_id: str, image_data: bytes, mime_type: str,
+        artist_name: str, uploaded_by: int,
+    ):
+        """Cria ou substitui a ilustração oficial de um líder, mantendo apenas a versão ativa."""
+        async with self.transaction() as tx:
+            await tx.conn.execute(
+                """INSERT INTO cartas_gwent_lideres_artes
+                   (leader_id,image_data,mime_type,artist_name,uploaded_by,revision)
+                   VALUES (?,?,?,?,?,?)
+                   ON CONFLICT(leader_id) DO UPDATE SET
+                     image_data=excluded.image_data,mime_type=excluded.mime_type,
+                     artist_name=excluded.artist_name,uploaded_by=excluded.uploaded_by,
+                     revision=excluded.revision,updated_at=CURRENT_TIMESTAMP""",
+                (str(leader_id), bytes(image_data), str(mime_type)[:80],
+                 str(artist_name or '')[:100], int(uploaded_by),
+                 hashlib.sha256(bytes(image_data)).hexdigest()),
+            )
+        return await self.coliseu_gwent_lider_arte_obter(leader_id)
+
+    async def coliseu_gwent_lider_arte_remover(self, leader_id: str):
+        async with self.transaction() as tx:
+            cur = await tx.conn.execute(
+                "DELETE FROM cartas_gwent_lideres_artes WHERE leader_id=?", (str(leader_id),)
+            )
+            return int(cur.rowcount or 0) > 0
 
     async def coliseu_atelie_criar_sessao(self, user_id: int, guild_id: int, card_id: str, game_name: str = ""):
         """Abre uma sessão de upload por DM, válida por 30 minutos."""
