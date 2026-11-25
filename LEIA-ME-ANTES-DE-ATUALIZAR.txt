@@ -1,0 +1,39 @@
+NARA — PACOTE CONSOLIDADO
+
+COMANDOS SLASH
+- /nara: central de membros
+- /jogo: painel de Cartas do Coliseu; partidas e decks abrem no site
+- /adm: painel administrativo
+
+INSTALAÇÃO
+1. Faça backup completo da pasta de dados atual, especialmente colizeu.db.
+2. Pare o bot antes de substituir os arquivos.
+3. Extraia este pacote sobre a pasta narabot-main ou substitua o código mantendo os dados.
+4. NÃO substitua o arquivo .env existente nem apague DATA_DIR.
+5. Instale as dependências: pip install -r requirements.txt
+6. Confira DISCORD_TOKEN, GUILD_ID, DATA_DIR, SOULSBOT_PUBLIC_URL,
+   SOULSBOT_WEB_SESSION_SECRET, DISCORD_OAUTH_CLIENT_ID,
+   DISCORD_OAUTH_CLIENT_SECRET e DISCORD_OAUTH_REDIRECT_URI.
+7. Inicie com: python bot.py
+
+MERCADO DO COLISEU
+- Pacote com 3 cartas: 120 Denários.
+- Limite: 3 pacotes por janela de 24 horas.
+- Chance Primordial: 0,1% por carta.
+- Proteção: após 10 cartas Comuns consecutivas, a próxima é Rara ou superior.
+- Duplicatas convertem em Almas ou fragmentos.
+- Forja direta permanece desativada; evolução e lapidação continuam disponíveis.
+
+SITE
+- O site é servido pelo próprio processo do bot na porta PORT (padrão 8080).
+- Configure o callback OAuth exatamente como definido no Discord Developer Portal.
+- Configure BOT_OWNER_ID e COLISEUM_ART_REVIEWER_IDS para aprovações do Ateliê.
+
+VALIDAÇÃO LOCAL DESTA ENTREGA
+- pytest -q: 35 testes aprovados.
+- python -m compileall -q .: aprovado.
+- node --check site/app.js: aprovado.
+- IDs do HTML: 45 IDs, sem duplicatas.
+
+LIMITAÇÃO
+A execução real do bot, o login OAuth, a sincronização dos comandos no Discord e um duelo entre duas contas precisam ser confirmados no servidor de hospedagem com as credenciais e dependências configuradas. O ambiente de preparação não tinha acesso à rede para instalar discord.py e aiosqlite; portanto, não foi possível validar a conexão real com Discord neste ambiente.
