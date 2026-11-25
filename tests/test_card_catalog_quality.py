@@ -20,12 +20,12 @@ class CardCatalogQualityTests(unittest.TestCase):
 
     def test_relic_texts_explain_actual_mechanical_conditions(self):
         expected = {
-            "reliquia_grande_runa_godrick": ("ao menos 1 aliado", "+1"),
-            "reliquia_runa_nao_nascidos": ("geada e podridão", "aliado purificado"),
+            "reliquia_grande_runa_godrick": ("ao menos uma unidade aliada", "+1"),
+            "reliquia_runa_nao_nascidos": ("geada e podridão", "purificada"),
             "reliquia_runa_morte": ("cada fileira", "bônus positivo"),
-            "reliquia_noite_chama": ("aplica 1 marca de geada", "escudo"),
-            "reliquia_lamina_negra": ("cai em 3", "escudo"),
-            "reliquia_algemas_margit": ("bônus negativos", "cai para 0"),
+            "reliquia_noite_chama": ("aplica geada", "escudo"),
+            "reliquia_lamina_negra": ("reduz em 3", "escudo"),
+            "reliquia_algemas_margit": ("bônus negativos", "zera o bônus positivo"),
         }
         for card_id, fragments in expected.items():
             text = preparar_carta(CARTAS_POR_ID[card_id].para_dict())["habilidade_texto"].casefold()
@@ -52,7 +52,7 @@ class CardCatalogQualityTests(unittest.TestCase):
     def test_status_specials_describe_the_actual_status_handlers(self):
         expected = {
             "gwent_especial_nevoa": ("podridão escarlate", "fileira escolhida"),
-            "gwent_especial_geada": ("geada", "inimigos em campo"),
+            "gwent_especial_geada": ("geada", "unidades inimigas em campo"),
         }
         for card_id, fragments in expected.items():
             prepared = preparar_carta(CARTAS_POR_ID[card_id].para_dict())

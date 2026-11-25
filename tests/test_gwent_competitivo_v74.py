@@ -153,14 +153,15 @@ def test_ai_considers_equipped_relic_as_a_legal_candidate():
 
 
 def test_geada_and_podrida_rarity_text_matches_engine_threshold():
-    from sistemas.cartas import CARTAS_POR_ID
+    from sistemas.cartas import HABILIDADES, get_carta
+    assert 'Lendárias ou superiores' in HABILIDADES['gwent_geada']['texto']
+    assert 'Lendárias ou superiores' in HABILIDADES['gwent_nevoa']['texto']
     for skill in ('gwent_geada', 'gwent_nevoa'):
-        card = next(c for c in CARTAS_POR_ID.values() if c.habilidade == skill)
+        card = next(c for c in __import__('sistemas.cartas', fromlist=['CARTAS_POR_ID']).CARTAS_POR_ID.values() if c.habilidade == skill)
         rare = gwent.preparar_carta({**card.para_dict(), 'raridade': 'Rara'})
         legendary = gwent.preparar_carta({**card.para_dict(), 'raridade': 'Lendária'})
-        assert 'raridade rara:' in rare['raridade_texto'].casefold()
-        assert '1 marca' in rare['raridade_texto'].casefold()
-        assert '2 marcas' in legendary['raridade_texto'].casefold()
+        assert 'raridade rara:' not in rare['habilidade_texto'].casefold()
+        assert 'segunda marca' in legendary['habilidade_texto'].casefold()
 
 
 def test_night_and_flame_relic_exposes_two_modes_and_resolves_selected_mode():

@@ -23,32 +23,19 @@ from config import get_data_dir
 
 from .cartas import HABILIDADES, VERSAO_ARTES
 from .arte_gwent_efeitos import desenhar_aura_unidade, desenhar_emblema_especial
-from . import molduras_cartas, templates_cartas, identidade_visual_cartas
-
-
-def _carta_mecanica_visual(card: dict[str, Any]) -> dict[str, Any]:
-    """Devolve a ficha efetiva do motor, sem habilidades genéricas substituídas."""
-    try:
-        from .gwent import preparar_carta
-        return preparar_carta(card)
-    except Exception:
-        return {
-            "habilidade": str(card.get("habilidade", "")),
-            "habilidade_nome": HABILIDADES.get(str(card.get("habilidade", "")), {}).get("nome", "Tática"),
-            "habilidade_texto": HABILIDADES.get(str(card.get("habilidade", "")), {}).get("texto", "Sem habilidade especial."),
-        }
+from . import molduras_cartas, templates_cartas
 
 
 def _dados_habilidade_visual(card: dict[str, Any]) -> tuple[str, str]:
     """Retorna o texto mecânico efetivo, priorizando habilidades exclusivas do motor."""
-    prepared = _carta_mecanica_visual(card)
-    return (str(prepared.get("habilidade_nome") or "Habilidade"),
-            str(prepared.get("habilidade_texto") or "Sem habilidade especial."))
-
-
-def _id_habilidade_visual(card: dict[str, Any]) -> str:
-    """Retorna o ID da habilidade que o motor realmente executa para a arte."""
-    return str(_carta_mecanica_visual(card).get("habilidade") or "")
+    try:
+        # Usa exatamente o mesmo texto preparado para a partida, inclusive os ajustes de raridade.
+        from .gwent import preparar_carta
+        prepared = preparar_carta(card)
+        return str(prepared.get("habilidade_nome") or "Habilidade"), str(prepared.get("habilidade_texto") or "Sem habilidade especial.")
+    except Exception:
+        ability = HABILIDADES.get(str(card.get("habilidade", "")), {})
+        return str(ability.get("nome") or "Tática"), str(ability.get("texto") or "Sem habilidade especial.")
 
 
 def _fingerprint_renderizador() -> str:
@@ -60,11 +47,6 @@ def _fingerprint_renderizador() -> str:
         root / "sistemas" / "molduras_cartas.py",
         root / "sistemas" / "arte_gwent_efeitos.py",
         root / "sistemas" / "templates_cartas.py",
-        root / "sistemas" / "identidade_visual_cartas.py",
-        root / "sistemas" / "renderizador_cartas_premium.py",
-        root / "assets" / "cartas" / "premium" / "template_ordem_aurea_overlay.png",
-        *(root / "assets" / "cartas" / "premium" / "raridades" / f"{nome}.webp"
-          for nome in ("comum", "rara", "epica", "lendaria", "mitica", "primordial", "singular")),
         root / "fonts" / "DejaVuSans.ttf",
         root / "fonts" / "DejaVuSans-Bold.ttf",
         root / "fonts" / "DejaVuSerif.ttf",
@@ -1051,7 +1033,7 @@ def _draw_gwent_unit(draw: ImageDraw.ImageDraw, box, faction: str, row: str, acc
 
 
 
-def _draw_card_legacy(card: dict[str, Any], width: int = LARGURA_PADRAO, height: int = ALTURA_PADRAO,
+def _draw_card(card: dict[str, Any], width: int = LARGURA_PADRAO, height: int = ALTURA_PADRAO,
                illustration_bytes: bytes | None = None) -> Image.Image:
     """Carta narrativa V11: arte ampla, moldura heráldica e leitura tática clara."""
     rarity = str(card.get("raridade", "Comum"))
@@ -1060,10 +1042,22 @@ def _draw_card_legacy(card: dict[str, Any], width: int = LARGURA_PADRAO, height:
     faction = molduras_cartas.normalizar_faccao(card.get("faccao") or {"Força":"Ordem Áurea","Destreza":"Véu Carmesim","Magia":"Lua Negra"}.get(ctype,"Ordem Áurea"))
     row = str(card.get("fileira") or {"Força":"melee","Destreza":"ranged","Magia":"siege"}.get(ctype,"melee"))
     seed = _seed(card); rng = random.Random(seed)
-    habilidade_visual_id = _id_habilidade_visual(card)
-    identidade = identidade_visual_cartas.resolver_identidade_visual(faction, rarity)
-    top, mid, accent, metal = identidade["tema_faccao"]["paleta"]
-    rdark, rlight = identidade["cores_raridade"]
+    palettes = {
+        "Ordem Áurea": ((39,31,17),(91,69,31),(224,183,82),(245,230,180)),
+        "Véu Carmesim": ((43,13,18),(83,23,31),(177,49,62),(238,178,177)),
+        "Lua Negra": ((18,15,39),(39,29,76),(139,112,214),(224,215,255)),
+    }
+    top, mid, accent, metal = palettes.get(faction, palettes["Ordem Áurea"])
+    rarity_colors = {
+        "Comum": ((23, 29, 37), (166, 181, 194)),
+        "Rara": ((9, 29, 48), (77, 180, 226)),
+        "Épica": ((28, 15, 50), (183, 126, 239)),
+        "Lendária": ((39, 25, 10), (239, 185, 75)),
+        "Mítica": ((38, 10, 18), (205, 61, 75)),
+        "Primordial": ((34, 32, 25), (239, 224, 174)),
+        "Singular": ((9, 12, 24), (151, 143, 206)),
+    }
+    rdark, rlight = rarity_colors.get(rarity, rarity_colors["Comum"])
     sx, sy = width/420, height/620
     X=lambda v:int(v*sx); Y=lambda v:int(v*sy)
     B=lambda a,b,c,d:(X(a),Y(b),X(c),Y(d))
@@ -1285,7 +1279,7 @@ def _draw_card_legacy(card: dict[str, Any], width: int = LARGURA_PADRAO, height:
                 a.line((hx,hy,ox,oy),fill=(*metal,255),width=max(5,X(8)))
                 rr=int(aw*.06); a.ellipse((ox-rr,oy-rr,ox+rr,oy+rr),fill=(*accent,215),outline=(*metal,255),width=max(2,X(3)))
             # aura visual da habilidade (escudo, vingança, ressurgir, devorar, sobrevivente, espólios)
-            desenhar_aura_unidade(art, habilidade_visual_id, aw, ah, cx, int(ah * .85), accent, metal, seed)
+            desenhar_aura_unidade(art, str(card.get("habilidade", "")), aw, ah, cx, int(ah * .85), accent, metal, seed)
             # partículas, runas e luz de recorte
             for _ in range(42):
                 qx=rng.randint(4,aw-4); qy=rng.randint(int(ah*.18),ah-4); rr=rng.choice((1,2,3))
@@ -1300,7 +1294,7 @@ def _draw_card_legacy(card: dict[str, Any], width: int = LARGURA_PADRAO, height:
             rad=math.radians(ang+rng.randint(-5,5))
             ex=cx+int(math.cos(rad)*aw*.46); ey=cy+int(math.sin(rad)*ah*.43)
             a.line((cx,cy,ex,ey),fill=(*metal,105),width=max(1,X(2)))
-        if not desenhar_emblema_especial(art, habilidade_visual_id, aw, ah, accent, metal, seed):
+        if not desenhar_emblema_especial(art, str(card.get("habilidade", "")), aw, ah, accent, metal, seed):
             a.polygon([(cx,cy-int(ah*.28)),(cx+int(aw*.18),cy),
                        (cx,cy+int(ah*.28)),(cx-int(aw*.18),cy)],
                       fill=(*accent,75),outline=(*metal,235),width=max(2,X(3)))
@@ -1381,20 +1375,6 @@ def _draw_card_legacy(card: dict[str, Any], width: int = LARGURA_PADRAO, height:
     # O sistema atual não usa custo de carta/deck: o espaço inferior é reservado
     # integralmente para o texto da habilidade.
     return im.convert("RGB")
-
-
-def _draw_card(card: dict[str, Any], width: int = LARGURA_PADRAO, height: int = ALTURA_PADRAO,
-               illustration_bytes: bytes | None = None) -> Image.Image:
-    """Renderiza com template premium quando a facção possui asset homologado."""
-    base = _draw_card_legacy(card, width=width, height=height, illustration_bytes=illustration_bytes)
-    try:
-        from .renderizador_cartas_premium import compor_carta_premium
-        premium = compor_carta_premium(card, base, width, height, illustration_bytes)
-        if premium is not None:
-            return premium
-    except Exception:
-        log.exception("Falha ao compor template premium; usando renderizador legado")
-    return base
 
 
 # Cartas com template completo (somente quando o membro enviou uma arte)
