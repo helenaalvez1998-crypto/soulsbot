@@ -268,7 +268,7 @@ class EldenGwentReworkTests(unittest.TestCase):
         values = [gwent.RARITY_EFFECT_BUDGET[r] for r in
                   ("Comum", "Rara", "Épica", "Lendária", "Mítica", "Primordial", "Singular")]
         self.assertEqual(values, [0, 1, 1, 2, 2, 3, 3])
-        self.assertIn("Potência Mítica", mythic["habilidade_texto"])
+        self.assertIn("Raridade Mítica", mythic["habilidade_texto"])
 
 
     def test_rarity_improves_status_and_weather_specials(self):

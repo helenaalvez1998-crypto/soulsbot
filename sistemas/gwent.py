@@ -185,40 +185,40 @@ SYNERGY_COMBOS = {
 # Habilidades de identidade: efeitos próprios de cartas-chave, além das habilidades
 # gerais e dos combos de facção. Cada efeito é resolvido uma vez ao entrar em campo.
 CARD_IDENTITY_ABILITIES = {
-    "chefe_guardiao_cinzas": {"name": "Égide das Cinzas", "text": "Ao entrar, concede +1 a um aliado da mesma fileira. Se já houver um aliado ali, recebe +1.", "effect": "ash_guardian"},
-    "chefe_dama_vazio": {"name": "Fenda do Vazio", "text": "Ao entrar, reduz em 2 o bônus da unidade inimiga mais forte (mínimo -2).", "effect": "void_rend"},
-    "chefe_cervo_sombrio": {"name": "Passagem Sombria", "text": "Recebe +1 para cada outra fileira ocupada por aliados, até +2.", "effect": "shadow_paths"},
-    "chefe_rei_afogado": {"name": "Dízimo do Abismo", "text": "Recebe +2 se houver unidade no seu descarte; caso contrário, +1 se o rival controlar mais unidades.", "effect": "abyss_tithe"},
-    "chefe_oraculo_ruina": {"name": "Presságio da Ruína", "text": "Reduz em 1 o bônus da unidade inimiga mais forte e recebe +1 se o rival estiver à frente.", "effect": "ruin_omen"},
-    "chefe_cacador_sem_rosto": {"name": "Marca da Presa", "text": "Recebe +2 se o rival controlar uma unidade com poder efetivo maior que o seu poder base.", "effect": "faceless_hunt"},
-    "chefe_vigia_cinzento": {"name": "Vigília Cinzenta", "text": "Concede +1 às outras unidades aliadas na mesma fileira.", "effect": "grey_watch"},
-    "chefe_aparicao_veio": {"name": "Deslocamento Espectral", "text": "Recebe +2 se a sua última unidade foi jogada em outra fileira.", "effect": "veil_shift"},
-    "arma_lamina_peregrino": {"name": "Duelo do Peregrino", "text": "Recebe +2 se o rival tiver jogado uma unidade na mesma fileira em seu último turno.", "effect": "pilgrim_duel"},
-    "arma_martelo_fornalha": {"name": "Martelo de Cadência", "text": "Recebe +1 para cada aliado da Ordem Áurea na fileira, até +2.", "effect": "forge_rhythm"},
-    "arma_cajado_marulho": {"name": "Ressonância das Marés", "text": "Recebe +2 se o rival controlar uma unidade do Véu Carmesim; caso contrário, +1 se o rival tiver mais unidades em campo.", "effect": "tide_resonance"},
-    "arma_duas_luas": {"name": "Dança Espelhada", "text": "Recebe +1 se houver outra unidade aliada em fileira diferente.", "effect": "twin_dance"},
-    "arma_grande_sino": {"name": "Sino do Último Bastião", "text": "Recebe +2 quando sua pontuação estiver abaixo da rival.", "effect": "last_bell"},
-    "arma_agulha_astro": {"name": "Fio Astral", "text": "Marca a unidade inimiga mais forte: ela perde 1 de bônus; a próxima unidade Astral aliada recebe +1 nesta rodada.", "effect": "astral_thread"},
-    "arma_lanca_fornalha": {"name": "Investida da Fornalha", "text": "Recebe +1 se já houver outra unidade da Ordem Áurea em campo.", "effect": "furnace_charge"},
-    "arma_arco_peregrino": {"name": "Tiro de Cobertura", "text": "Concede +1 à unidade aliada mais fraca em outra fileira.", "effect": "covering_shot"},
-    "magia_brasa_errante": {"name": "Brasa Persistente", "text": "Recebe +1 para cada fileira que contenha inimigos e esteja sob clima, até +2.", "effect": "wandering_ember"},
-    "magia_selo_vigilia": {"name": "Selo de Vigília", "text": "Concede resistência climática 1 a si e +1 a um aliado na mesma fileira.", "effect": "vigil_seal"},
-    "magia_trovao_oco": {"name": "Descarga Oca", "text": "Reduz em 1 o bônus de todas as unidades inimigas na sua fileira.", "effect": "hollow_thunder"},
-    "magia_nevoa_antiga": {"name": "Névoa Ancestral", "text": "Recebe +2 se qualquer fileira estiver sob clima.", "effect": "ancient_mist"},
-    "magia_sol_negro": {"name": "Eclipse Devorador", "text": "Recebe +2 se houver uma unidade inimiga com bônus positivo.", "effect": "devouring_eclipse"},
-    "magia_fagulha": {"name": "Faísca Condutora", "text": "Recebe +1 se houver outra unidade aliada da Lua Negra em campo.", "effect": "conductive_spark"},
-    "magia_orbe_eco": {"name": "Orbe Refrator", "text": "Recebe +1 para cada carta especial no seu descarte, até +2.", "effect": "echo_orb"},
-    "magia_chama_fria": {"name": "Contrafogo", "text": "Reduz em 1 o bônus de até duas unidades inimigas na mesma fileira.", "effect": "counterflame"},
-    "covenant_lua_velada": {"name": "Aliança Lunar", "text": "Recebe +1 e concede +1 a uma unidade aliada em outra fileira.", "effect": "veiled_moon"},
-    "covenant_sentinelas": {"name": "Sentinela Compartilhada", "text": "Recebe +1 se houver unidade aliada em cada uma das outras fileiras.", "effect": "shared_sentinel"},
-    "covenant_ultimos": {"name": "Último Juramento", "text": "Recebe +2 se você tiver menos unidades em campo que o rival.", "effect": "last_oath"},
-    "covenant_filhos_brasa": {"name": "Herança da Brasa", "text": "Recebe +1 e fortalece em +1 um aliado da Ordem Áurea na mesma fileira.", "effect": "ember_kin"},
-    "covenant_peregrinos_nevoa": {"name": "Rastro na Névoa", "text": "Recebe +1 se sua última unidade foi jogada em outra fileira.", "effect": "mist_trail"},
-    "chefe_malenia_lamina_miquella": {"name": "Flor Escarlate", "text": "Ao entrar, aplica Podridão Escarlate às unidades inimigas da fileira; alvos já contaminados sofrem uma segunda marca.", "effect": "scarlet_bloom"},
-    "chefe_radahn_flagelo_estrelas": {"name": "Gravidade do Flagelo", "text": "Ao entrar, desloca a unidade inimiga mais forte para sua fileira e reduz seu bônus em 2.", "effect": "star_gravity"},
-    "chefe_maliketh_morte_destinada": {"name": "Morte Destinada", "text": "Ao entrar, remove até 2 pontos de bônus da unidade inimiga mais forte.", "effect": "destined_death"},
-    "chefe_messmer_impalador": {"name": "Lança do Impalador", "text": "Ao entrar, aplica Sangramento às unidades inimigas da fileira; uma segunda marca provoca Hemorragia.", "effect": "impaling_spear"},
-    "chefe_placidusax_lorde_dragao": {"name": "Tempestade do Tempo", "text": "Ao entrar, aplica Geada às unidades inimigas da fileira e recebe +1 por inimigo atingido, até +3.", "effect": "time_storm"},
+    "chefe_guardiao_cinzas": {"name": "Égide das Cinzas", "text": "Ao entrar em campo, dá +1 de bônus a um aliado da mesma fileira. Se já houver um aliado nessa fileira, esta carta também ganha +1.", "effect": "ash_guardian"},
+    "chefe_dama_vazio": {"name": "Fenda do Vazio", "text": "Ao entrar em campo, tira 2 pontos de bônus da unidade inimiga mais forte. O bônus dela não pode ficar abaixo de -2.", "effect": "void_rend"},
+    "chefe_cervo_sombrio": {"name": "Passagem Sombria", "text": "Ganha +1 para cada outra fileira que tenha um aliado seu, até +2.", "effect": "shadow_paths"},
+    "chefe_rei_afogado": {"name": "Dízimo do Abismo", "text": "Ganha +2 se você tiver uma unidade no descarte. Se não tiver, ganha +1 caso o adversário tenha mais unidades em campo.", "effect": "abyss_tithe"},
+    "chefe_oraculo_ruina": {"name": "Presságio da Ruína", "text": "Tira 1 ponto de bônus da unidade inimiga mais forte. Também ganha +1 se o adversário estiver vencendo.", "effect": "ruin_omen"},
+    "chefe_cacador_sem_rosto": {"name": "Marca da Presa", "text": "Ganha +2 se o adversário tiver uma unidade com poder atual maior que o poder-base desta carta.", "effect": "faceless_hunt"},
+    "chefe_vigia_cinzento": {"name": "Vigília Cinzenta", "text": "Dá +1 de bônus a todos os seus outros aliados na mesma fileira.", "effect": "grey_watch"},
+    "chefe_aparicao_veio": {"name": "Deslocamento Espectral", "text": "Ganha +2 se sua unidade anterior foi jogada em outra fileira.", "effect": "veil_shift"},
+    "arma_lamina_peregrino": {"name": "Duelo do Peregrino", "text": "Ganha +2 se o adversário jogou uma unidade na mesma fileira no turno anterior.", "effect": "pilgrim_duel"},
+    "arma_martelo_fornalha": {"name": "Martelo de Cadência", "text": "Ganha +1 para cada aliado da Ordem Áurea na mesma fileira, até +2.", "effect": "forge_rhythm"},
+    "arma_cajado_marulho": {"name": "Ressonância das Marés", "text": "Ganha +2 se o adversário tiver uma unidade do Véu Carmesim. Caso contrário, ganha +1 se ele tiver mais unidades em campo.", "effect": "tide_resonance"},
+    "arma_duas_luas": {"name": "Dança Espelhada", "text": "Ganha +1 se você tiver outro aliado em uma fileira diferente.", "effect": "twin_dance"},
+    "arma_grande_sino": {"name": "Sino do Último Bastião", "text": "Ganha +2 quando sua pontuação total for menor que a do adversário.", "effect": "last_bell"},
+    "arma_agulha_astro": {"name": "Fio Astral", "text": "Marca o inimigo mais forte e tira 1 ponto de bônus dele. A próxima unidade Astral que você jogar ganha +1 nesta rodada.", "effect": "astral_thread"},
+    "arma_lanca_fornalha": {"name": "Investida da Fornalha", "text": "Ganha +1 se já houver outra unidade da Ordem Áurea em campo.", "effect": "furnace_charge"},
+    "arma_arco_peregrino": {"name": "Tiro de Cobertura", "text": "Dá +1 de bônus ao seu aliado mais fraco que esteja em outra fileira.", "effect": "covering_shot"},
+    "magia_brasa_errante": {"name": "Brasa Persistente", "text": "Ganha +1 para cada fileira que tenha inimigos e esteja sob efeito climático, até +2.", "effect": "wandering_ember"},
+    "magia_selo_vigilia": {"name": "Selo de Vigília", "text": "Reduz em 1 o dano do clima sofrido por esta carta e dá +1 de bônus a um aliado da mesma fileira.", "effect": "vigil_seal"},
+    "magia_trovao_oco": {"name": "Descarga Oca", "text": "Tira 1 ponto de bônus de cada unidade inimiga na mesma fileira.", "effect": "hollow_thunder"},
+    "magia_nevoa_antiga": {"name": "Névoa Ancestral", "text": "Ganha +2 se houver efeito climático em qualquer fileira.", "effect": "ancient_mist"},
+    "magia_sol_negro": {"name": "Eclipse Devorador", "text": "Ganha +2 se algum inimigo tiver bônus acima de zero.", "effect": "devouring_eclipse"},
+    "magia_fagulha": {"name": "Faísca Condutora", "text": "Ganha +1 se houver outra unidade da Lua Negra do seu lado do campo.", "effect": "conductive_spark"},
+    "magia_orbe_eco": {"name": "Orbe Refrator", "text": "Ganha +1 para cada carta especial no seu descarte, até +2.", "effect": "echo_orb"},
+    "magia_chama_fria": {"name": "Contrafogo", "text": "Tira 1 ponto de bônus de até dois inimigos na mesma fileira.", "effect": "counterflame"},
+    "covenant_lua_velada": {"name": "Aliança Lunar", "text": "Esta carta ganha +1 e dá +1 de bônus a um aliado em outra fileira.", "effect": "veiled_moon"},
+    "covenant_sentinelas": {"name": "Sentinela Compartilhada", "text": "Ganha +1 se você tiver pelo menos um aliado em cada uma das outras duas fileiras.", "effect": "shared_sentinel"},
+    "covenant_ultimos": {"name": "Último Juramento", "text": "Ganha +2 se você tiver menos unidades em campo que o adversário.", "effect": "last_oath"},
+    "covenant_filhos_brasa": {"name": "Herança da Brasa", "text": "Esta carta ganha +1 e dá +1 de bônus a um aliado da Ordem Áurea na mesma fileira.", "effect": "ember_kin"},
+    "covenant_peregrinos_nevoa": {"name": "Rastro na Névoa", "text": "Ganha +1 se sua unidade anterior foi jogada em outra fileira.", "effect": "mist_trail"},
+    "chefe_malenia_lamina_miquella": {"name": "Flor Escarlate", "text": "Ao entrar em campo, aplica Podridão Escarlate aos inimigos da fileira. Quem já estiver contaminado recebe uma segunda marca.", "effect": "scarlet_bloom"},
+    "chefe_radahn_flagelo_estrelas": {"name": "Gravidade do Flagelo", "text": "Ao entrar em campo, move o inimigo mais forte para sua fileira e tira 2 pontos de bônus dele.", "effect": "star_gravity"},
+    "chefe_maliketh_morte_destinada": {"name": "Morte Destinada", "text": "Ao entrar em campo, tira até 2 pontos de bônus do inimigo mais forte.", "effect": "destined_death"},
+    "chefe_messmer_impalador": {"name": "Lança do Impalador", "text": "Ao entrar em campo, marca os inimigos da fileira com Sangramento. A segunda marca causa Hemorragia.", "effect": "impaling_spear"},
+    "chefe_placidusax_lorde_dragao": {"name": "Tempestade do Tempo", "text": "Ao entrar em campo, aplica Geada aos inimigos da fileira e ganha +1 para cada inimigo atingido, até +3.", "effect": "time_storm"},
     # Expansão V75 — efeitos individuais das doze novas unidades.
     "gwent_v75_ordem_veterano_juramento": {"name": "Juramento Dourado", "text": "Ao entrar, recebe +1; se houver aliado na mesma fileira, o aliado mais fraco também recebe +1.", "effect": "v75_golden_vow"},
     "gwent_v75_ordem_confessora_graca": {"name": "Regressão Serena", "text": "Purifica até dois aliados da mesma fileira de estados negativos; cada aliado purificado recebe +1. Se ninguém precisar de purificação, fortalece o aliado mais fraco em +1.", "effect": "v75_grace_mender"},
@@ -268,9 +268,9 @@ def _aplicar_habilidade_identidade(player: dict, other: dict, card: dict, state:
     elif effect == "pilgrim_duel":
         if other.get("last_row") == row: card["bonus"] += 2
     elif effect == "forge_rhythm":
-        card["bonus"] += min(2, sum(1 for u in allies if u.get("tipo") == "Força" and u.get("row") == row))
+        card["bonus"] += min(2, sum(1 for u in allies if canonical_faction(u.get("faccao") or FACTIONS.get(str(u.get("tipo", "")))) == "Ordem Áurea" and u.get("row") == row))
     elif effect == "tide_resonance":
-        if any(u.get("tipo") == "Destreza" for u in enemies):
+        if any(canonical_faction(u.get("faccao") or FACTIONS.get(str(u.get("tipo", "")))) == "Véu Carmesim" for u in enemies):
             card["bonus"] += 2
         elif len(enemies) > len(allies):  # Etapa 3: alternativa contra facções que não são o Conclave.
             card["bonus"] += 1
@@ -282,7 +282,7 @@ def _aplicar_habilidade_identidade(player: dict, other: dict, card: dict, state:
         if strongest: strongest["bonus"] = max(-2, int(strongest.get("bonus", 0)) - 1)
         player["astral_thread_ready"] = True
     elif effect == "furnace_charge":
-        if any(u.get("tipo") == "Força" for u in allies): card["bonus"] += 1
+        if any(canonical_faction(u.get("faccao") or FACTIONS.get(str(u.get("tipo", "")))) == "Ordem Áurea" for u in allies): card["bonus"] += 1
     elif effect == "covering_shot" and weakest_other_row:
         weakest_other_row["bonus"] = int(weakest_other_row.get("bonus", 0)) + 1
     elif effect == "wandering_ember":
@@ -297,7 +297,7 @@ def _aplicar_habilidade_identidade(player: dict, other: dict, card: dict, state:
     elif effect == "devouring_eclipse":
         if any(int(u.get("bonus", 0)) > 0 for u in enemies): card["bonus"] += 2
     elif effect == "conductive_spark":
-        if any(u.get("tipo") == "Magia" for u in allies): card["bonus"] += 1
+        if any(canonical_faction(u.get("faccao") or FACTIONS.get(str(u.get("tipo", "")))) == "Lua Negra" for u in allies): card["bonus"] += 1
     elif effect == "echo_orb":
         card["bonus"] += min(2, sum(1 for c in player.get("discard", []) if c.get("especial")))
     elif effect == "counterflame":
@@ -313,7 +313,7 @@ def _aplicar_habilidade_identidade(player: dict, other: dict, card: dict, state:
         if len(allies) < len(enemies): card["bonus"] += 2
     elif effect == "ember_kin":
         card["bonus"] += 1
-        ally = next((u for u in same_row if u.get("tipo") == "Força"), None)
+        ally = next((u for u in same_row if canonical_faction(u.get("faccao") or FACTIONS.get(str(u.get("tipo", "")))) == "Ordem Áurea"), None)
         if ally: ally["bonus"] = int(ally.get("bonus", 0)) + 1
     elif effect == "mist_trail":
         if player.get("last_row") is not None and player.get("last_row") != row: card["bonus"] += 1
@@ -508,13 +508,18 @@ def preparar_carta(card: dict) -> dict:
               int(RARITY_EFFECT_BUDGET.get(raridade, 0)) if (skill or identity or has_synergy) else 0)
     # Lore (descricao) nunca deve ser usada como fallback de regra mecânica.
     # Isso evita que frases narrativas sejam exibidas como se fossem efeitos de combate.
-    texto_habilidade = str(
-        identity.get("text")
-        or card.get("habilidade_texto")
-        or skill_data.get("texto")
-        or "Sem habilidade especial."
-    )[:420]
+    textos_habilidade = []
+    if identity.get("text"):
+        textos_habilidade.append(str(identity["text"]))
+    if skill_data.get("texto") and identity:
+        textos_habilidade.append(f"Habilidade adicional: {skill_data['texto']}")
+    elif not identity and card.get("habilidade_texto"):
+        textos_habilidade.append(str(card["habilidade_texto"]))
+    elif not identity and skill_data.get("texto"):
+        textos_habilidade.append(str(skill_data["texto"]))
+    texto_habilidade = str(" ".join(textos_habilidade) or "Sem habilidade especial.")[:420]
     if budget:
+        quantidade_alteracoes = "alteração" if budget == 1 else "alterações"
         upgrades = {
             "gwent_nevoa": f" Raridade {raridade}: pode aplicar uma segunda marca de Podridão Escarlate.",
             "gwent_chuva": " Aplica Sangramento às unidades inimigas da fileira de Cerco; a segunda marca provoca Hemorragia.",
@@ -538,13 +543,15 @@ def preparar_carta(card: dict) -> dict:
             # do orçamento 2 (Lendária+), não em Rara/Épica.
             if budget >= 2:
                 label = "Podridão Escarlate" if skill == "gwent_nevoa" else "Geada"
-                texto_habilidade = (texto_habilidade + f" Raridade {raridade}: aplica a segunda marca de {label} a todas as unidades elegíveis da fileira/campo afetado.").strip()[:420]
+                texto_habilidade = (texto_habilidade + f" Raridade {raridade}: aplica a segunda marca de {label} a todas as unidades elegíveis da fileira/campo afetado.").strip()
         elif skill in upgrades:
-            texto_habilidade = (texto_habilidade + upgrades[skill]).strip()[:420]
+            texto_habilidade = (texto_habilidade + upgrades[skill]).strip()
         elif skill:
-            texto_habilidade = (texto_habilidade + f" Potência {raridade}: quando esta habilidade altera bônus, amplia em 1 ponto cada uma de até {budget} dessas alterações por ativação.").strip()[:420]
+            texto_habilidade = (texto_habilidade + f" Raridade {raridade}: reforça até {budget} bônus já alterados pela habilidade: +1 nos positivos ou -1 nos negativos. Não muda o poder inicial nem os escudos.").strip()
+        elif identity:
+            texto_habilidade = (texto_habilidade + f" Raridade {raridade}: reforça até {budget} bônus já alterados pela habilidade: +1 nos positivos ou -1 nos negativos. Não muda o poder inicial nem os escudos.").strip()
         elif has_synergy:
-            texto_habilidade = (texto_habilidade + f" Potência {raridade}: ao completar um combo compatível, amplia em 1 ponto cada bônus elegível, até {budget} alteração(ões).").strip()[:420]
+            texto_habilidade = (texto_habilidade + f" Raridade {raridade}: ao completar combo compatível, reforça até {budget} bônus já alterados: +1 nos positivos ou -1 nos negativos.").strip()
     return {
         "id": str(card["id"]), "nome": str(card.get("nome", "Carta")),
         "categoria": category,
@@ -557,7 +564,10 @@ def preparar_carta(card: dict) -> dict:
         "arquetipo_descricao": FACTION_ARCHETYPES.get(faction, {}).get("description", ""),
         "fileira": row,
         "row": row, "row_label": ROW_LABELS[row], "habilidade": skill,
-        "habilidade_nome": str(identity.get("name", card.get("habilidade_nome", skill_data.get("nome", skill.replace("_", " ").title())))),
+        "habilidade_nome": str(
+            f"{identity['name']} + {skill_data['nome']}" if identity and skill_data.get("nome")
+            else identity.get("name", card.get("habilidade_nome", skill_data.get("nome", skill.replace("_", " ").title())))
+        ),
         "habilidade_texto": texto_habilidade,
         "habilidade_identidade": bool(identity),
         "sinergias": sorted(CARD_SYNERGY_TAGS.get(str(card["id"]), set())),
@@ -1517,7 +1527,7 @@ def aplicar_jogada(state: dict, user_id: int, card_id: str | None = None,
             elif skill == "adaptacao" and last_row is not None and last_row != row: card["bonus"] += 1
             elif skill == "cacador_arcano":
                 # Etapa 3: também caça unidades fortalecidas, para funcionar contra qualquer facção.
-                if any(c.get("tipo") == "Magia" for c in other["board"]) or any(int(c.get("bonus", 0)) > 0 for c in other["board"]):
+                if any(canonical_faction(c.get("faccao") or FACTIONS.get(str(c.get("tipo", "")))) == "Lua Negra" for c in other["board"]) or any(int(c.get("bonus", 0)) > 0 for c in other["board"]):
                     card["bonus"] += 1
             elif skill == "quebra_ritmo" and enemy_last_row == row: card["bonus"] += 1
             elif skill == "olho_tempestade" and state.get("weather", {}).get(row): card["bonus"] += 2
@@ -1591,7 +1601,8 @@ def aplicar_jogada(state: dict, user_id: int, card_id: str | None = None,
                     f"A raridade {card.get('raridade', 'Comum')} ampliou a habilidade em {potencia_aplicada} ponto(s)."
                 )
             # Passiva visível: a primeira unidade da facção do deck recebe +1 nesta rodada.
-            if card.get("tipo") in FACTIONS and FACTIONS[card["tipo"]] == player["faction"] and not player["faction_boost_used"]:
+            card_faction = canonical_faction(card.get("faccao") or FACTIONS.get(str(card.get("tipo", ""))))
+            if card_faction == player["faction"] and not player["faction_boost_used"]:
                 card["bonus"] += FACTION_BOOST.get(player["faction"], 1)
                 player["faction_boost_used"] = True
             player["hand"].remove(found)

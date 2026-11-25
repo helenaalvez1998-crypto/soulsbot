@@ -66,24 +66,24 @@ HABILIDADES_PRIMORDIAIS = (
 )
 
 HABILIDADES: dict[str, dict[str, str]] = {
-    "primeira_luz": {"nome": "Graça Dourada", "texto": "Recebe +1 de poder ao entrar na primeira rodada."},
-    "retaliacao": {"nome": "Retaliação dos Semideuses", "texto": "Recebe +1 de poder quando sua pontuação está abaixo da rival."},
-    "impeto": {"nome": "Ímpeto do Lorde", "texto": "Recebe +1 de poder quando sua pontuação está acima da rival."},
-    "ultimo_folego": {"nome": "Último Suspiro", "texto": "Recebe +1 de poder na terceira rodada."},
-    "contragolpe": {"nome": "Contragolpe", "texto": "Recebe +2 de poder quando sua pontuação está abaixo da rival."},
-    "encadeamento": {"nome": "Postura Encadeada", "texto": "Recebe +2 ao jogar na mesma fileira da sua unidade anterior."},
-    "adaptacao": {"nome": "Passo do Peregrino", "texto": "Recebe +1 ao jogar em uma fileira diferente da sua última unidade."},
-    "sangue_frio": {"nome": "Concentração", "texto": "Recebe +2 quando as pontuações atuais estão empatadas."},
-    "instinto": {"nome": "Instinto de Caçador", "texto": "Recebe +2 quando sua pontuação está abaixo da rival."},
-    "precisao": {"nome": "Mira Cariana", "texto": "Recebe +1 ao entrar na fileira de longa distância."},
-    "drenagem": {"nome": "Selo Enfraquecedor", "texto": "Reduz em 1 o bônus de todas as unidades inimigas, até o limite de -2."},
-    "cacador_arcano": {"nome": "Caçador de Feitiços", "texto": "Recebe +1 se o adversário controlar uma unidade da Lua Negra ou qualquer unidade com bônus positivo."},
-    "quebra_ritmo": {"nome": "Ruptura de Postura", "texto": "Recebe +1 se o adversário jogou na mesma fileira em seu último turno."},
+    "primeira_luz": {"nome": "Graça Dourada", "texto": "Na primeira rodada, ganha +1 de poder ao entrar em campo."},
+    "retaliacao": {"nome": "Retaliação dos Semideuses", "texto": "Ganha +1 de poder quando sua pontuação total é menor que a do adversário."},
+    "impeto": {"nome": "Ímpeto do Lorde", "texto": "Ganha +1 de poder quando sua pontuação total é maior que a do adversário."},
+    "ultimo_folego": {"nome": "Último Suspiro", "texto": "Na terceira rodada, ganha +1 de poder ao entrar em campo."},
+    "contragolpe": {"nome": "Contragolpe", "texto": "Ganha +2 de poder quando sua pontuação total é menor que a do adversário."},
+    "encadeamento": {"nome": "Postura Encadeada", "texto": "Ganha +2 de poder se for jogada na mesma fileira que sua última unidade."},
+    "adaptacao": {"nome": "Passo do Peregrino", "texto": "Ganha +1 de poder se for jogada em uma fileira diferente da sua última unidade."},
+    "sangue_frio": {"nome": "Concentração", "texto": "Ganha +2 de poder quando os dois jogadores estão com a mesma pontuação."},
+    "instinto": {"nome": "Instinto de Caçador", "texto": "Ganha +2 de poder quando sua pontuação total é menor que a do adversário."},
+    "precisao": {"nome": "Mira Cariana", "texto": "Ganha +1 de poder ao entrar na fileira de Longa Distância."},
+    "drenagem": {"nome": "Selo Enfraquecedor", "texto": "Diminui em 1 o bônus dos inimigos, até o mínimo de -2."},
+    "cacador_arcano": {"nome": "Caçador de Feitiços", "texto": "Ganha +1 de poder se o adversário tiver uma unidade da Lua Negra ou uma unidade com bônus acima de zero."},
+    "quebra_ritmo": {"nome": "Ruptura de Postura", "texto": "Ganha +1 de poder se o adversário jogou uma unidade na mesma fileira no turno anterior."},
     # Efeitos exclusivos: somente a respectiva Primordial pode utilizá-los.
     "lei_primeva": {"nome": "Lei Primeva", "texto": "Recebe +2 de poder ao entrar na primeira rodada."},
     "decreto_soberano": {"nome": "Decreto Soberano", "texto": "Reduz em 2 o bônus de todas as unidades inimigas, até o limite de -2."},
     "olho_tempestade": {"nome": "Olho da Tempestade", "texto": "Recebe +2 quando sua fileira estiver sob efeito climático."},
-    "fome_abismo": {"nome": "Fome do Abismo", "texto": "Recebe +2 quando sua pontuação está abaixo da rival."},
+    "fome_abismo": {"nome": "Fome do Abismo", "texto": "Ganha +2 de poder quando sua pontuação total é menor que a do adversário."},
     "paradoxo_eterno": {"nome": "Paradoxo Eterno", "texto": "Recebe +2 na terceira rodada se o adversário venceu a segunda."},
     "guardiao_fileira": {"nome": "Guardião da Fileira", "texto": "+1 para cada outra unidade sua na mesma fileira, até +3."},
     "cacador_solitario": {"nome": "Caçador Solitário", "texto": "+2 se não houver outra unidade sua na fileira."},
@@ -131,8 +131,30 @@ HABILIDADES: dict[str, dict[str, str]] = {
 # Alinhamento narrativo individual. Não altera o tipo mecânico nem a composição
 # predominante do deck; serve para identificar a lealdade/ambientação da carta.
 FACCOES_IDENTIDADE_POR_CARTA = {
-    "gwent_unidade_senhor_cacada": "Lua Negra",       # Blaidd, aliado de Ranni
-    "gwent_unidade_carniceiro_forja": "Véu Carmesim", # Recusante de Volcano Manor
+    # Personagens e grupos cuja facção narrativa não coincide com o tipo de combate.
+    "chefe_oraculo_ruina": "Ordem Áurea",              # Gurranq/Maliketh, sombra leal de Marika
+    "primordial_tempestade": "Lua Negra",               # Placidusax: tempestade ancestral e domínio do tempo
+    "arma_martelo_fornalha": "Véu Carmesim",           # Artesão de Volcano Manor
+    "arma_duas_luas": "Lua Negra",                     # Tradição cariana
+    "arma_arco_peregrino": "Véu Carmesim",              # Recusante de Volcano Manor
+    "magia_selo_vigilia": "Ordem Áurea",                # Confessora da Ordem Áurea
+    "magia_fagulha": "Lua Negra",                       # Feitiçaria cariana
+    "magia_sol_negro": "Véu Carmesim",                  # Apóstolos da Pele Divina e chama negra
+    "covenant_lua_velada": "Lua Negra",                 # Juramentada de Ranni
+    "covenant_coroa_abismo": "Véu Carmesim",            # Dinastia de Mohgwyn
+    "covenant_peregrinos_nevoa": "Lua Negra",           # Cidades Eternas
+    "gwent_unidade_senhor_cacada": "Lua Negra",         # Blaidd, aliado de Ranni
+    "gwent_unidade_cavaleira": "Lua Negra",             # Cavaleira Cariana
+    "gwent_unidade_cartografa": "Lua Negra",            # Exploradora da Cidade Eterna
+    "gwent_unidade_invocador": "Véu Carmesim",          # Apóstolo da Pele Divina
+    "gwent_unidade_mestre_forja": "Véu Carmesim",       # Ferreiro de Volcano Manor
+    "gwent_unidade_dupla_veu": "Lua Negra",              # Gêmeas da Cidade Eterna
+    "gwent_unidade_saqueadora_veu": "Lua Negra",        # Ladina da Cidade Eterna
+    "gwent_unidade_contrabandista": "Véu Carmesim",     # Recusante de Volcano Manor
+    "gwent_unidade_guardiao_runas": "Ordem Áurea",      # Guardião da Ordem Áurea
+    "gwent_unidade_detonador": "Véu Carmesim",          # Guerreiro da Chama Frenética
+    "gwent_unidade_devorador_mana": "Véu Carmesim",     # Cavaleiro de Sangue de Mohg
+    "gwent_unidade_carniceiro_forja": "Véu Carmesim",   # Recusante de Volcano Manor
 }
 
 # A fileira é definida pelo papel tático da unidade, não pela facção.
@@ -226,7 +248,7 @@ _CARTAS_BASE = [
     Carta("chefe_cervo_sombrio", "Cavaleiro do Cão de Caça", "Chefe", "Destreza", 4, "Comum", 1, "contragolpe", "Um cavaleiro errante segue a trilha de presas pelas florestas enevoadas das Terras Intermédias."),
     Carta("chefe_rei_afogado", "Godfrey, Primeiro Lorde Prístino", "Chefe", "Força", 7, "Épica", 3, "primeira_luz", "Primeiro Lorde Prístino e consorte de Marika, Godfrey liderou os guerreiros que conquistaram as Terras Intermédias."),
     Carta("chefe_oraculo_ruina", "Gurranq, Clérigo Bestial", "Chefe", "Magia", 7, "Lendária", 4, "impeto", "O clérigo bestial consome Raiz da Morte e guarda um segredo ligado à própria Runa da Morte."),
-    Carta("chefe_cacador_sem_rosto", "Assassino da Faca Negra", "Chefe", "Destreza", 5, "Rara", 2, "retaliacao", "Um assassino Numen envolto em segredo, ligado à Noite das Facas Negras e ao fragmento da Runa da Morte."),
+    Carta("chefe_cacador_sem_rosto", "Assassina da Faca Negra", "Chefe", "Destreza", 5, "Rara", 2, "retaliacao", "Uma assassina Numen ligada à Noite das Facas Negras, quando um fragmento da Runa da Morte foi usado para matar Godwyn."),
     Carta("chefe_vigia_cinzento", "Cavaleiro de Leyndell", "Chefe", "Força", 4, "Comum", 1, "drenagem", "Um soldado da capital mantém a vigília entre as muralhas erguidas em nome da Ordem Áurea."),
     Carta("chefe_aparicao_veio", "Lâmina Negra Errante", "Chefe", "Destreza", 3, "Comum", 1, "adaptacao", "Uma figura encapuzada atravessa as sombras, deixando apenas o rumor de uma lâmina silenciosa."),
     Carta("chefe_malenia_lamina_miquella", "Malenia, Lâmina de Miquella", "Chefe", "Destreza", 9, "Primordial", 4, "drenagem", "Espadachim lendária e irmã gêmea de Miquella, luta enquanto a Podridão Escarlate consome seu corpo."),
@@ -281,44 +303,44 @@ _CARTAS_BASE = [
     Carta("elden_especial_chama", "Chama do Gigante", "Especial", "Força", 0, "Rara", 2, "gwent_chama", "A chama dos gigantes arde contra o frio que tenta aprisionar os vivos."),
     Carta("elden_especial_invocacao", "Cinzas dos Lobos Solitários", "Especial", "Magia", 0, "Rara", 2, "gwent_invocacao", "Cinzas antigas despertam os espíritos de lobos que outrora caçaram ao lado de seus mestres."),
     # V19 — Relíquias: cada jogador pode ativar apenas uma por partida.
-    Carta("reliquia_grande_runa_godrick", "Grande Runa de Godrick", "Especial", "Força", 0, "Lendária", 3, "reliquia_godrick", "Fragmento da ordem dourada reivindicado por Godrick, o Enxertado, em sua busca desesperada por grandeza."),
+    Carta("reliquia_grande_runa_godrick", "Grande Runa de Godrick", "Especial", "Força", 0, "Lendária", 3, "reliquia_godrick", "Fragmento do Anel Prístino reivindicado por Godrick, o Enxertado, que buscava poder por meio do enxerto."),
     Carta("reliquia_runa_nao_nascidos", "Grande Runa dos Não Nascidos", "Especial", "Magia", 0, "Lendária", 3, "reliquia_renala", "A Grande Runa guardada por Rennala conserva o poder do renascimento e da perfeição inacabada."),
     Carta("reliquia_runa_morte", "Runa da Morte", "Especial", "Destreza", 0, "Mítica", 4, "reliquia_morte", "O fragmento da Morte Destinada recorda o poder que Maliketh recebeu para manter selado."),
-    Carta("reliquia_noite_chama", "Espada da Noite e da Chama", "Especial", "Magia", 0, "Lendária", 3, "reliquia_noite_chama", "Arma lendária que reúne a feitiçaria da noite e a chama dourada em duas posturas distintas."),
-    Carta("reliquia_lamina_negra", "Lâmina Negra", "Especial", "Destreza", 0, "Mítica", 4, "reliquia_lamina_negra", "Uma lâmina marcada pela Morte Destinada, associada aos assassinos que mudaram o destino dos semideuses."),
+    Carta("reliquia_noite_chama", "Espada da Noite e da Chama", "Especial", "Magia", 0, "Lendária", 3, "reliquia_noite_chama", "Arma lendária da Mansão Cariana. Sua postura especial libera um ataque mágico ou uma onda de fogo."),
+    Carta("reliquia_lamina_negra", "Lâmina Negra", "Especial", "Destreza", 0, "Mítica", 4, "reliquia_lamina_negra", "A arma de Maliketh, que guarda a Morte Destinada selada em sua lâmina. Não é uma das adagas usadas pelas Assassinas da Faca Negra."),
     Carta("reliquia_algemas_margit", "Algemas de Margit", "Especial", "Força", 0, "Épica", 2, "reliquia_algemas", "Correntes forjadas para conter o Agouro caído, capazes de subjugar até mesmo um inimigo temível."),
     # Novas unidades de facção e sinergia.
-    Carta("gwent_unidade_baluarte", "Cavaleiro do Crisol", "Chefe", "Força", 6, "Rara", 2, "guardiao_fileira", "Quanto maior a formação aliada, mais difícil é derrubá-lo."),
-    Carta("gwent_unidade_lamina_sem_juramento", "Caçador de Dedos", "Arma", "Destreza", 6, "Rara", 2, "cacador_solitario", "Ataca melhor quando opera sem apoio na fileira."),
-    Carta("gwent_unidade_portaestandarte", "Porta-estandarte de Leyndell", "Covenant", "Força", 4, "Comum", 1, "estandarte", "Fortalece as demais unidades aliadas na mesma fileira."),
-    Carta("gwent_unidade_oraculo_clima", "Profeta de Liurnia", "Magia", "Magia", 5, "Rara", 2, "resistencia_climatica", "Sua visão atravessa tempestades e geadas."),
-    Carta("gwent_unidade_eco", "Erudito das Pedras Cintilantes", "Magia", "Magia", 5, "Rara", 2, "eco_arcano", "Canaliza o poder das cartas especiais já utilizadas."),
-    Carta("gwent_unidade_cavaleira", "Cavaleira Cariana", "Chefe", "Destreza", 5, "Comum", 1, "quebra_ritmo", "Uma duelista que pune movimentos previsíveis."),
+    Carta("gwent_unidade_baluarte", "Cavaleiro do Crisol", "Chefe", "Força", 6, "Rara", 2, "guardiao_fileira", "Um cavaleiro do Crisol, marcado pelas antigas formas que antecederam a Árvore Áurea, guarda a formação com disciplina."),
+    Carta("gwent_unidade_lamina_sem_juramento", "Caçador de Dedos", "Arma", "Destreza", 6, "Rara", 2, "cacador_solitario", "Caçador de Dedos, um duelista errante que prefere trilhas solitárias e confrontos sem testemunhas."),
+    Carta("gwent_unidade_portaestandarte", "Porta-estandarte de Leyndell", "Covenant", "Força", 4, "Comum", 1, "estandarte", "O estandarte de Leyndell reúne soldados dispersos sob o símbolo dourado da capital."),
+    Carta("gwent_unidade_oraculo_clima", "Profeta de Liurnia", "Magia", "Magia", 5, "Rara", 2, "resistencia_climatica", "O profeta de Liurnia observa as mudanças do céu e interpreta os sinais trazidos por tempestades e geadas."),
+    Carta("gwent_unidade_eco", "Erudito das Pedras Cintilantes", "Magia", "Magia", 5, "Rara", 2, "eco_arcano", "Um estudioso das pedras cintilantes investiga as ressonâncias deixadas por feitiçarias antigas."),
+    Carta("gwent_unidade_cavaleira", "Cavaleira Cariana", "Chefe", "Destreza", 5, "Comum", 1, "quebra_ritmo", "Uma duelista cariana, treinada nas tradições de combate da realeza lunar."),
     Carta("gwent_unidade_gigante", "Gigante de Fogo", "Chefe", "Força", 7, "Épica", 3, "instinto", "Uma presença colossal na linha de frente."),
     Carta("gwent_unidade_cartografa", "Exploradora da Cidade Eterna", "Covenant", "Destreza", 4, "Comum", 1, "adaptacao", "Encontra rotas onde os outros veem obstáculos."),
     Carta("gwent_unidade_invocador", "Apóstolo da Pele Divina Errante", "Magia", "Magia", 7, "Épica", 3, "cacador_arcano", "Converte conhecimento arcano em força de combate."),
-    Carta("gwent_unidade_mestre_forja", "Mestre Ferreiro de Volcano Manor", "Chefe", "Força", 5, "Rara", 2, "dupla_fornalha", "Luta melhor ao lado de outra unidade da Ordem Áurea."),
-    Carta("gwent_unidade_dupla_veu", "Gêmeas da Cidade Eterna", "Covenant", "Destreza", 5, "Rara", 2, "irmandade_veu", "Coordena ataques com aliados posicionados em outra fileira."),
-    Carta("gwent_unidade_circulo", "Discípulo da Academia", "Magia", "Magia", 5, "Rara", 2, "circulo_arcano", "Amplifica a magia quando encontra aliados ou resíduos arcanos."),
+    Carta("gwent_unidade_mestre_forja", "Mestre Ferreiro de Volcano Manor", "Chefe", "Força", 5, "Rara", 2, "dupla_fornalha", "Um mestre ferreiro de Volcano Manor trabalha entre brasas, aço e os juramentos dos recusantes."),
+    Carta("gwent_unidade_dupla_veu", "Gêmeas da Cidade Eterna", "Covenant", "Destreza", 5, "Rara", 2, "irmandade_veu", "Duas irmãs das Cidades Eternas percorrem caminhos subterrâneos que raramente aparecem nos mapas."),
+    Carta("gwent_unidade_circulo", "Discípulo da Academia", "Magia", "Magia", 5, "Rara", 2, "circulo_arcano", "Discípulo de Raya Lucaria, dedica-se ao estudo dos círculos arcanos e dos resíduos de feitiçaria."),
 
     # Etapa 2: unidades de facção que usam os efeitos de ciclo de vida (escudo, queda, ressurreição...).
     # Ordem Áurea — muralha (escudo/sobrevivência/vingança) e banquete (devorar/espólios).
-    Carta("gwent_unidade_sentinela_rubra", "Cavaleiro de Radahn", "Covenant", "Força", 4, "Comum", 1, "escudo_ferro", "Primeira a receber o golpe, última a recuar."),
+    Carta("gwent_unidade_sentinela_rubra", "Cavaleiro de Radahn", "Covenant", "Força", 4, "Comum", 1, "escudo_ferro", "Um cavaleiro da hoste de Radahn mantém sua posição sob o estandarte vermelho de Caelid."),
     Carta("gwent_unidade_veterano_cercos", "Cavaleiro Draconiano", "Chefe", "Força", 5, "Rara", 2, "sobrevivente", "Já viu mais muralhas caírem do que rostos conhecidos."),
     Carta("gwent_unidade_herdeiro_portao", "Godwyn, o Dourado", "Chefe", "Força", 6, "Épica", 3, "vinganca", "Quando cai, a formação inteira jura vingá-lo."),
     Carta("gwent_unidade_carniceiro_forja", "Carrasco de Volcano Manor", "Arma", "Força", 4, "Rara", 2, "devorar", "Consome os restos da batalha para ampliar a própria força."),
-    Carta("gwent_unidade_intendente", "Mercador Nômade", "Covenant", "Força", 3, "Comum", 1, "espolios", "Cada vitória enche os depósitos da Ordem."),
+    Carta("gwent_unidade_intendente", "Mercador Nômade", "Covenant", "Força", 3, "Comum", 1, "espolios", "Um mercador nômade percorre as Terras Intermédias levando provisões e notícias entre assentamentos."),
     # Lua Negra — fantasmas (retorno e persistência) e caravana (saque e blindagem).
-    Carta("gwent_unidade_cacadora_fantasma", "Assassina de Ravenmount", "Chefe", "Destreza", 5, "Rara", 2, "sobrevivente", "Some na névoa e reaparece quando a próxima rodada começa."),
-    Carta("gwent_unidade_cantora_lamentos", "Fia, Companheira do Leito de Morte", "Covenant", "Destreza", 4, "Rara", 2, "ressurgir", "Seu canto arrasta os caídos de volta ao campo."),
+    Carta("gwent_unidade_cacadora_fantasma", "Assassina de Ravenmount", "Chefe", "Destreza", 5, "Rara", 2, "sobrevivente", "Uma assassina de Ravenmount atravessa a névoa sem deixar rastros fáceis de seguir."),
+    Carta("gwent_unidade_cantora_lamentos", "Fia, Companheira do Leito de Morte", "Covenant", "Destreza", 4, "Rara", 2, "ressurgir", "Fia, Companheira do Leito de Morte, entoa lamentos pelos que encontraram repouso entre os mortos."),
     Carta("gwent_unidade_senhor_cacada", "Blaidd, o Meio-Lobo", "Chefe", "Destreza", 6, "Épica", 3, "vinganca", "A presa que o derruba desperta a matilha inteira."),
     Carta("gwent_unidade_saqueadora_veu", "Ladina da Cidade Eterna", "Arma", "Destreza", 4, "Comum", 1, "espolios", "Nenhuma rota é cara demais para quem leva o butim."),
-    Carta("gwent_unidade_contrabandista", "Recusante da Mansão Vulcânica", "Covenant", "Destreza", 4, "Comum", 1, "escudo_ferro", "Sempre tem um truque guardado para a primeira emboscada."),
+    Carta("gwent_unidade_contrabandista", "Recusante da Mansão Vulcânica", "Covenant", "Destreza", 4, "Comum", 1, "escudo_ferro", "Um recusante de Volcano Manor, acostumado a negociar favores e segredos nas encostas do Monte Gelmir."),
     # Véu Carmesim — rúnico (proteção e retorno) e eclipse (consumo e conhecimento).
-    Carta("gwent_unidade_guardiao_runas", "Guardião da Ordem Áurea", "Magia", "Magia", 5, "Comum", 1, "escudo_ferro", "Runas gravadas na pele desviam o primeiro feitiço."),
+    Carta("gwent_unidade_guardiao_runas", "Guardião da Ordem Áurea", "Magia", "Magia", 5, "Comum", 1, "escudo_ferro", "Um guardião da Ordem Áurea carrega inscrições rúnicas ligadas aos ensinamentos da capital."),
     Carta("gwent_unidade_necromante", "Servo dos que Vivem na Morte", "Magia", "Magia", 4, "Rara", 2, "ressurgir", "Desperta no campo os que o descarte ainda guarda."),
     Carta("gwent_unidade_detonador", "Guerreiro da Chama Frenética", "Arma", "Magia", 6, "Épica", 3, "vinganca", "Sua queda libera a energia que ele guardava."),
-    Carta("gwent_unidade_devorador_mana", "Cavaleiro de Sangue de Mohg", "Magia", "Magia", 5, "Rara", 2, "devorar", "Consome aliados menores para alimentar o ritual de sangue."),
+    Carta("gwent_unidade_devorador_mana", "Cavaleiro de Sangue de Mohg", "Magia", "Magia", 5, "Rara", 2, "devorar", "Um cavaleiro ligado ao sangue de Mohg participa dos rituais sombrios da dinastia subterrânea."),
     Carta("gwent_unidade_bibliotecaria", "Bibliotecária de Raya Lucaria", "Covenant", "Magia", 4, "Comum", 1, "espolios", "O conhecimento reunido na guerra vale mais que ouro."),
 
     # Etapa 2: cartas especiais novas (todas funcionam sem alvo escolhido; `target_id` apenas refina).
@@ -365,22 +387,22 @@ CARTAS_PRIMORDIAIS = [c for c in _cartas_v18 if c.id in {x.id for x in CARTAS_PR
 # As cartas entram após o balanceamento legado V18 para preservar suas habilidades próprias.
 CARTAS_EXPANSAO_V75 = [
     # ORDEM ÁUREA — formação, proteção e purificação.
-    Carta("gwent_v75_ordem_veterano_juramento", "Veterano do Juramento Dourado", "Covenant", "Força", 4, "Rara", 2, "primeira_luz", "Veterano de Leyndell que mantém a formação unida: ao entrar, fortalece a si e o aliado mais fraco da mesma fileira.", fileira="melee"),
-    Carta("gwent_v75_ordem_guardiao_crisol", "Guardião do Crisol Menor", "Chefe", "Força", 4, "Rara", 2, "", "Um guardião das raízes antigas que mantém a posição ao lado dos soldados de Leyndell, lembrando que a muralha é tão forte quanto sua formação.", fileira="melee"),
-    Carta("gwent_v75_ordem_confessora_graca", "Confessora da Graça Serena", "Magia", "Força", 5, "Épica", 3, "primeira_luz", "Uma confessorada treinada na Lei da Regressão remove condições negativas de até dois aliados na fileira de Cerco e os fortalece.", fileira="siege"),
-    Carta("gwent_v75_ordem_arauto_estandarte", "Arauto do Estandarte Áureo", "Covenant", "Força", 5, "Épica", 3, "", "O arauto ergue o estandarte da capital entre fileiras distintas, sinalizando a marcha coordenada dos soldados de Leyndell.", fileira="ranged"),
+    Carta("gwent_v75_ordem_veterano_juramento", "Veterano do Juramento Dourado", "Covenant", "Força", 4, "Rara", 2, "", "Veterano de Leyndell que mantém a formação unida: ao entrar, fortalece a si e o aliado mais fraco da mesma fileira.", fileira="melee"),
+    Carta("gwent_v75_ordem_guardiao_crisol", "Guardião do Crisol Menor", "Chefe", "Força", 4, "Rara", 2, "", "Não possui habilidade individual. Pode completar combos da Ordem Áurea quando estiver em campo com a unidade compatível.", fileira="melee"),
+    Carta("gwent_v75_ordem_confessora_graca", "Confessora da Graça Serena", "Magia", "Força", 5, "Épica", 3, "", "Uma Confessora treinada na Lei da Regressão remove condições negativas de até dois aliados na fileira de Cerco e os fortalece.", fileira="siege"),
+    Carta("gwent_v75_ordem_arauto_estandarte", "Arauto do Estandarte Áureo", "Covenant", "Força", 5, "Épica", 3, "", "Não possui habilidade individual. Pode completar combos de formação da Ordem Áurea com a unidade compatível.", fileira="ranged"),
 
     # VÉU CARMESIM — marcas de Sangramento, pressão e sacrifício calculado.
-    Carta("gwent_v75_veu_acolito_sangue", "Acólito da Dinastia Sanguínea", "Magia", "Destreza", 4, "Rara", 2, "primeira_luz", "Servo do Palácio de Mohgwyn que marca o inimigo mais forte da fileira; a segunda marca provoca Hemorragia.", fileira="ranged"),
-    Carta("gwent_v75_veu_devota_hemorragia", "Devota da Hemorragia", "Covenant", "Destreza", 4, "Rara", 2, "", "Uma devota do Palácio de Mohgwyn conduz cânticos rituais diante de um campo marcado pelo sangue da dinastia.", fileira="siege"),
-    Carta("gwent_v75_veu_carrasco_preco", "Carrasco da Procissão Carmesim", "Chefe", "Destreza", 5, "Épica", 3, "primeira_luz", "O carrasco sacrifica o aliado mais fraco da mesma fileira para absorver parte de seu poder, com ganho limitado.", fileira="melee"),
-    Carta("gwent_v75_veu_cacador_sangue", "Caçador das Catacumbas de Mohgwyn", "Arma", "Destreza", 5, "Épica", 3, "", "Um caçador de Mohgwyn segue rastros de combatentes feridos pelas galerias subterrâneas, aguardando o momento de fechar a perseguição.", fileira="ranged"),
+    Carta("gwent_v75_veu_acolito_sangue", "Acólito da Dinastia Sanguínea", "Magia", "Destreza", 4, "Rara", 2, "", "Servo do Palácio de Mohgwyn que marca o inimigo mais forte da fileira; a segunda marca provoca Hemorragia.", fileira="ranged"),
+    Carta("gwent_v75_veu_devota_hemorragia", "Devota da Hemorragia", "Covenant", "Destreza", 4, "Rara", 2, "", "Não possui habilidade individual. Pode completar o combo Banquete da Hemorragia com a unidade compatível.", fileira="siege"),
+    Carta("gwent_v75_veu_carrasco_preco", "Carrasco da Procissão Carmesim", "Chefe", "Destreza", 5, "Épica", 3, "", "O carrasco sacrifica o aliado mais fraco da mesma fileira para absorver parte de seu poder, com ganho limitado.", fileira="melee"),
+    Carta("gwent_v75_veu_cacador_sangue", "Caçador das Catacumbas de Mohgwyn", "Arma", "Destreza", 5, "Épica", 3, "", "Não possui habilidade individual. Pode completar combos de marca de Sangramento com a unidade compatível.", fileira="ranged"),
 
     # LUA NEGRA — Geada, leitura de campo e controle gravitacional.
-    Carta("gwent_v75_lua_oraculo_geada", "Oráculo Gélido de Sellia", "Magia", "Magia", 4, "Rara", 2, "primeira_luz", "Uma astróloga de Sellia aplica Geada ao inimigo mais forte da fileira; completar a segunda marca fortalece o oráculo.", fileira="siege"),
-    Carta("gwent_v75_lua_cartografo_lunar", "Cartógrafo das Cidades Eternas", "Covenant", "Magia", 4, "Rara", 2, "", "Lê as rotas subterrâneas de Nokron e orienta aliados entre pontes e distritos separados da Cidade Eterna.", fileira="ranged"),
-    Carta("gwent_v75_lua_graviturgista", "Graviturgista de Nokron", "Magia", "Magia", 5, "Épica", 3, "primeira_luz", "Dobra a gravidade sobre até dois inimigos fortalecidos na fileira escolhida; se atingir dois, recebe poder adicional.", fileira="siege"),
-    Carta("gwent_v75_lua_guardia", "Guardiã do Juramento Lunar", "Chefe", "Magia", 5, "Épica", 3, "", "Uma guardiã cariana vigia as passagens entre fileiras, mantendo-se entre os aliados e os inimigos marcados pela Geada.", fileira="melee"),
+    Carta("gwent_v75_lua_oraculo_geada", "Oráculo Gélido de Sellia", "Magia", "Magia", 4, "Rara", 2, "", "Uma astróloga de Sellia aplica Geada ao inimigo mais forte da fileira; completar a segunda marca fortalece o oráculo.", fileira="siege"),
+    Carta("gwent_v75_lua_cartografo_lunar", "Cartógrafo das Cidades Eternas", "Covenant", "Magia", 4, "Rara", 2, "", "Não possui habilidade individual. Pode completar combos de mobilidade lunar com a unidade compatível.", fileira="ranged"),
+    Carta("gwent_v75_lua_graviturgista", "Graviturgista de Nokron", "Magia", "Magia", 5, "Épica", 3, "", "Dobra a gravidade sobre até dois inimigos fortalecidos na fileira escolhida; se atingir dois, recebe poder adicional.", fileira="siege"),
+    Carta("gwent_v75_lua_guardia", "Guardiã do Juramento Lunar", "Chefe", "Magia", 5, "Épica", 3, "", "Não possui habilidade individual. Pode completar combos de mobilidade lunar com a unidade compatível.", fileira="melee"),
 ]
 
 _CARTAS_BASE = [*_CARTAS_BASE, *CARTAS_EXPANSAO_V75]
@@ -402,7 +424,7 @@ def _hash_int(valor: str) -> int:
 
 
 def carta_jogo(nome_jogo: str, marco: str) -> Carta:
-    """Cria uma recompensa com identidade coerente e nome exclusivo por origem."""
+    """Cria uma recompensa com nome e território coerentes com seu arquétipo."""
     marco = "platina" if str(marco).lower() == "platina" else "zerado"
     slug = slug_jogo(nome_jogo)
     n = _hash_int(f"{slug}:{marco}:gwent-reward-v2")
@@ -412,44 +434,41 @@ def carta_jogo(nome_jogo: str, marco: str) -> Carta:
     minimo, maximo = FAIXA_PODER[raridade]
     poder = minimo + ((n // 11) % (maximo - minimo + 1))
 
-    # O título e o território precisam pertencer à mesma facção.
     identidades = {
-        "Força": {
-            "nomes": ("Cavaleiro de Leyndell", "Sentinela da Árvore Áurea", "Juramentado do Crisol"),
-            "epitetos": ("da Graça Dourada", "de Leyndell", "da Árvore Áurea", "do Crisol", "da Capital Dourada"),
-            "facção": "Ordem Áurea",
-            "lore": "Soldado da Ordem Áurea, treinado para proteger Leyndell e sustentar a linha de frente.",
-        },
-        "Destreza": {
-            "nomes": ("Cavaleiro Sanguíneo", "Recusante de Volcano Manor", "Lâmina de Ravenmount"),
-            "epitetos": ("da Dinastia Sanguínea", "de Mohgwyn", "da Procissão Carmesim", "das Catacumbas de Mohgwyn", "do Véu Carmesim"),
-            "facção": "Véu Carmesim",
-            "lore": "Combatente do Véu Carmesim, ligado aos rituais de Mohgwyn e à pressão por Sangramento.",
-        },
-        "Magia": {
-            "nomes": ("Feiticeiro Cariano", "Astrólogo de Liurnia", "Erudito de Raya Lucaria"),
-            "epitetos": ("da Lua Negra", "de Sellia", "de Nokron", "da Tradição Cariana", "das Cidades Eternas"),
-            "facção": "Lua Negra",
-            "lore": "Estudioso da Lua Negra, dedicado às artes arcanas de Sellia, Liurnia e Nokron.",
-        },
+        "Força": (
+            ("Cavaleiro de Leyndell", ("da Graça Dourada", "da Capital Dourada")),
+            ("Sentinela da Árvore Áurea", ("de Leyndell", "da Árvore Áurea")),
+            ("Juramentado do Crisol", ("do Crisol", "das Raízes Antigas")),
+        ),
+        "Destreza": (
+            ("Cavaleiro Sanguíneo", ("da Dinastia Sanguínea", "de Mohgwyn")),
+            ("Recusante de Volcano Manor", ("do Monte Gelmir", "da Mansão Vulcânica")),
+            ("Lâmina de Ravenmount", ("da Névoa", "de Ravenmount")),
+        ),
+        "Magia": (
+            ("Feiticeiro Cariano", ("da Lua Negra", "da Tradição Cariana")),
+            ("Astrólogo de Liurnia", ("das Pedras Cintilantes", "de Liurnia")),
+            ("Erudito de Raya Lucaria", ("da Academia", "dos Sábios Carianos")),
+        ),
     }
-    identidade = identidades[tipo]
-    titulo_base = identidade["nomes"][(n // 13) % len(identidade["nomes"])]
-    epiteto = identidade["epitetos"][(n // 19) % len(identidade["epitetos"])]
-    # O selo curto evita que jogos diferentes gerem cartas indistinguíveis com o mesmo título.
+    opcoes = identidades[tipo]
+    nome_base, epitetos = opcoes[(n // 13) % len(opcoes)]
+    epiteto = epitetos[(n // 19) % len(epitetos)]
     selo = hashlib.sha256(f"{slug}:{marco}".encode("utf-8")).hexdigest()[:4].upper()
-    titulo = f"{titulo_base} {epiteto} · Selo {selo}"
+    titulo = f"{nome_base} {epiteto} · Selo {selo}"
 
-    descricao = identidade["lore"]
+    descricoes = {
+        "Força": "Combatente da Ordem Áurea, treinado para sustentar a formação e proteger seus aliados.",
+        "Destreza": "Combatente do Véu Carmesim, habituado a emboscadas, riscos calculados e confrontos de curta distância.",
+        "Magia": "Estudioso da Lua Negra, dedicado à feitiçaria, à observação dos astros e ao controle do campo.",
+    }
+    descricao = descricoes[tipo]
     if habilidade:
-        nome_habilidade = HABILIDADES.get(habilidade, {}).get("nome", "sua técnica especial")
-        descricao += f" Técnica: {nome_habilidade}."
+        nome_habilidade = HABILIDADES.get(habilidade, {}).get("nome", "técnica especial")
+        descricao += f" Habilidade: {nome_habilidade}."
     else:
-        descricao += " Sem habilidade especial; depende do poder-base e dos bônus de combate."
-    if marco == "platina":
-        descricao += " Recompensa por domínio completo."
-    else:
-        descricao += " Recompensa por conquista."
+        descricao += " Sem habilidade especial; seu valor vem do poder-base e dos bônus de combate."
+    descricao += " Recompensa por domínio completo." if marco == "platina" else " Recompensa por conquista."
 
     return Carta(
         id=f"jogo_{slug}_{marco}", nome=titulo[:95], categoria="Chefe", tipo=tipo,
@@ -460,6 +479,7 @@ def carta_jogo(nome_jogo: str, marco: str) -> Carta:
 
 
 def carta_patente(indice: int, nivel_minimo: int, nome_patente: str) -> Carta:
+    """Gera uma recompensa de patente com título coerente com sua facção."""
     seed = f"patente:{indice}:{nome_patente}:soulsbot-card-v1"
     n = _hash_int(seed)
     if nivel_minimo >= 75:
@@ -474,24 +494,28 @@ def carta_patente(indice: int, nivel_minimo: int, nome_patente: str) -> Carta:
     poder = minimo + (n % (maximo - minimo + 1))
     tipo = TIPOS[(n // 9) % len(TIPOS)]
     habilidade = HABILIDADES_COMUNS[(n // 17) % len(HABILIDADES_COMUNS)] if (raridade in {"Épica", "Lendária"} or n % 2 == 0) else ""
-    card_id = f"patente_{indice + 1}"
+
+    nomes_por_tipo = {
+        "Força": ("Lorde de Leyndell", "Veterano de Leyndell", "Escudeiro da Árvore Áurea", "Recruta de Leyndell"),
+        "Destreza": ("Lorde Sanguíneo", "Cavaleiro de Mohgwyn", "Acólito Sanguíneo", "Recruta de Mohgwyn"),
+        "Magia": ("Mestre Cariano", "Feiticeiro Cariano", "Aprendiz Cariano", "Novato de Raya Lucaria"),
+    }
+    indice_nome = 0 if nivel_minimo >= 75 else 1 if nivel_minimo >= 30 else 2 if nivel_minimo >= 10 else 3
+    selo = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:4].upper()
+    titulo = f"{nomes_por_tipo[tipo][indice_nome]} · Selo {selo}"
+
     return Carta(
-        id=card_id,
-        nome=(
-            ("Lorde de Leyndell" if nivel_minimo >= 75 else "Veterano de Leyndell" if nivel_minimo >= 30 else "Escudeiro de Leyndell" if nivel_minimo >= 10 else "Recruta de Leyndell")
-            if tipo == "Força" else
-            ("Lorde Sanguíneo" if nivel_minimo >= 75 else "Cavaleiro de Mohgwyn" if nivel_minimo >= 30 else "Acólito Sanguíneo" if nivel_minimo >= 10 else "Recruta de Mohgwyn")
-            if tipo == "Destreza" else
-            ("Mestre Cariano" if nivel_minimo >= 75 else "Feiticeiro Cariano" if nivel_minimo >= 30 else "Aprendiz Cariano" if nivel_minimo >= 10 else "Novato de Raya Lucaria")
-        ) + " " + ("da Graça Perdida", "da Noite dos Punhais", "do Palácio de Mohgwyn", "da Lua Negra", "das Ruínas de Farum Azula")[(n // 29) % 5],
+        id=f"patente_{indice + 1}",
+        nome=titulo[:95],
         categoria="Patente",
         tipo=tipo,
         poder=int(poder),
         raridade=raridade,
         custo=CUSTO_RARIDADE[raridade],
         habilidade=habilidade,
-        descricao=f"Recompensa de progressão nas Terras Intermédias — nível {nivel_minimo}.",
+        descricao=(f"Recompensa por alcançar o nível {nivel_minimo}. " + (HABILIDADES.get(habilidade, {}).get("texto", "") if habilidade else "Esta carta não tem habilidade especial; seu efeito vem do poder e dos bônus recebidos em combate.")),
     )
+
 
 
 CARTAS_PATENTE = [carta_patente(i, nivel, nome) for i, (nivel, nome) in enumerate(PATENTES)]
