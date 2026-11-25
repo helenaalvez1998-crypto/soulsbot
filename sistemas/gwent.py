@@ -17,6 +17,41 @@ def canonical_faction(value: str | None) -> str | None:
     value = str(value)
     return LEGACY_FACTION_ALIASES.get(value, value)
 
+
+def embaralhar_deck(deck: list[dict], rng=None) -> list[dict]:
+    """Retorna uma cópia embaralhada; produção usa SystemRandom e testes podem injetar RNG."""
+    from secrets import SystemRandom
+    shuffled = deepcopy(deck)
+    (rng or SystemRandom()).shuffle(shuffled)
+    return shuffled
+
+
+def contar_faccoes_deck(cards: list[dict]) -> dict[str, int]:
+    """Conta facções das unidades; cartas especiais não definem a facção do deck."""
+    counts = {faction: 0 for faction in FACTION_TYPES}
+    for card in cards or []:
+        if card.get("especial") or str(card.get("categoria", "")).casefold() == "especial":
+            continue
+        faction = canonical_faction(card.get("faccao"))
+        if faction not in FACTION_TYPES:
+            faction = FACTIONS.get(str(card.get("tipo", "")))
+        if faction in counts:
+            counts[faction] += 1
+    return counts
+
+
+def faccoes_predominantes(cards: list[dict]) -> set[str]:
+    counts = contar_faccoes_deck(cards)
+    highest = max(counts.values(), default=0)
+    return {faction for faction, count in counts.items() if count == highest and highest > 0}
+
+
+def validar_faccao_deck(cards: list[dict], faction: str) -> tuple[bool, dict[str, int]]:
+    """A facção declarada deve estar entre as mais representadas nas unidades do deck."""
+    normalized = canonical_faction(faction)
+    counts = contar_faccoes_deck(cards)
+    return normalized in faccoes_predominantes(cards), counts
+
 # Contrato de cobertura: cada habilidade declarada no catálogo precisa estar ligada
 # a um ramo do motor (unidade, Primordial ou carta tática especial).
 HABILIDADES_UNIDADE_IMPLEMENTADAS = frozenset({
@@ -359,7 +394,10 @@ def preparar_carta(card: dict) -> dict:
     raridade = str(card.get("raridade", "Comum"))
     # Sem habilidade, só recebe orçamento se puder completar um combo registrado.
     has_synergy = bool(CARD_SYNERGY_TAGS.get(str(card.get("id", "")), set()))
-    budget = int(RARITY_EFFECT_BUDGET.get(raridade, 0)) if (skill or identity or has_synergy) else 0
+    # Relíquias possuem potência fixa no próprio texto do item; a raridade não
+    # acrescenta modificadores ocultos como ocorre com cartas especiais comuns.
+    budget = (0 if skill.startswith("reliquia_") else
+              int(RARITY_EFFECT_BUDGET.get(raridade, 0)) if (skill or identity or has_synergy) else 0)
     # Lore (descricao) nunca deve ser usada como fallback de regra mecânica.
     # Isso evita que frases narrativas sejam exibidas como se fossem efeitos de combate.
     texto_habilidade = str(
@@ -387,7 +425,13 @@ def preparar_carta(card: dict) -> dict:
             "gwent_podrida": f" Raridade {raridade}: pode aplicar a segunda marca imediatamente a até {min(3, budget)} alvo(s).",
             "gwent_loucura": f" Raridade {raridade}: pode aplicar a segunda marca imediatamente a até {min(3, budget)} alvo(s).",
         }
-        if skill in upgrades:
+        if skill in {"gwent_nevoa", "gwent_geada"}:
+            # Esses dois efeitos globais só aplicam a segunda marca a partir
+            # do orçamento 2 (Lendária+), não em Rara/Épica.
+            if budget >= 2:
+                label = "Podridão Escarlate" if skill == "gwent_nevoa" else "Geada"
+                texto_habilidade = (texto_habilidade + f" Raridade {raridade}: aplica a segunda marca de {label} a todas as unidades elegíveis da fileira/campo afetado.").strip()[:420]
+        elif skill in upgrades:
             texto_habilidade = (texto_habilidade + upgrades[skill]).strip()[:420]
         elif skill:
             texto_habilidade = (texto_habilidade + f" Potência {raridade}: quando esta habilidade altera bônus, amplia em 1 ponto cada uma de até {budget} dessas alterações por ativação.").strip()[:420]
@@ -481,13 +525,8 @@ def preparar_carta_pessoal(definition: dict, exemplar: dict, *, owner_id: int | 
 
 
 def _faction(cards):
-    counts = {kind: 0 for kind in FACTIONS}
-    for card in cards:
-        if not card.get("especial"):
-            kind = str(card.get("tipo", "Força"))
-            if kind in counts:
-                counts[kind] += 1
-    return FACTIONS[max(counts, key=lambda k: (counts[k], k))]
+    counts = contar_faccoes_deck(cards)
+    return max(counts, key=lambda faction: (counts[faction], faction))
 
 
 def novo_estado(match_id: int, creator_id: int, opponent_id: int, decks: dict[str, list[dict]], deck_configs: dict[str, dict] | None = None) -> dict:
@@ -497,6 +536,7 @@ def novo_estado(match_id: int, creator_id: int, opponent_id: int, decks: dict[st
         deck = deepcopy(decks[uid])
         config = deck_configs.get(uid, {})
         requested_faction = canonical_faction(config.get("faction"))
+        # Decks antigos preservam a facção salva; decks novos são validados no endpoint de gravação.
         faction = requested_faction if requested_faction in FACTION_TYPES else _faction(deck)
         leader_id = config.get("leader_id") or DEFAULT_LEADERS[faction]
         if leader_id not in LEADERS or LEADERS[leader_id]["faction"] != faction:
@@ -510,7 +550,7 @@ def novo_estado(match_id: int, creator_id: int, opponent_id: int, decks: dict[st
         }
     return {
         "match_id": int(match_id), "status": "active", "phase": "mulligan", "round": 1,
-        "players": players, "turn": str(creator_id),
+        "players": players, "turn": str(creator_id), "round_starter": str(creator_id),
         "weather": {row: 0 for row in ROWS},
         "crowns": {str(creator_id): 0, str(opponent_id): 0},
         "rounds": [], "winner_id": None,
@@ -657,6 +697,27 @@ def opcoes_de_alvo(state: dict, user_id) -> dict:
     return resultado
 
 
+def opcoes_de_reliquia(state: dict, user_id) -> dict:
+    """Descreve escolhas de alvo da Relíquia equipada para a interface e para a IA."""
+    player = state.get("players", {}).get(str(user_id))
+    if not player:
+        return {}
+    relic_id = str(player.get("equipped_relic_id") or "")
+    other = next((p for uid, p in state.get("players", {}).items() if uid != str(user_id)), {})
+    rows = {}
+    if relic_id in {"reliquia_noite_chama", "reliquia_lamina_negra", "reliquia_algemas_margit"}:
+        for row in ROWS:
+            targets = [u for u in other.get("board", []) if u.get("row") == row]
+            rows[row] = [_resumo_alvo(u) for u in targets]
+    return {
+        "relic_id": relic_id,
+        "requires_row": relic_id in {"reliquia_noite_chama", "reliquia_lamina_negra", "reliquia_algemas_margit"},
+        "requires_target": relic_id in {"reliquia_lamina_negra", "reliquia_algemas_margit"},
+        "supports_modes": relic_id == "reliquia_noite_chama",
+        "rows": rows,
+    }
+
+
 def placar(state: dict) -> dict:
     return {uid: {
         "score": pontuacao(player, state.get("weather")),
@@ -687,7 +748,7 @@ def _resolve_round(state: dict) -> None:
         state["last_event"] += " Partida encerrada."
         return
     state["round"] += 1
-    state["weather"] = {row: 0 for row in ROWS}
+    previous_weather = deepcopy(state.get("weather", {}))
     extras = []
     for pid, player in state["players"].items():
         board = player.get("board", [])
@@ -697,32 +758,46 @@ def _resolve_round(state: dict) -> None:
             extras.append("Espólios de guerra: o vencedor comprou uma carta.")
         # Sobrevivente: a mais forte permanece no campo para a próxima rodada.
         keepers = [u for u in board if u.get("habilidade") == "sobrevivente"]
-        keeper = max(keepers, key=lambda u: _poder_efetivo(u, state.get("weather")), default=None)
+        keeper = max(keepers, key=lambda u: _poder_efetivo(u, previous_weather), default=None)
         # Unidades sobrevivem à rodada no descarte: isso habilita recuperação
         # por Lágrima Sagrada e mantém o histórico completo da partida.
         for fallen in board:
             if fallen is keeper:
                 continue
             archived = deepcopy(fallen)
+            # Bônus, escudos e estados são temporários: não podem reaparecer ao
+            # recuperar uma unidade do descarte em uma rodada posterior.
+            archived["bonus"] = 0
+            archived["escudo"] = 0
             for status_key in ("sangramento", "geada", "podrida", "loucura"):
                 archived[status_key] = 0
+            archived.pop("combo_ativado", None)
             player.setdefault("discard", []).append(archived)
         player["board"] = []
         if keeper is not None:
             kept = deepcopy(keeper)
             kept["bonus"] = 0
+            kept["escudo"] = 0
             # Estados temporários são encerrados ao fim da rodada, inclusive em Sobreviventes.
             for status_key in ("sangramento", "geada", "podrida", "loucura"):
                 kept[status_key] = 0
+            kept.pop("combo_ativado", None)
             player["board"].append(kept)
             extras.append(f"{kept['nome']} sobreviveu à rodada.")
         player["passed"] = False
         player["faction_boost_used"] = False
         player["last_row"] = None
         player["synergy_used"] = {}
-    state["turn"] = winner or (b if state["turn"] == a else a)
+        player.pop("astral_thread_ready", None)
+    state["weather"] = {row: 0 for row in ROWS}
+    # Iniciativa alternada: a pessoa que abriu a rodada anterior cede a abertura
+    # da próxima, independentemente do vencedor. Isso evita snowball de iniciativa.
+    previous_starter = str(state.get("round_starter") or a)
+    next_starter = b if previous_starter == a else a
+    state["round_starter"] = next_starter
+    state["turn"] = next_starter
     state["last_event"] += " " + " ".join(extras) if extras else ""
-    state["last_event"] += " Nova rodada: as cartas restantes continuam na mão."
+    state["last_event"] += f" Nova rodada: {next_starter} começa (iniciativa alternada); as cartas restantes continuam na mão."
 
 
 
@@ -1053,8 +1128,13 @@ def aplicar_jogada(state: dict, user_id: int, card_id: str | None = None,
                 alvos=[u for u in other["board"] if u.get("row")==row]
                 alvo=next((u for u in alvos if u.get("id")==str(target_id)),None) if target_id else (max(alvos,key=lambda u:_poder_efetivo(u,state.get("weather"))) if alvos else None)
                 if not alvo: return {"error": "Alvo não encontrado."}
-                if int(alvo.get("escudo",0))>0: alvo["escudo"]-=1; return {"error": "O Escudo bloqueou a Lâmina Negra; a Relíquia não foi consumida."}
-                alvo["bonus"]=int(alvo.get("bonus",0))-3; player["relic_used"]=True; eventos_especial.append(f"Lâmina Negra reduziu o bônus de {alvo['nome']} em 3.")
+                if int(alvo.get("escudo",0))>0:
+                    alvo["escudo"]-=1
+                    eventos_especial.append(f"O Escudo de {alvo['nome']} bloqueou a Lâmina Negra; a Relíquia não foi consumida.")
+                else:
+                    alvo["bonus"]=int(alvo.get("bonus",0))-3
+                    player["relic_used"]=True
+                    eventos_especial.append(f"Lâmina Negra reduziu o bônus de {alvo['nome']} em 3.")
             elif skill == "reliquia_algemas":
                 if row not in ROWS: return {"error": "Escolha a fileira do alvo."}
                 alvos=[u for u in other["board"] if u.get("row")==row]
@@ -1287,9 +1367,10 @@ def aplicar_jogada(state: dict, user_id: int, card_id: str | None = None,
                 eventos_especial.append(f"{', '.join(movidos)} moveram-se para {ROW_LABELS[row]}.")
             else:
                 return {"error": "Efeito especial desconhecido."}
-            potencia_aplicada = _aplicar_potencia_raridade(
-                card, player, other, bonus_antes, bonus_card_antes
-            )
+            # Relíquias têm efeitos fixos descritos no catálogo; sua raridade não
+            # altera números nem cria uma segunda camada oculta de potência.
+            potencia_aplicada = (0 if str(skill).startswith("reliquia_") else
+                _aplicar_potencia_raridade(card, player, other, bonus_antes, bonus_card_antes))
             if potencia_aplicada:
                 eventos_especial.append(
                     f"A raridade {card.get('raridade', 'Comum')} ampliou o efeito em {potencia_aplicada} ponto(s)."
@@ -1548,11 +1629,12 @@ def executar_turno_ia(state: dict, ai_user_id: int = AI_PLAYER_ID) -> dict:
 
         candidates: list[tuple[float, dict]] = []
 
-        def consider(action: str, row: str | None = None, card: dict | None = None) -> None:
+        def consider(action: str, row: str | None = None, card: dict | None = None,
+                     target_id: str | None = None) -> None:
             result = aplicar_jogada(
                 current, ai_user_id,
                 card_id=str(card.get("id", "")) if card else "",
-                action=action, row=row,
+                action=action, row=row, target_id=target_id,
             )
             if "error" in result or not isinstance(result.get("state"), dict):
                 return
@@ -1574,6 +1656,22 @@ def executar_turno_ia(state: dict, ai_user_id: int = AI_PLAYER_ID) -> dict:
         if not ai.get("weather_used", False):
             for row in ROWS:
                 consider("weather", row)
+
+        # A Relíquia é avaliada pelo mesmo motor que valida as ações humanas.
+        if ai.get("equipped_relic_id") and not ai.get("relic_used", False):
+            relic_id = str(ai.get("equipped_relic_id"))
+            if relic_id in {"reliquia_grande_runa_godrick", "reliquia_runa_nao_nascidos", "reliquia_runa_morte"}:
+                consider("relic")
+            elif relic_id == "reliquia_noite_chama":
+                for row in ROWS:
+                    if any(u.get("row") == row for u in human.get("board", [])):
+                        consider("relic", row, target_id="noite")
+                        consider("relic", row, target_id="chama")
+            elif relic_id in {"reliquia_lamina_negra", "reliquia_algemas_margit"}:
+                for row in ROWS:
+                    for target in human.get("board", []):
+                        if target.get("row") == row:
+                            consider("relic", row, target_id=str(target.get("id", "")))
 
         best = max(candidates, key=lambda item: item[0], default=None)
         if best is None or best[0] <= 0.05:

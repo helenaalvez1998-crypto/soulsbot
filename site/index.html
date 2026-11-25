@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#07080d"><title>NARABOT — Comunidade e Gwent do Coliseu</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800;900&family=Cormorant+Garamond:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css?v=gwent-leader-art-v73">
+  <link rel="stylesheet" href="/style.css?v=gwent-competitive-v74">
 <link rel="stylesheet" href="/elden-ui.css?v=v49">
 <script>try{const v=JSON.parse(localStorage.getItem('vis')||'{}'),r=document.documentElement;r.dataset.theme=v.tema||'cinzas';if(/^#[0-9a-f]{6}$/i.test(v.cor||'')){r.style.setProperty('--gold',v.cor);r.style.setProperty('--gold-bright','color-mix(in srgb,'+v.cor+' 70%,#fff)')}}catch(e){}</script>
 
@@ -184,7 +184,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
     <footer>NARABOT · GWENT DO COLISEU <span>Jogo principal · conectado ao servidor oficial</span></footer>
   </main>
 </div>
-<script src="/app.js?v=gwent-leader-art-v73" defer></script>
+<script src="/app.js?v=gwent-competitive-v74" defer></script>
 <script>
 (()=>{const io=new IntersectionObserver(e=>e.forEach(x=>{if(x.isIntersecting){x.target.classList.add('in');io.unobserve(x.target)}}),{threshold:.12});
 const sc=()=>document.querySelectorAll('.reveal:not(.in),.gwent-store,.atelier-panel,.gwent-drop-history,.challenge-panel').forEach(el=>{if(!el.dataset.o){el.dataset.o=1;el.classList.add('reveal');io.observe(el)}});sc();

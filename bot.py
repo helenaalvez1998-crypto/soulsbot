@@ -1152,7 +1152,10 @@ class NaraBot(commands.Bot):
         if (len(entries) != 12 or any(not card_id or len(card_id) > 120 or exemplar_id < 0 for card_id, exemplar_id in entries)
                 or len(set(ids)) != 12):
             return web.json_response({"error": "O deck Gwent exige exatamente 12 modelos diferentes."}, status=400)
-        from sistemas.gwent import DEFAULT_LEADERS, LEADERS, canonical_faction
+        if relic_id and relic_id in ids:
+            return web.json_response({"error": "A Relíquia equipada não pode ocupar também uma das 12 posições do deck."}, status=400)
+        from sistemas.gwent import (DEFAULT_LEADERS, LEADERS, canonical_faction,
+                                    validar_faccao_deck)
         faction = canonical_faction(faction) or "Ordem Áurea"
         if faction not in DEFAULT_LEADERS:
             return web.json_response({"error": "Facção inválida."}, status=400)
@@ -1174,9 +1177,12 @@ class NaraBot(commands.Bot):
             if not exemplar or str(exemplar["card_id"]) != card_id:
                 return web.json_response({"error": f"O exemplar selecionado não pertence à carta {card_id}."}, status=403)
             resolved.append(int(exemplar["id"]))
-        from sistemas.cartas import get_carta
+        from sistemas.cartas import get_carta, carta_de_jogo_por_id
+        owned_rows = await self.db.coliseu_listar_colecao(user_id)
+        game_by_id = {str(item["card_id"]): str(item["game_name"] or "") for item in owned_rows}
         unit_count = 0
         special_count = 0
+        faction_units = []
         for card_id, exemplar_id in entries:
             card = get_carta(card_id)
             if card is None and card_id.startswith("transmutacao_"):
@@ -1196,14 +1202,30 @@ class NaraBot(commands.Bot):
                         or definition.get("categoria") != "Unidade"):
                     return web.json_response({"error": f"Carta pessoal inválida: {card_id}."}, status=409)
                 unit_count += 1
+                faction_units.append({"tipo": str(definition.get("tipo", "")), "categoria": "Unidade"})
             elif card is None and card_id.startswith("jogo_"):
+                game_name = game_by_id.get(card_id, "")
+                if not game_name:
+                    return web.json_response({"error": f"Carta de jogo não pertence à sua coleção: {card_id}."}, status=403)
+                try:
+                    game_card = carta_de_jogo_por_id(card_id, game_name)
+                except ValueError:
+                    return web.json_response({"error": f"Carta de jogo inválida: {card_id}."}, status=409)
                 unit_count += 1
+                faction_units.append({"tipo": str(game_card.tipo), "categoria": str(game_card.categoria)})
             elif card is None:
                 return web.json_response({"error": f"Carta inválida no deck: {card_id}."}, status=400)
             elif str(card.categoria).casefold() == "especial":
                 special_count += 1
             else:
                 unit_count += 1
+                faction_units.append({"tipo": str(card.tipo), "categoria": str(card.categoria)})
+        faction_ok, faction_counts = validar_faccao_deck(faction_units, faction)
+        if not faction_ok:
+            counts_text = " · ".join(f"{name}: {count}" for name, count in faction_counts.items())
+            return web.json_response({
+                "error": f"A facção escolhida precisa ser a predominante entre suas unidades. Distribuição atual: {counts_text}."
+            }, status=400)
         if unit_count < 8 or special_count > 4:
             return web.json_response({"error": "O deck precisa ter pelo menos 8 unidades e no máximo 4 cartas especiais."}, status=400)
         import json
@@ -1385,8 +1407,8 @@ class NaraBot(commands.Bot):
 
         import copy
         import json
-        import random
-        from sistemas.gwent import AI_PLAYER_ID, DEFAULT_LEADERS, aplicar_jogada, novo_estado, canonical_faction
+        from sistemas.gwent import (AI_PLAYER_ID, DEFAULT_LEADERS, aplicar_jogada,
+                                    novo_estado, canonical_faction, embaralhar_deck)
 
         saved = await self.db._one(
             "SELECT faction,leader_id,relic_id FROM cartas_gwent_decks WHERE user_id=?", (user_id,)
@@ -1402,6 +1424,7 @@ class NaraBot(commands.Bot):
             # O modo treino é espelhado: mesma facção e líder evitam vantagem
             # artificial de coleção; a IA recebe outra ordem de compra.
             "leader_id": human_config["leader_id"] or DEFAULT_LEADERS.get(faction, ""),
+            "relic_id": human_config["relic_id"],
         }
         ai_deck = copy.deepcopy(deck)
 
@@ -1427,8 +1450,10 @@ class NaraBot(commands.Bot):
             )
             match_id = int(cursor.lastrowid)
 
-            random.Random((match_id << 16) ^ int(user_id)).shuffle(ai_deck)
-            decks = {str(user_id): copy.deepcopy(deck), str(AI_PLAYER_ID): ai_deck}
+            decks = {
+                str(user_id): embaralhar_deck(deck),
+                str(AI_PLAYER_ID): embaralhar_deck(ai_deck),
+            }
             configs = {str(user_id): human_config, str(AI_PLAYER_ID): ai_config}
             state = novo_estado(match_id, user_id, AI_PLAYER_ID, decks, configs)
             state["is_ai_match"] = True
@@ -1484,10 +1509,13 @@ class NaraBot(commands.Bot):
                 invitation = json.loads(row["state_json"] or "{}")
                 if not invitation.get("pending_invitation"):
                     return web.json_response({"error": "Dados do convite inválidos."}, status=409)
-                from sistemas.gwent import novo_estado
+                from sistemas.gwent import novo_estado, embaralhar_deck
+                match_decks = invitation.get("decks", {})
+                # O embaralhamento acontece somente após a aceitação, usando CSPRNG.
+                match_decks = {uid: embaralhar_deck(deck) for uid, deck in match_decks.items()}
                 state = novo_estado(
                     match_id, creator_id, opponent_id,
-                    invitation.get("decks", {}), invitation.get("configs", {}),
+                    match_decks, invitation.get("configs", {}),
                 )
                 cursor = await tx.conn.execute(
                     "UPDATE cartas_gwent_matches SET status='active',state_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending'",
@@ -1569,7 +1597,7 @@ class NaraBot(commands.Bot):
         is_ai_match = bool(state.get("is_ai_match") or opponent_id == "-1")
         opponent_member = guild.get_member(int(opponent_id)) if guild and str(opponent_id).isdigit() and not is_ai_match else None
         opponent_name = "NARA · Adversária IA" if is_ai_match else (opponent_member.display_name if opponent_member else f"Jogador {opponent_id[-4:]}")
-        from sistemas.gwent import LEADERS, opcoes_de_alvo
+        from sistemas.gwent import LEADERS, opcoes_de_alvo, opcoes_de_reliquia
         leader_id = own.get("leader_id", "")
         # O histórico interno guarda score_a/score_b na ordem em que os jogadores
         # foram inseridos (criador, desafiante). Convertemos para a perspectiva
@@ -1596,6 +1624,9 @@ class NaraBot(commands.Bot):
             "winner_id": state["winner_id"], "last_event": state["last_event"],
             "score": placar(state), "hand": own["hand"], "leader_used": own["leader_used"],
             "alvos": opcoes_de_alvo(state, user_id),
+            "relic_options": opcoes_de_reliquia(state, user_id),
+            "equipped_relic_id": own.get("equipped_relic_id", ""),
+            "relic_used": own.get("relic_used", False),
             "weather_used": own.get("weather_used", False), "weather": state.get("weather", {}),
             "is_your_turn": state["turn"] == str(user_id), "your_id": str(user_id),
             "rounds": round_history, "mulligan_done": own.get("mulligan_done", True),

@@ -179,8 +179,10 @@ let gwentDeckIds = [];
 let gwentSavedIds = [];
 let gwentSavedFaction = 'Ordem Áurea';
 let gwentSavedLeader = 'comandante_fornalha';
+let gwentSavedRelic = '';
 let gwentLeaderOptions = [];
 let currentGwentMatch = null;
+let currentGwentData = null;
 let gwentMatchFinished = false;
 let gwentPoll = null;
 let gwentListPoll = null;
@@ -309,16 +311,30 @@ function renderGwentBuilder() {
     && (!rarityFilter || c.raridade === rarityFilter)
     && (`${c.nome} ${c.faccao} ${c.row_label || c.fileira} ${c.papel_gwent} ${c.categoria} ${c.habilidade} ${c.habilidade_texto} ${c.descricao}`.toLocaleLowerCase('pt-BR').includes(q)));
   $('#gwent-card-pool').innerHTML = pool.map(card => cardTile(card)).join('') || '<div class="empty-state">Nenhuma carta disponível.</div>';
-  const configChanged = ($('#gwent-faction')?.value || 'Ordem Áurea') !== gwentSavedFaction
-    || ($('#gwent-leader')?.value || 'comandante_fornalha') !== gwentSavedLeader;
-  $('#gwent-save-deck').disabled = selected.length !== 12 || unitCount < 8 || specialCount > 4
+  const selectedFaction = $('#gwent-faction')?.value || 'Ordem Áurea';
+  const factionByType = {'Força':'Ordem Áurea','Destreza':'Véu Carmesim','Magia':'Lua Negra'};
+  const factionAliases = {'Lua Sombria':'Lua Negra','Casa Cariana':'Lua Negra','Dinastia Mohgwyn':'Véu Carmesim'};
+  const factionCounts = {'Ordem Áurea':0,'Véu Carmesim':0,'Lua Negra':0};
+  selected.filter(card => card.categoria !== 'Especial').forEach(card => {
+    const rawFaction = card.faccao || '';
+    const faction = factionAliases[rawFaction] || (Object.prototype.hasOwnProperty.call(factionCounts, rawFaction) ? rawFaction : factionByType[card.tipo] || '');
+    if (Object.prototype.hasOwnProperty.call(factionCounts, faction)) factionCounts[faction] += 1;
+  });
+  const maxFactionCount = Math.max(...Object.values(factionCounts));
+  const factionMatches = maxFactionCount > 0 && factionCounts[selectedFaction] === maxFactionCount;
+  const configChanged = selectedFaction !== gwentSavedFaction
+    || ($('#gwent-leader')?.value || 'comandante_fornalha') !== gwentSavedLeader
+    || ($('#gwent-relic-select')?.value || '') !== gwentSavedRelic;
+  $('#gwent-save-deck').disabled = selected.length !== 12 || unitCount < 8 || specialCount > 4 || !factionMatches
     || (JSON.stringify(gwentDeckIds) === JSON.stringify(gwentSavedIds) && !configChanged);
   const resetButton = $('#gwent-reset-deck');
   if (resetButton) resetButton.disabled = selected.length === 0 && gwentSavedIds.length === 0;
   $('#gwent-deck-status').textContent = selected.length === 12 && unitCount < 8
     ? 'Inclua pelo menos 8 unidades no deck.'
     : specialCount > 4 ? 'O limite é de 4 cartas especiais por deck.'
-    : `${unitCount}/12 unidades e ${specialCount}/4 especiais. Deck válido exige ao menos 8 unidades.`;
+    : selected.length === 12 && !factionMatches
+      ? `A facção escolhida precisa ser predominante: Ordem Áurea ${factionCounts['Ordem Áurea']} · Véu Carmesim ${factionCounts['Véu Carmesim']} · Lua Negra ${factionCounts['Lua Negra']}.`
+      : `${unitCount}/12 unidades e ${specialCount}/4 especiais. Facção predominante: ${selectedFaction}.`;
 }
 
 
@@ -772,6 +788,9 @@ async function loadGwentDeck() {
     gwentDeckIds = [...gwentSavedIds];
     gwentSavedFaction = data.faction || 'Ordem Áurea';
     gwentSavedLeader = data.leader_id || 'comandante_fornalha';
+    gwentSavedRelic = data.relic_id || '';
+    const relicSelect = $('#gwent-relic-select');
+    if (relicSelect) { relicSelect.value = gwentSavedRelic; relicSelect.dispatchEvent(new Event('change', {bubbles:true})); }
     applyGwentLeaders(data.leaders_by_faction);
     $('#gwent-faction').value = gwentSavedFaction;
     renderGwentLeaderOptions(gwentSavedLeader);
@@ -785,7 +804,7 @@ async function saveGwentDeck() {
   try {
     const r = await fetch('/api/gwent/deck', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({cards:gwentDeckIds.map(key => { const card = collection.find(c => c.id === key); return {card_id:card?.card_id || card?.id, exemplar_id:Number(card?.exemplar_id || 0)}; }), faction:$('#gwent-faction').value, leader_id:$('#gwent-leader').value, relic_id:$('#gwent-relic-select')?.value || ''})});
     const data = await parseGwentApiResponse(r); if (!r.ok) throw new Error(data.error || 'Falha ao salvar deck.');
-    gwentSavedIds = [...gwentDeckIds]; gwentSavedFaction = $('#gwent-faction').value; gwentSavedLeader = $('#gwent-leader').value;
+    gwentSavedIds = [...gwentDeckIds]; gwentSavedFaction = $('#gwent-faction').value; gwentSavedLeader = $('#gwent-leader').value; gwentSavedRelic = $('#gwent-relic-select')?.value || '';
     $('#gwent-deck-status').textContent = 'Deck, facção e líder salvos. Seu exército está pronto para a arena.';
     showNotice('Deck Gwent atualizado.', 'success');
   } catch(e) { $('#gwent-deck-status').textContent = e.message; }
@@ -938,6 +957,56 @@ function openGwentTargetPicker(cardId, row, info) {
   modal.querySelector('button')?.focus();
 }
 
+function closeGwentRelicPicker() { document.getElementById('gwent-relic-modal')?.remove(); }
+function openGwentRelicPicker(data = currentGwentData) {
+  if (!data || !data.is_your_turn || data.phase !== 'battle') return;
+  const relicId = String(data.equipped_relic_id || '');
+  if (!relicId || data.relic_used) return;
+  const mine = data.score?.[String(data.your_id)] || {};
+  const enemyId = String(data.opponent?.id || '');
+  const enemy = data.score?.[enemyId] || {};
+  const needsRow = ['reliquia_noite_chama','reliquia_lamina_negra','reliquia_algemas_margit'].includes(relicId);
+  const needsTarget = ['reliquia_lamina_negra','reliquia_algemas_margit'].includes(relicId);
+  const rowLabels = {melee:'Corpo a corpo',ranged:'Longa distância',siege:'Cerco'};
+  const rowKeys = ['melee','ranged','siege'];
+  const firstRow = rowKeys.find(row => (enemy.board || []).some(unit => unit.row === row)) || 'melee';
+  const modal = document.createElement('div');
+  modal.id = 'gwent-relic-modal'; modal.className = 'gwent-target-modal';
+  modal.setAttribute('role','dialog'); modal.setAttribute('aria-modal','true');
+  const relicNames = {
+    reliquia_grande_runa_godrick:'Grande Runa de Godrick', reliquia_runa_nao_nascidos:'Grande Runa dos Não Nascidos',
+    reliquia_runa_morte:'Runa da Morte', reliquia_noite_chama:'Espada da Noite e da Chama',
+    reliquia_lamina_negra:'Lâmina Negra', reliquia_algemas_margit:'Algemas de Margit'
+  };
+  modal.innerHTML = `<div class="gwent-target-box"><small class="eyebrow">AÇÃO ÚNICA DA PARTIDA</small><h3>${escapeHTML(relicNames[relicId] || 'Relíquia')}</h3>
+    ${needsRow ? `<label class="gwent-relic-choice"><span>FILEIRA INIMIGA</span><select id="gwent-relic-row">${rowKeys.map(row => `<option value="${row}" ${row === firstRow ? 'selected' : ''}>${rowLabels[row]}</option>`).join('')}</select></label>` : ''}
+    ${relicId === 'reliquia_noite_chama' ? `<label class="gwent-relic-choice"><span>POSTURA</span><select id="gwent-relic-mode"><option value="noite">Noite — aplicar Geada à fileira</option><option value="chama">Chama — atingir a unidade mais forte</option></select></label>` : ''}
+    ${needsTarget ? `<label class="gwent-relic-choice"><span>ALVO</span><select id="gwent-relic-target"></select></label>` : ''}
+    <p class="muted">A ativação consome seu turno. A Relíquia só pode ser consumida uma vez por partida.</p>
+    <div class="gwent-target-actions"><button type="button" data-gwent-relic-confirm>CONFIRMAR</button><button type="button" class="secondary" data-gwent-relic-cancel>CANCELAR</button></div></div>`;
+  const updateTargets = () => {
+    if (!needsTarget) return;
+    const row = modal.querySelector('#gwent-relic-row')?.value || firstRow;
+    const targetSelect = modal.querySelector('#gwent-relic-target');
+    const targets = (enemy.board || []).filter(unit => unit.row === row);
+    targetSelect.innerHTML = targets.map(unit => `<option value="${escapeHTML(unit.id)}">${escapeHTML(unit.nome)} · ${number(Math.max(1, Number(unit.poder || 0) + Number(unit.bonus || 0)))} poder${Number(unit.escudo || 0) > 0 ? ' · Escudo' : ''}</option>`).join('');
+    modal.querySelector('[data-gwent-relic-confirm]').disabled = !targets.length;
+  };
+  modal.addEventListener('change', event => { if (event.target.id === 'gwent-relic-row') updateTargets(); });
+  modal.addEventListener('click', event => {
+    if (event.target === modal || event.target.closest('[data-gwent-relic-cancel]')) return closeGwentRelicPicker();
+    if (!event.target.closest('[data-gwent-relic-confirm]')) return;
+    const row = modal.querySelector('#gwent-relic-row')?.value || '';
+    const target = needsTarget ? (modal.querySelector('#gwent-relic-target')?.value || '')
+      : relicId === 'reliquia_noite_chama' ? (modal.querySelector('#gwent-relic-mode')?.value || 'noite') : '';
+    closeGwentRelicPicker();
+    sendGwentAction('relic', '', row, [], target);
+  });
+  document.body.appendChild(modal);
+  updateTargets();
+  modal.querySelector('select')?.focus();
+}
+
 function replaceGwentArenaMarkup(arena, markup) {
   // Reusa os próprios elementos <img> que já carregaram. Substituir o HTML
   // completo sem isso faz o navegador piscar/reabrir todas as artes a cada jogada.
@@ -1011,6 +1080,7 @@ function replaceGwentArenaMarkup(arena, markup) {
 }
 
 function renderGwentArena(data) {
+  currentGwentData = data;
   const arena = $('#gwent-arena');
   // O modo de duelo é aplicado no ponto de renderização também: protege contra
   // fluxos que abrem uma partida sem passar pelo botão padrão de entrada.
@@ -1745,7 +1815,7 @@ document.addEventListener('click', async event => {
   if (event.target.closest('[data-gwent-pass]')) sendGwentAction('pass');
   if (event.target.closest('[data-gwent-leader]')) sendGwentAction('leader', '', $('#gwent-leader-row').value);
   if (event.target.closest('[data-gwent-weather]')) sendGwentAction('weather', '', $('#gwent-leader-row').value);
-  if (event.target.closest('[data-gwent-relic]')) sendGwentAction('relic');
+  if (event.target.closest('[data-gwent-relic]')) openGwentRelicPicker();
   if (event.target.closest('[data-gwent-surrender]')) {
     if (window.confirm('Tem certeza de que deseja desistir? A vitória será concedida ao adversário.')) sendGwentAction('surrender');
   }
@@ -2412,5 +2482,6 @@ window.addEventListener('resize', () => {
   select.addEventListener('change', () => {
     try { localStorage.setItem(key, select.value); } catch (_) {}
     render();
+    if (typeof renderGwentBuilder === 'function') renderGwentBuilder();
   });
 })();

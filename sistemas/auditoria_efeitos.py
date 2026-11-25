@@ -18,8 +18,11 @@ def gerar_relatorio_efeitos() -> dict:
          "handler": info["effect"]}
         for card_id, info in sorted(CARD_IDENTITY_ABILITIES.items())
     ]
+    # Relíquias têm catálogo próprio e handlers próprios; são listadas aqui
+    # para não serem contabilizadas como habilidades especiais convencionais.
     especiais_sem_cobertura = sorted(
-        k for k in HABILIDADES_ESPECIAIS_IMPLEMENTADAS if k not in HABILIDADES
+        k for k in HABILIDADES_ESPECIAIS_IMPLEMENTADAS
+        if k not in HABILIDADES or k.startswith("reliquia_")
     )
     return {
         "total_catalogo": len(HABILIDADES),
