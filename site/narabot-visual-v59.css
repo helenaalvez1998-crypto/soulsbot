@@ -337,3 +337,54 @@ body>main .top a,body>main .top button{position:relative;z-index:1}
  #tab-deck .gwent-builder>div:first-child{position:static!important;max-height:none!important;display:block}
  #tab-deck #gwent-card-pool{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}
 }
+
+
+/* ===== V63 - Deck montado compacto: prioriza a coleção ===== */
+@media (min-width:861px){
+  #tab-deck .gwent-builder{
+    grid-template-columns:minmax(235px,275px) minmax(0,1fr)!important;
+    gap:18px!important;
+  }
+  #tab-deck .gwent-builder>div:first-child{
+    padding:14px!important;
+    max-height:calc(100vh - 112px);
+  }
+  #tab-deck .gwent-config{gap:8px!important;padding:10px!important}
+  #tab-deck .gwent-leader-card-preview{
+    width:100%!important;max-width:150px!important;margin:4px auto 8px!important;
+  }
+  #tab-deck .gwent-leader-relic{
+    min-height:175px!important;padding:10px 9px!important;gap:5px!important;
+  }
+  #tab-deck .gwent-leader-relic .leader-relic-sigil{margin-bottom:8px!important}
+  #tab-deck .gwent-leader-relic strong{margin-top:0!important;font-size:1rem!important}
+  #tab-deck .gwent-leader-relic p{font-size:.72rem!important;line-height:1.25!important;margin:3px 0!important}
+  #tab-deck #gwent-deck-selected{
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    gap:6px!important;padding:7px 0 10px!important;
+  }
+  #tab-deck #gwent-deck-selected .gwent-card-tile{padding:3px!important;border-radius:8px!important}
+  #tab-deck #gwent-deck-selected .gwent-card-tile-art img{
+    width:100%!important;height:88px!important;aspect-ratio:5/7!important;object-fit:contain!important;
+  }
+  #tab-deck #gwent-deck-selected .gwent-card-tile-hint{
+    font-size:7px!important;line-height:1.1!important;letter-spacing:.04em!important;padding:3px 0!important;
+  }
+  #tab-deck .gwent-relic-loadout{margin:10px 0!important;padding:10px!important}
+  #tab-deck .gwent-relic-preview{margin-top:7px!important;padding:9px!important}
+  #tab-deck #gwent-deck-status{font-size:11px!important;line-height:1.35!important}
+}
+@media (min-width:1500px){
+  #tab-deck .gwent-builder{grid-template-columns:minmax(250px,290px) minmax(0,1fr)!important}
+}
+@media (max-width:860px){
+  #tab-deck #gwent-deck-selected{
+    grid-template-columns:repeat(auto-fill,minmax(105px,1fr))!important;
+    gap:8px!important;
+  }
+  #tab-deck #gwent-deck-selected .gwent-card-tile-art img{
+    max-height:145px!important;object-fit:contain!important;
+  }
+  #tab-deck .gwent-leader-card-preview{max-width:190px!important;margin:8px auto!important}
+  #tab-deck .gwent-leader-relic{min-height:205px!important}
+}
