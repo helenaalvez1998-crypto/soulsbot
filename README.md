@@ -38,7 +38,7 @@ substitua `.env` nem `data/` ao copiar o código novo.
 
 ## Gwent do Coliseu — edição Elden Ring
 
-A edição temática Elden Ring usa as facções Ordem Áurea, Véu Carmesim e Lua Sombria. Consulte `REGRAS_ELDEN_GWENT.md` para o novo livro de regras, estados negativos, invocação espiritual e combos.
+A edição temática Elden Ring usa as facções Ordem Áurea, Véu Carmesim e Lua Negra. Consulte `REGRAS_ELDEN_GWENT.md` para o novo livro de regras, estados negativos, invocação espiritual e combos.
 
 
 O Gwent é o único jogo de cartas ativo no bot e no site. O motor antigo de duelo de cinco cartas foi retirado do runtime: o cog legado e suas rotinas de deck/duelo não são carregados nem distribuídos. As tabelas históricas que já existirem no SQLite são preservadas sem DROP; instalações novas não criam as tabelas antigas. Elas não possuem rotas ou comandos ativos.
@@ -110,3 +110,7 @@ Faça backup de `data/` e do banco antes de atualizar. Desligue o bot, extraia o
 
 A validação desta atualização cobre compilação Python, sintaxe JavaScript, schema SQLite, migração de inventário legado, drops idempotentes, variantes do mesmo modelo por raridade, seleção persistente de exemplares no deck, evolução por fragmentos e concessão individual de Singular/Primordial. Os testes automatizados ficam em `tests/` e rodam com `python -m unittest discover -v`. A validação final em produção ainda depende de executar o bot com as dependências instaladas no seu servidor Discord e testar duas contas reais simultaneamente.
 \n\n## Portal NARA — administração web\n\nA área Administração permite gerir fila, configurações e Radar RSS. Na Fase 4 também permite configurar até 25 cargos selecionáveis e publicar/atualizar os painéis de cargos, Platinas e Jogos Zerados. Para cargos selecionáveis, o bot precisa de `Gerenciar Cargos` e deve estar acima dos cargos configurados. Consulte `PORTAL_NARA_FASE4.md` para detalhes e limites.\n
+
+## Líderes V15
+
+O Coliseu possui nove líderes com habilidades exclusivas. Consulte `REGRAS_LIDERES_V15.md` e `CHANGELOG_LIDERES_EXCLUSIVOS_V15.md` para a descrição dos efeitos e limites.

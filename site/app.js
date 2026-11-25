@@ -208,20 +208,20 @@ function updateGwentSelectedCardUI(cardId = gwentSelectedHandCard) {
 }
 
 const gwentFactionInfo = {
-  'Ordem Áurea': { description: 'Defesa, escudos, formação e fortalecimento dos juramentados.', leaders: [
-    ['comandante_fornalha', 'Godfrey, Primeiro Lorde Prístino', '+2 às unidades de corpo a corpo.'],
-    ['bastiao_ancestral', 'Sentinela da Árvore Áurea', '+1 às unidades de corpo a corpo e resistência climática +1.'],
-    ['juiz_cerco', 'Comandante de Leyndell', 'Concede escudo a até 3 unidades da fileira escolhida.']
+  'Ordem Áurea': { description: 'Luz, lei e fé: defesa, juramentos, proteção e purificação.', leaders: [
+    ['comandante_fornalha', 'Godfrey', 'Fortalece +2 todas as unidades aliadas de Corpo a Corpo.'],
+    ['bastiao_ancestral', 'Morgott', 'Concede Escudo e +1 a até 2 aliados da fileira escolhida.'],
+    ['juiz_cerco', 'Radagon', 'Purifica estados negativos; cada aliado purificado recebe +1.']
   ]},
-  'Lua Sombria': { description: 'Magia, cosmos e segredos: feitiçaria lunar, gravidade, congelamento e controle das fileiras.', leaders: [
-    ['mestre_eclipse', 'Ranni, Bruxa da Lua', 'Compra uma carta, dissipa o clima e fortalece uma fileira.'],
-    ['arquimaga_eclipse', 'Rennala, Rainha da Lua Cheia', 'Dissipa o clima e fortalece o cerco.'],
-    ['oraculo_tempestade', 'Preceptora Cariana', 'Dissipa o clima e fortalece o cerco, com bônus maior se havia clima.']
+  'Lua Negra': { description: 'Magia, cosmos e segredos: feitiçaria, gravidade e domínio astral.', leaders: [
+    ['arquimaga_eclipse', 'Rennala', 'Remove Geada e Podridão dos aliados; aliados purificados em Cerco recebem +1.'],
+    ['mestre_eclipse', 'Astel', 'Aplica Geada aos 3 inimigos mais fortes da fileira escolhida.'],
+    ['oraculo_tempestade', 'Loretta', 'Concede +2 às 2 unidades aliadas mais fortes de Longa Distância.']
   ]},
-  'Véu Carmesim': { description: 'Sangue, sacrifício e heresia: sangramento, rituais e retorno dos caídos.', leaders: [
-    ['mestre_veu', 'Mohg, Senhor do Sangue', '+2 às unidades de longa distância.'],
-    ['sombra_caminhante', 'Cavaleiro de Sangue de Mohgwyn', 'Fortalece a fileira de longa distância.'],
-    ['voz_caidos', 'Nobre Sanguíneo de Mohgwyn', 'Traz do descarte uma unidade de poder 6 ou menos com +2.']
+  'Véu Carmesim': { description: 'Sangue, sacrifício e heresia: hemorragia, devoção e corrupção.', leaders: [
+    ['mestre_veu', 'Mohg', 'Aplica marcas de Sangramento aos 2 inimigos mais fortes da fileira.'],
+    ['sombra_caminhante', 'Rykard', 'Sacrifica o aliado mais fraco e fortalece os demais da fileira.'],
+    ['voz_caidos', 'Esgar', 'Ressuscita uma unidade de poder-base até 5 do descarte.']
   ]}
 };
 // Os líderes vêm do servidor (fonte única); a lista fixa acima serve só de reserva se a API não enviar.
@@ -243,6 +243,13 @@ function renderGwentLeaderOptions(selected = '') {
   const leader = info.leaders.find(([id]) => id === select.value) || info.leaders[0];
   const leaderHelp = $('#gwent-leader-description');
   if (leaderHelp) leaderHelp.textContent = `${leader[1]}: ${leader[2]}`;
+  const preview = $('#gwent-leader-card');
+  if (preview) {
+    const sigils = {'Ordem Áurea':'✧','Véu Carmesim':'♜','Lua Negra':'☾'};
+    const portraits = {Godfrey:'godfrey',Morgott:'morgott',Radagon:'radagon',Mohg:'mohg',Rykard:'rykard',Esgar:'esgar',Rennala:'rennala',Astel:'astel',Loretta:'loretta'};
+    const portrait = portraits[leader[1]] || 'godfrey';
+    preview.innerHTML = `<div class="gwent-leader-relic faction-${faction === 'Ordem Áurea' ? 'gold' : faction === 'Véu Carmesim' ? 'blood' : 'moon'}" style="--leader-art:url('assets/leaders/${portrait}.webp')"><div class="leader-relic-sigil">${sigils[faction] || '✦'}</div><small>${escapeHTML(faction)}</small><strong>${escapeHTML(leader[1])}</strong><p>${escapeHTML(leader[2])}</p><em>LÍDER · CARTA DE COMANDO</em></div>`;
+  }
 }
 function renderGwentBuilder() {
   const selected = gwentDeckIds.map(id => collection.find(c => c.id === id)).filter(Boolean);

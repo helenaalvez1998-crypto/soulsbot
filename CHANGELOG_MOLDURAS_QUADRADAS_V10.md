@@ -11,7 +11,7 @@ Manter a carta no formato vertical colecionável (420 × 620), mas substituir co
 - A identidade de facção aparece em gravações internas do aro:
   - Ordem Áurea: ramos da Térvore, folhas e cantoneiras arquitetônicas de Leyndell.
   - Véu Carmesim: espinhos, gotas e marcas rituais inspiradas em Mohgwyn.
-  - Lua Sombria: arcos lunares, órbitas e estrelas inspiradas na tradição cariana.
+  - Lua Negra: arcos lunares, órbitas e estrelas inspiradas na tradição cariana.
 - A raridade continua definindo metal, cor, brilho e acabamento.
 - As 21 combinações (3 facções × 7 raridades) continuam distintas no overlay.
 - Janela da ilustração, proporção da carta, placas, textos, poder, ícones, regras e substituição de arte foram preservados.

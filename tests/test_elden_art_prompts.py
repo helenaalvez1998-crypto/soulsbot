@@ -39,7 +39,7 @@ class EldenRingArtPromptTests(unittest.TestCase):
 
     def test_dark_moon_prompt_uses_carian_world(self):
         prompt = gerar_prompt_carta(self.make_card(
-            "Lua Sombria", "Ranni, Bruxa da Lua", "Contempla a Lua Negra sobre Liurnia.",
+            "Lua Negra", "Ranni, Bruxa da Lua", "Contempla a Lua Negra sobre Liurnia.",
             "chefe_dama_vazio",
         ))
         self.assertIn("LUA SOMBRIA (MAGIC, COSMOS AND SECRETS)", prompt)

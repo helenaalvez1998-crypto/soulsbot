@@ -6,7 +6,7 @@ from sistemas import molduras_cartas as molduras
 
 class MoldurasPorFaccaoTests(unittest.TestCase):
     def test_aliases_antigos_sao_normalizados(self):
-        self.assertEqual(molduras.normalizar_faccao("Casa Cariana"), "Lua Sombria")
+        self.assertEqual(molduras.normalizar_faccao("Casa Cariana"), "Lua Negra")
         self.assertEqual(molduras.normalizar_faccao("Dinastia Mohgwyn"), "Véu Carmesim")
         self.assertEqual(molduras.normalizar_faccao("Ordem Aurea"), "Ordem Áurea")
 
@@ -48,7 +48,7 @@ class MoldurasPorFaccaoTests(unittest.TestCase):
         for raridade in molduras.ESTILOS:
             a = overlays[("Ordem Áurea", raridade)]
             b = overlays[("Véu Carmesim", raridade)]
-            c = overlays[("Lua Sombria", raridade)]
+            c = overlays[("Lua Negra", raridade)]
             self.assertIsNotNone(ImageChops.difference(a, b).getbbox())
             self.assertIsNotNone(ImageChops.difference(b, c).getbbox())
         # Mesma facção em raridades diferentes deve mudar o acabamento.
@@ -72,7 +72,7 @@ class MoldurasPorFaccaoTests(unittest.TestCase):
         for box in regioes:
             recortes = {f: img.crop(box) for f, img in overlays.items()}
             self.assertIsNotNone(ImageChops.difference(recortes["Ordem Áurea"], recortes["Véu Carmesim"]).getbbox())
-            self.assertIsNotNone(ImageChops.difference(recortes["Véu Carmesim"], recortes["Lua Sombria"]).getbbox())
+            self.assertIsNotNone(ImageChops.difference(recortes["Véu Carmesim"], recortes["Lua Negra"]).getbbox())
 
     def test_nomes_legados_usam_emblema_e_arquitetura_corretos(self):
         antigo = molduras.construir_overlay(
@@ -80,7 +80,7 @@ class MoldurasPorFaccaoTests(unittest.TestCase):
             fileira="siege", especial=False,
         )
         atual = molduras.construir_overlay(
-            raridade="Lendária", faccao="Lua Sombria", tipo="Magia",
+            raridade="Lendária", faccao="Lua Negra", tipo="Magia",
             fileira="siege", especial=False,
         )
         self.assertEqual(ImageChops.difference(antigo, atual).getbbox(), None)

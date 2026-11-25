@@ -6,7 +6,7 @@ Esta revisão altera somente a geração do briefing textual usado pelo Ateliê 
 
 ## Alterações
 
-- Atualizadas as diretrizes visuais das três facções: Ordem Áurea, Véu Carmesim e Lua Sombria.
+- Atualizadas as diretrizes visuais das três facções: Ordem Áurea, Véu Carmesim e Lua Negra.
 - Adicionadas referências ambientais condicionais para Leyndell/Altus, Mohgwyn, Liurnia/Cariana, Haligtree, Caelid, Farum Azula, Cidades Eternas, Gelmir/Volcano Manor, Limgrave/Stormveil, Montanhas dos Gigantes e Reino das Sombras.
 - A localização só é sugerida quando nome, descrição, habilidade ou cena da carta dão suporte; o prompt evita misturar regiões sem relação.
 - Reforçada a preservação da aparência, silhueta, equipamento e identidade canônica de personagens nomeados de Elden Ring.

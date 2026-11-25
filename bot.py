@@ -1041,19 +1041,23 @@ class NaraBot(commands.Bot):
         leader_id = str(row["leader_id"] or "") if row else ""
         if leader_id not in LEADERS or LEADERS[leader_id]["faction"] != faction:
             leader_id = DEFAULT_LEADERS[faction]
-        leaders = [{"id": key, "name": value["name"], "description": value["description"]}
-                   for key, value in LEADERS.items() if value["faction"] == faction]
+        leaders = [{"id": key, "name": value["name"], "description": value["description"],
+                     "visual_only": True, "power": None, "cost": None, "rarity": "Lendária",
+                     "card_type": "Líder"}
+                    for key, value in LEADERS.items() if value["faction"] == faction]
         return web.json_response({
             "deck": cards, "faction": faction, "leader_id": leader_id,
             "leaders": leaders,
             "leaders_by_faction": {
-                name: [{"id": key, "name": value["name"], "description": value["description"]}
+                name: [{"id": key, "name": value["name"], "description": value["description"],
+                          "visual_only": True, "power": None, "cost": None, "rarity": "Lendária",
+                          "card_type": "Líder"}
                        for key, value in LEADERS.items() if value["faction"] == name]
                 for name in DEFAULT_LEADERS},
             "factions": [{"name": name, "preferred_type": kind,
                           "description": {"Ordem Áurea": "Formação e resistência na linha de frente.",
                                           "Véu Carmesim": "Sangue, sacrifício e rituais de heresia.",
-                                          "Lua Sombria": "Magia lunar, cosmos e segredos arcanos."}[name]}
+                                          "Lua Negra": "Magia lunar, cosmos e segredos arcanos."}[name]}
                          for kind, name in FACTIONS.items()],
             "rules": {"cards": 12, "opening_hand": 10, "reserve": 2, "unique": True}})
 

@@ -78,7 +78,7 @@ FACCOES: dict[str, dict] = {
     # Esmaltes de facção: discretos o bastante para conviver com a raridade.
     "Ordem Áurea": dict(cor=(184, 143, 57), metal=(242, 218, 153), esc=(38, 29, 15)),
     "Véu Carmesim": dict(cor=(142, 42, 48), metal=(205, 139, 125), esc=(34, 12, 17)),
-    "Lua Sombria": dict(cor=(93, 111, 159), metal=(191, 202, 224), esc=(15, 20, 37)),
+    "Lua Negra": dict(cor=(93, 111, 159), metal=(191, 202, 224), esc=(15, 20, 37)),
 }
 
 # Nomes antigos ainda podem existir em cartas salvas, decks e templates.
@@ -87,8 +87,8 @@ _ALIASES_FACCAO = {
     "ordem aurea": "Ordem Áurea", "golden order": "Ordem Áurea",
     "veu carmesim": "Véu Carmesim", "dinastia mohgwyn": "Véu Carmesim",
     "mohgwyn": "Véu Carmesim", "blood dynasty": "Véu Carmesim",
-    "lua sombria": "Lua Sombria", "casa cariana": "Lua Sombria",
-    "cariana": "Lua Sombria", "carian": "Lua Sombria",
+    "lua negra": "Lua Negra", "lua sombria": "Lua Negra", "casa cariana": "Lua Negra",
+    "cariana": "Lua Negra", "carian": "Lua Negra",
 }
 
 def normalizar_faccao(valor: str | None) -> str:
@@ -260,7 +260,7 @@ def _g_bigorna(md, R, v=255):
 
 
 def _g_lua(md, R, v=255):
-    """Selo da Lua Sombria: lua crescente, órbita e estrelas distantes."""
+    """Selo da Lua Negra: lua crescente, órbita e estrelas distantes."""
     # Crescente aberto à direita, com recorte limpo.
     md.ellipse([R*.12, R*.08, R*1.88, R*1.92], fill=v)
     md.ellipse([R*.55, R*.00, R*2.05, R*1.50], fill=0)
@@ -640,7 +640,7 @@ def _emblema_faccao(ov, est, faccao):
            luz=f["metal"], sombra=3.2)
     anel = _mascara(lambda d: d.ellipse(_box((cx - r + 6, cy - r + 6, cx + r - 6, cy + r - 6)), fill=255))
     _compor(ov, ImageChops.subtract(anel, _erodir(anel, .7)), [f["cor"]], alpha=95)
-    glifo = {"Ordem Áurea": _g_erdtree, "Lua Sombria": _g_lua, "Véu Carmesim": _g_sangue}.get(faccao, _g_arcano)
+    glifo = {"Ordem Áurea": _g_erdtree, "Lua Negra": _g_lua, "Véu Carmesim": _g_sangue}.get(faccao, _g_arcano)
     _carimbar(ov, glifo, cx, cy + (1.2 if faccao == "Ordem Áurea" else 0), 15.5, [_tom(f["metal"], 1.25), f["cor"]])
 
 

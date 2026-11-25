@@ -77,7 +77,7 @@ HABILIDADES: dict[str, dict[str, str]] = {
     "instinto": {"nome": "Instinto de Caçador", "texto": "Recebe +2 quando sua pontuação está abaixo da rival."},
     "precisao": {"nome": "Mira Cariana", "texto": "Recebe +1 ao entrar na fileira de longa distância."},
     "drenagem": {"nome": "Selo Enfraquecedor", "texto": "Reduz em 1 o bônus de todas as unidades inimigas, até o limite de -2."},
-    "cacador_arcano": {"nome": "Caçador de Feitiços", "texto": "Recebe +1 se o adversário controlar uma unidade da Lua Sombria ou qualquer unidade com bônus positivo."},
+    "cacador_arcano": {"nome": "Caçador de Feitiços", "texto": "Recebe +1 se o adversário controlar uma unidade da Lua Negra ou qualquer unidade com bônus positivo."},
     "quebra_ritmo": {"nome": "Ruptura de Postura", "texto": "Recebe +1 se o adversário jogou na mesma fileira em seu último turno."},
     # Efeitos exclusivos: somente a respectiva Primordial pode utilizá-los.
     "lei_primeva": {"nome": "Lei Primeva", "texto": "Recebe +2 de poder ao entrar na primeira rodada."},
@@ -174,7 +174,7 @@ class Carta:
     def para_dict(self) -> dict[str, Any]:
         """Serializa somente campos canônicos do Gwent; nunca expõe categorias antigas."""
         data = asdict(self)
-        faccoes = {"Força": "Ordem Áurea", "Destreza": "Véu Carmesim", "Magia": "Lua Sombria"}
+        faccoes = {"Força": "Ordem Áurea", "Destreza": "Véu Carmesim", "Magia": "Lua Negra"}
         fileiras = {"Força": "melee", "Destreza": "ranged", "Magia": "siege"}
         papeis = {
             ("Força", "melee"): "Vanguarda",
@@ -216,6 +216,11 @@ _CARTAS_BASE = [
     Carta("chefe_cacador_sem_rosto", "Assassino da Faca Negra", "Chefe", "Destreza", 5, "Rara", 2, "retaliacao"),
     Carta("chefe_vigia_cinzento", "Cavaleiro de Leyndell", "Chefe", "Força", 4, "Comum", 1, "drenagem"),
     Carta("chefe_aparicao_veio", "Lâmina Negra Errante", "Chefe", "Destreza", 3, "Comum", 1, "adaptacao"),
+    Carta("chefe_malenia_lamina_miquella", "Malenia, Lâmina de Miquella", "Chefe", "Destreza", 9, "Primordial", 4, "drenagem", "Reduz em 1 os bônus de todas as unidades inimigas, até o limite de -2."),
+    Carta("chefe_radahn_flagelo_estrelas", "Radahn, Flagelo das Estrelas", "Chefe", "Força", 9, "Primordial", 4, "quebra_ritmo", "Recebe +1 se o adversário jogou na mesma fileira em seu último turno."),
+    Carta("chefe_maliketh_morte_destinada", "Maliketh, Lâmina Negra", "Chefe", "Força", 8, "Lendária", 4, "cacador_arcano", "Recebe +1 se o adversário controlar uma unidade da Lua Negra ou qualquer unidade com bônus positivo."),
+    Carta("chefe_messmer_impalador", "Messmer, o Empalador", "Chefe", "Força", 8, "Lendária", 4, "quebra_ritmo", "Recebe +1 se o adversário jogou na mesma fileira em seu último turno."),
+    Carta("chefe_placidusax_lorde_dragao", "Placidusax, Lorde Dragão", "Chefe", "Magia", 9, "Primordial", 4, "olho_tempestade", "Recebe +2 quando sua fileira estiver sob efeito climático."),
     # Armas
     Carta("arma_lamina_peregrino", "Duelista da Casa Hoslow", "Arma", "Destreza", 4, "Comum", 1, "primeira_luz"),
     Carta("arma_martelo_fornalha", "Ferreiro de Volcano Manor", "Arma", "Força", 6, "Rara", 2, "encadeamento"),
@@ -244,9 +249,9 @@ _CARTAS_BASE = [
     Carta("covenant_peregrinos_nevoa", "Peregrinos da Cidade Eterna", "Covenant", "Destreza", 4, "Comum", 1, "primeira_luz"),
     Carta("covenant_irmandade_ferro", "Guardas da Árvore Áurea", "Covenant", "Força", 4, "Comum", 1, "retaliacao"),
     # Cartas especiais do modo Gwent: entram na coleção por recompensas/pacotes do Discord.
-    Carta("gwent_especial_nevoa", "Névoa de Sellia", "Especial", "Magia", 0, "Rara", 2, "gwent_nevoa", "Reduz em 2 o poder de todas as unidades da fileira escolhida até o fim da rodada."),
-    Carta("gwent_especial_geada", "Lua Gélida", "Especial", "Magia", 0, "Rara", 2, "gwent_geada", "Reduz em 1 o poder de todas as unidades das três fileiras até o fim da rodada."),
-    Carta("gwent_especial_chuva", "Chuva de Estrelas", "Especial", "Magia", 0, "Comum", 1, "gwent_chuva", "Reduz em 2 o poder das unidades da fileira de cerco até o fim da rodada."),
+    Carta("gwent_especial_nevoa", "Miasma da Podridão", "Especial", "Magia", 0, "Rara", 2, "gwent_nevoa", "Aplica Podridão Escarlate às unidades inimigas da fileira escolhida; raridades elevadas podem aplicar uma segunda marca."),
+    Carta("gwent_especial_geada", "Geada dos Picos dos Gigantes", "Especial", "Magia", 0, "Rara", 2, "gwent_geada", "Aplica Geada a todas as unidades inimigas; raridades elevadas podem aplicar uma segunda marca."),
+    Carta("gwent_especial_chuva", "Sangue Corrompido", "Especial", "Destreza", 0, "Comum", 1, "gwent_chuva", "Aplica Sangramento às unidades inimigas de Cerco; a segunda marca causa Hemorragia e reduz bônus."),
     Carta("gwent_especial_chifre", "Rugido de Godfrey", "Especial", "Força", 0, "Épica", 3, "gwent_chifre", "Concede +2 de poder às suas unidades na fileira escolhida até o fim da rodada."),
     Carta("gwent_especial_medico", "Lágrima Sagrada", "Especial", "Destreza", 0, "Rara", 2, "gwent_medico", "Devolve à mão uma unidade com poder base 4 ou menos do seu descarte."),
     Carta("gwent_especial_queima", "Chama Negra", "Especial", "Magia", 0, "Épica", 3, "gwent_queima", "Tenta remover a unidade mais forte de cada lado; escudos podem bloquear a remoção."),
@@ -262,6 +267,13 @@ _CARTAS_BASE = [
     Carta("elden_especial_loucura", "Chama Frenética", "Especial", "Magia", 0, "Épica", 3, "gwent_loucura", "Cada marca reduz 1 de poder efetivo; a segunda remove todos os bônus positivos das unidades atingidas. Marcas expiram no fim da rodada."),
     Carta("elden_especial_chama", "Chama do Gigante", "Especial", "Força", 0, "Rara", 2, "gwent_chama", "Remove Geada de todas as suas unidades; cada unidade purificada recebe +1 de poder até o fim da rodada."),
     Carta("elden_especial_invocacao", "Cinzas dos Lobos Solitários", "Especial", "Magia", 0, "Rara", 2, "gwent_invocacao", "Invoca Lobos Espirituais com 3 de poder na fileira escolhida. A invocação ocupa uma unidade no campo, mas não consome carta da mão, e vai ao descarte no fim da rodada."),
+    # V19 — Relíquias: cada jogador pode ativar apenas uma por partida.
+    Carta("reliquia_grande_runa_godrick", "Grande Runa de Godrick", "Especial", "Força", 0, "Lendária", 3, "reliquia_godrick", "Concede +1 de bônus a todas as suas unidades em campo."),
+    Carta("reliquia_runa_nao_nascidos", "Grande Runa dos Não Nascidos", "Especial", "Magia", 0, "Lendária", 3, "reliquia_renala", "Purifica Geada e Podridão dos aliados e concede +1 às unidades purificadas."),
+    Carta("reliquia_runa_morte", "Runa da Morte", "Especial", "Destreza", 0, "Mítica", 4, "reliquia_morte", "Remove até 2 pontos de bônus da unidade inimiga mais forte em cada fileira."),
+    Carta("reliquia_noite_chama", "Espada da Noite e da Chama", "Especial", "Magia", 0, "Lendária", 3, "reliquia_noite_chama", "Escolha: Chama reduz poder de um alvo; Noite aplica Geada a uma fileira inimiga."),
+    Carta("reliquia_lamina_negra", "Lâmina Negra", "Especial", "Destreza", 0, "Mítica", 4, "reliquia_lamina_negra", "Reduz em 3 o bônus de uma unidade inimiga; Escudo bloqueia o efeito."),
+    Carta("reliquia_algemas_margit", "Algemas de Margit", "Especial", "Força", 0, "Épica", 2, "reliquia_algemas", "Anula os bônus positivos de uma unidade inimiga."),
     # Novas unidades de facção e sinergia.
     Carta("gwent_unidade_baluarte", "Cavaleiro do Crisol", "Chefe", "Força", 6, "Rara", 2, "guardiao_fileira", "Quanto maior a formação aliada, mais difícil é derrubá-lo."),
     Carta("gwent_unidade_lamina_sem_juramento", "Caçador de Dedos", "Arma", "Destreza", 6, "Rara", 2, "cacador_solitario", "Ataca melhor quando opera sem apoio na fileira."),
@@ -283,7 +295,7 @@ _CARTAS_BASE = [
     Carta("gwent_unidade_herdeiro_portao", "Godwyn, o Dourado", "Chefe", "Força", 6, "Épica", 3, "vinganca", "Quando cai, a formação inteira jura vingá-lo."),
     Carta("gwent_unidade_carniceiro_forja", "Carrasco de Volcano Manor", "Arma", "Força", 4, "Rara", 2, "devorar", "Consome os restos da batalha para ampliar a própria força."),
     Carta("gwent_unidade_intendente", "Mercador Nômade", "Covenant", "Força", 3, "Comum", 1, "espolios", "Cada vitória enche os depósitos da Ordem."),
-    # Lua Sombria — fantasmas (retorno e persistência) e caravana (saque e blindagem).
+    # Lua Negra — fantasmas (retorno e persistência) e caravana (saque e blindagem).
     Carta("gwent_unidade_cacadora_fantasma", "Assassina de Ravenmount", "Chefe", "Destreza", 5, "Rara", 2, "sobrevivente", "Some na névoa e reaparece quando a próxima rodada começa."),
     Carta("gwent_unidade_cantora_lamentos", "Fia, Companheira do Leito de Morte", "Covenant", "Destreza", 4, "Rara", 2, "ressurgir", "Seu canto arrasta os caídos de volta ao campo."),
     Carta("gwent_unidade_senhor_cacada", "Blaidd, o Meio-Lobo", "Chefe", "Destreza", 6, "Épica", 3, "vinganca", "A presa que o derruba desperta a matilha inteira."),
@@ -314,6 +326,28 @@ CARTAS_PRIMORDIAIS = [
     Carta("primordial_abismo", "Mãe Sem Forma", "Relíquia", "Destreza", 8, "Primordial", 4, "fome_abismo", "Uma cópia por jogador. Recebe +2 quando sua pontuação está abaixo da rival."),
     Carta("primordial_eternidade", "Maliketh, Guardião da Morte Destinada", "Relíquia", "Força", 8, "Primordial", 4, "paradoxo_eterno", "Uma cópia por jogador. Recebe +2 na terceira rodada se o rival venceu a segunda."),
 ]
+# V18 — metade das unidades usa força pura, sem habilidade especial.
+# Priorizamos cartas Comuns e completamos a meta com cartas Raras; Épicas+ preservam efeitos.
+_unidades_v18 = [c for c in [*_CARTAS_BASE, *CARTAS_PRIMORDIAIS] if c.categoria.casefold() != "especial"]
+_protegidas_com_efeito_v18 = {"chefe_guardiao_cinzas", "covenant_irmandade_ferro"}
+_sem_efeito_v18 = [c for c in _unidades_v18 if c.raridade == "Comum" and c.id not in _protegidas_com_efeito_v18]
+_meta_sem_efeito_v18 = (len(_unidades_v18) // 2) + 2  # reserva duas unidades sem efeito para equilibrar as patentes geradas
+_faltam_v18 = max(0, _meta_sem_efeito_v18 - len(_sem_efeito_v18))
+_sem_efeito_v18 += sorted(
+    [c for c in _unidades_v18 if c.raridade == "Rara" and c.id not in _protegidas_com_efeito_v18],
+    key=lambda c: hashlib.sha256(c.id.encode("utf-8")).hexdigest(),
+)[:_faltam_v18]
+CARTAS_SEM_EFEITO_IDS = frozenset(c.id for c in _sem_efeito_v18)
+_cartas_v18 = []
+for _c in [*_CARTAS_BASE, *CARTAS_PRIMORDIAIS]:
+    if _c.id in CARTAS_SEM_EFEITO_IDS:
+        _poder = min(FAIXA_PODER[_c.raridade][1], _c.poder + 1)
+        _cartas_v18.append(Carta(_c.id, _c.nome, _c.categoria, _c.tipo, _poder, _c.raridade, _c.custo, "", _c.descricao, _c.jogo_origem, _c.fileira))
+    else:
+        _cartas_v18.append(_c)
+_CARTAS_BASE = [c for c in _cartas_v18 if c.id not in {x.id for x in CARTAS_PRIMORDIAIS}]
+CARTAS_PRIMORDIAIS = [c for c in _cartas_v18 if c.id in {x.id for x in CARTAS_PRIMORDIAIS}]
+
 CARTAS_POR_ID: dict[str, Carta] = {c.id: c for c in [*_CARTAS_BASE, *CARTAS_PRIMORDIAIS]}
 
 
@@ -336,8 +370,8 @@ def carta_jogo(nome_jogo: str, marco: str) -> Carta:
     slug = slug_jogo(nome_jogo)
     n = _hash_int(f"{slug}:{marco}:gwent-reward-v2")
     tipo = TIPOS[n % len(TIPOS)]
-    habilidade = HABILIDADES_COMUNS[(n // 7) % len(HABILIDADES_COMUNS)]
     raridade = "Épica" if marco == "platina" else "Rara"
+    habilidade = HABILIDADES_COMUNS[(n // 7) % len(HABILIDADES_COMUNS)] if (raridade == "Épica" or n % 2 == 0) else ""
     minimo, maximo = FAIXA_PODER[raridade]
     poder = minimo + ((n // 11) % (maximo - minimo + 1))
     nomes = {
@@ -372,7 +406,7 @@ def carta_patente(indice: int, nivel_minimo: int, nome_patente: str) -> Carta:
     minimo, maximo = FAIXA_PODER[raridade]
     poder = minimo + (n % (maximo - minimo + 1))
     tipo = TIPOS[(n // 9) % len(TIPOS)]
-    habilidade = HABILIDADES_COMUNS[(n // 17) % len(HABILIDADES_COMUNS)]
+    habilidade = HABILIDADES_COMUNS[(n // 17) % len(HABILIDADES_COMUNS)] if (raridade in {"Épica", "Lendária"} or n % 2 == 0) else ""
     card_id = f"patente_{indice + 1}"
     return Carta(
         id=card_id,

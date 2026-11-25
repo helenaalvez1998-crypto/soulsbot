@@ -12,15 +12,15 @@ Os IDs internos das cartas existentes foram preservados para não quebrar invent
 |---|---|---|
 | Ordem Áurea | Força | Luz, Lei e Fé; formação, escudos, resistência e proteção dos juramentados |
 | Véu Carmesim | Destreza | Sangue, Sacrifício e Heresia; sangramento, rituais e pressão crescente |
-| Lua Sombria | Magia | Magia, Cosmos e Segredos; feitiçaria lunar, gravidade, geada e controle |
+| Lua Negra | Magia | Magia, Cosmos e Segredos; feitiçaria lunar, gravidade, geada e controle |
 
 A facção do deck é determinada pelo tipo predominante das unidades. Cartas especiais não contam para a maioria. Em caso de empate, o motor mantém o critério determinístico anterior. A primeira unidade da facção escolhida jogada em cada rodada recebe +1 de poder; o bônus é igual para as três facções.
 
 ### Líderes
 
-- **Ordem Áurea:** Godfrey, Sentinela da Árvore Áurea e Comandante de Leyndell.
-- **Véu Carmesim:** Mohg, Cavaleiro de Sangue de Mohgwyn e Nobre Sanguíneo de Mohgwyn.
-- **Lua Sombria:** Ranni, Rennala e Preceptora Cariana.
+- **Ordem Áurea:** Godfrey, Sentinela Áurea e Guardião de Leyndell.
+- **Véu Carmesim:** Mohg, Cavaleiro Carmesim e Nobre Sanguíneo.
+- **Lua Negra:** Ranni, Rennala e Mestra Cariana.
 
 O líder continua sendo escolhido no deck e pode ser ativado uma vez por partida. Cada líder permanece vinculado à facção e seu efeito é resolvido pelo servidor.
 
@@ -40,7 +40,7 @@ O líder continua sendo escolhido no deck e pode ser ativado uma vez por partida
 
 ### Passiva de facção
 
-A primeira unidade da facção principal do deck jogada em cada rodada recebe +1 de poder. O bônus é idêntico para Ordem Áurea, Lua Sombria e Véu Carmesim. Ele é aplicado uma única vez por jogador a cada rodada.
+A primeira unidade da facção principal do deck jogada em cada rodada recebe +1 de poder. O bônus é idêntico para Ordem Áurea, Lua Negra e Véu Carmesim. Ele é aplicado uma única vez por jogador a cada rodada.
 
 ## Estados negativos
 
@@ -69,7 +69,7 @@ O total combinado de Geada, Podridão e Loucura não pode impor mais de 3 pontos
 Os combos são disparados quando a carta que completa a combinação entra em campo. Cada combo é aplicado uma vez por jogador por rodada.
 
 - **Juramento da Árvore Áurea:** duas unidades marcadas como Ordem Áurea; +2 para a carta que completa o combo e +1 às unidades aliadas da mesma fileira.
-- **Convergência da Lua Sombria:** duas unidades ligadas à Lua Sombria; +2 para a carta que completa o combo.
+- **Convergência da Lua Negra:** duas unidades ligadas à Lua Negra; +2 para a carta que completa o combo.
 - **Ritual do Véu Carmesim:** duas unidades do Véu Carmesim; +2 para a carta que completa o combo e +1 às unidades aliadas da mesma fileira.
 
 Os combos anteriores continuam ativos. As cartas preservam seus IDs, portanto a alteração de nomes não apaga as sinergias já vinculadas ao catálogo.

@@ -8,7 +8,7 @@ Dar às três facções uma linguagem ornamental claramente diferente sem modifi
 
 - **Ordem Áurea:** arcadas inspiradas em Leyndell, brotos/folhas da Térvore, cartuchos ovais e rosácea solar.
 - **Véu Carmesim:** ferragens de tridente, espinhos, gotas rituais, medalhões de sangue e corrente cerimonial.
-- **Lua Sombria:** astrolábios, constelações, crescentes, órbitas e estrela polar.
+- **Lua Negra:** astrolábios, constelações, crescentes, órbitas e estrela polar.
 - Os ornamentos foram reforçados nas faixas laterais e nos cantos superior/inferior para continuarem reconhecíveis em miniaturas.
 - A raridade continua definindo metal, cor, brilho e acabamento; a facção define a heráldica.
 

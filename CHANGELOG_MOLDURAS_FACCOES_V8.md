@@ -9,7 +9,7 @@ Atualiza exclusivamente o renderizador visual das molduras. A janela da ilustra�
 - A silhueta estrutural da moldura agora depende da facção, além dos ornamentos e cores já existentes:
   - **Ordem Áurea:** perfil de arquitetura sagrada, ombros chanfrados e coroamento central inspirado em Leyndell/Térvore.
   - **Véu Carmesim:** perfil mais agressivo, com recortes e espinhos laterais inspirados nos ritos de Mohgwyn.
-  - **Lua Sombria:** perfil ogival e astral, com arcos e coroamento pontiagudo inspirado na arquitetura cariana.
+  - **Lua Negra:** perfil ogival e astral, com arcos e coroamento pontiagudo inspirado na arquitetura cariana.
 - A raridade continua determinando o acabamento metálico, espessura, brilho e ornamentos próprios.
 - Filete interno recebe a cor heráldica da facção para reforçar a leitura sem substituir a cor da raridade.
 - Normalização centralizada dos nomes de facção, inclusive aliases legados `Casa Cariana` e `Dinastia Mohgwyn`, evitando fallback visual incorreto para Ordem Áurea.

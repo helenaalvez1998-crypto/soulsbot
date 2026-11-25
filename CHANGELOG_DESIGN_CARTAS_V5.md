@@ -14,7 +14,7 @@ Atualizar o renderizador Pillow para que a moldura comunique a raridade e os emb
   - Mítica: carmesim.
   - Primordial: marfim celestial.
   - Singular: obsidiana iridescente.
-- Os emblemas continuam identificando a facção com glifos próprios: Térvore (Ordem Áurea), sangue (Véu Carmesim) e lua (Lua Sombria).
+- Os emblemas continuam identificando a facção com glifos próprios: Térvore (Ordem Áurea), sangue (Véu Carmesim) e lua (Lua Negra).
 - A cor da facção permanece nos detalhes do painel e nos acentos, sem substituir a cor principal da raridade.
 - A gema de tipo e o ícone de fileira continuam separados do emblema da facção, evitando confusão entre categoria, posição e facção.
 - Nenhum custo é desenhado na carta padrão. O espaço inferior é usado pela habilidade e sua descrição.

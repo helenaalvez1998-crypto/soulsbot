@@ -82,7 +82,7 @@ CORES_CATEGORIA = {
 SIMBOLOS = {"Destreza": "✥", "Força": "⚔", "Magia": "✧"}
 CORES_FACCAO = {
     "Ordem Áurea": ((38, 31, 17), (230, 190, 91)),
-    "Lua Sombria": ((24, 18, 51), (139, 112, 214)),
+    "Lua Negra": ((24, 18, 51), (139, 112, 214)),
     "Véu Carmesim": ((47, 13, 20), (190, 54, 68)),
 }
 ROTULOS_FILEIRA = {"melee": "CORPO A CORPO", "ranged": "LONGA DISTÂNCIA", "siege": "CERCO"}
@@ -1027,13 +1027,13 @@ def _draw_card(card: dict[str, Any], width: int = LARGURA_PADRAO, height: int = 
     rarity = str(card.get("raridade", "Comum"))
     category = "Especial" if str(card.get("categoria", "Unidade")).casefold() == "especial" else "Unidade"
     ctype = str(card.get("tipo", "Magia"))
-    faction = molduras_cartas.normalizar_faccao(card.get("faccao") or {"Força":"Ordem Áurea","Destreza":"Véu Carmesim","Magia":"Lua Sombria"}.get(ctype,"Ordem Áurea"))
+    faction = molduras_cartas.normalizar_faccao(card.get("faccao") or {"Força":"Ordem Áurea","Destreza":"Véu Carmesim","Magia":"Lua Negra"}.get(ctype,"Ordem Áurea"))
     row = str(card.get("fileira") or {"Força":"melee","Destreza":"ranged","Magia":"siege"}.get(ctype,"melee"))
     seed = _seed(card); rng = random.Random(seed)
     palettes = {
         "Ordem Áurea": ((39,31,17),(91,69,31),(224,183,82),(245,230,180)),
         "Véu Carmesim": ((43,13,18),(83,23,31),(177,49,62),(238,178,177)),
-        "Lua Sombria": ((18,15,39),(39,29,76),(139,112,214),(224,215,255)),
+        "Lua Negra": ((18,15,39),(39,29,76),(139,112,214),(224,215,255)),
     }
     top, mid, accent, metal = palettes.get(faction, palettes["Ordem Áurea"])
     rarity_colors = {
@@ -1446,7 +1446,7 @@ def _draw_card_com_template(card: dict[str, Any], illustration_bytes: bytes) -> 
 
     category = str(card.get("categoria", "Unidade"))
     card_type = str(card.get("tipo", "Magia"))
-    faction = molduras_cartas.normalizar_faccao(card.get("faccao") or {"Força": "Ordem Áurea", "Destreza": "Véu Carmesim", "Magia": "Lua Sombria"}.get(card_type, "Ordem Áurea"))
+    faction = molduras_cartas.normalizar_faccao(card.get("faccao") or {"Força": "Ordem Áurea", "Destreza": "Véu Carmesim", "Magia": "Lua Negra"}.get(card_type, "Ordem Áurea"))
     row = str(card.get("fileira") or {"Força": "melee", "Destreza": "ranged", "Magia": "siege"}.get(card_type, "melee"))
     rarity_base, rarity_accent = CORES_RARIDADE.get(rarity, CORES_RARIDADE["Comum"])
     type_accent = CORES_FACCAO.get(faction, ((21, 29, 39), (44, 47, 61)))[1]

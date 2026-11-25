@@ -28,7 +28,7 @@ A revisão concentra-se no acabamento do metal e na identidade visual das rarida
 
 - **Ordem Áurea:** frontões de catedral, colunas de Leyndell, brotos e folhas da Térvore, selo solar.
 - **Véu Carmesim:** ferragens de tridente, espinhos, gotas rituais e medalhões de sangue.
-- **Lua Sombria:** astrolábios, órbitas, nós estelares, crescentes e estrela polar.
+- **Lua Negra:** astrolábios, órbitas, nós estelares, crescentes e estrela polar.
 
 ## Preservado
 

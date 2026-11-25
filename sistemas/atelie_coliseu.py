@@ -1004,8 +1004,8 @@ def gerar_prompt_carta(carta: dict[str, Any]) -> str:
     habilidade_nome = _valor_prompt(habilidade.get("nome") or habilidade_id or "Sem habilidade", 80)
     habilidade_regra = _valor_prompt(habilidade.get("texto") or "", 240)
     jogo_origem = _valor_prompt(carta.get("jogo_origem") or "", 100)
-    origem_elden = "elden ring" in jogo_origem.casefold() or faccao in {"Ordem Áurea", "Véu Carmesim", "Lua Sombria"}
-    cena = CENAS_ELDEN_POR_ID.get(card_id, "") if origem_elden else CENAS_POR_CARTA.get(card_id, "")
+    origem_elden = "elden ring" in jogo_origem.casefold() or faccao in {"Ordem Áurea", "Véu Carmesim", "Lua Negra"}
+    cena = (V16_BOSS_ART_PROMPTS.get(card_id, "") or CENAS_ELDEN_POR_ID.get(card_id, "")) if origem_elden else CENAS_POR_CARTA.get(card_id, "")
     if not cena and card_id.startswith("patente_"):
         nivel = "unrecorded"
         import re
@@ -1085,7 +1085,7 @@ def gerar_prompt_carta(carta: dict[str, Any]) -> str:
             "Keep violence atmospheric and purposeful rather than graphic. Do not make every subject a vampire, do not automatically give everyone a trident, horns or blood magic, "
             "and never overwrite a named character's established identity, weapon or allegiance. Avoid modern horror, splatter and generic demon designs."
         ),
-        "Lua Sombria": (
+        "Lua Negra": (
             "FACTION IDENTITY — LUA SOMBRIA (MAGIC, COSMOS AND SECRETS): a NARABOT faction drawing from Carian and lunar traditions of the Lands Between. "
             "Use midnight blue, deep indigo, muted violet, cold silver and pale moon-white as controlled accents. Visual references may include Liurnia's misty lakes, "
             "Carian architecture, Raya Lucaria's scholarly spaces, moonlit towers, ancient observatories and the mysterious Eternal Cities beneath the earth—but select only a setting that fits the card. "
@@ -1315,3 +1315,37 @@ def normalizar_imagem_carta(dados: bytes) -> ImagemNormalizada:
         raise
     except (UnidentifiedImageError, Image.DecompressionBombError, OSError, ValueError, SyntaxError, OverflowError) as exc:
         raise ArteInvalida("Não consegui abrir essa imagem. Envie um PNG, JPG ou WEBP válido.") from exc
+
+# V16 — briefings exclusivos dos novos chefes lendários.
+V16_BOSS_ART_PROMPTS = {
+    "chefe_malenia_lamina_miquella": (
+        "Malenia, Blade of Miquella, canonical Elden Ring design: tall valkyrie with a weathered gold prosthetic arm and leg, long copper-red hair, ornate winged gold helm, scarlet rot-goddess atmosphere kept restrained. "
+        "She stands in the roots and pale blossoms of Elphael, Brace of the Haligtree, holding the curved Hand of Malenia. "
+        "Show a precise Waterfowl Dance preparation: cloak and hair caught in a rising spiral, scarlet petals and rot motes tracing the motion. "
+        "Cinematic dark-fantasy game key art, ancient architecture, realistic metal and cloth, no generic knight, no text, no UI."
+    ),
+    "chefe_radahn_flagelo_estrelas": (
+        "Starscourge Radahn in his canonical Elden Ring form: enormous red-haired demigod wearing battered golden lion armor, riding the tiny exhausted horse Leonard, twin colossal curved greatswords in hand. "
+        "Set on the vast red dunes of Wailing Dunes in Caelid beneath a wounded star-filled sky. "
+        "Depict gravity magic pulling stones and fragments of the night sky into orbit around him; keep the horse visibly present and anatomically correct. "
+        "Epic but grounded FromSoftware dark-fantasy key art, no generic barbarian, no text, no UI."
+    ),
+    "chefe_maliketh_morte_destinada": (
+        "Maliketh, the Black Blade, canonical beast clergyman form: lean towering wolf-like beastman, pale mane, dark layered armor and tattered cloth, wielding the Black Blade. "
+        "Set amid the crumbling floating sanctuaries of Crumbling Farum Azula, with torn architecture suspended in a violent golden storm. "
+        "The blade leaks restrained crimson-black Destined Death energy that curls like burning runes around its edge. "
+        "Detailed fur, worn armor, monumental scale, tragic and threatening presence, no generic werewolf, no text, no UI."
+    ),
+    "chefe_messmer_impalador": (
+        "Messmer the Impaler, canonical Shadow of the Erdtree design: pale red-haired demigod with one visible serpentine eye, ornate dark-red and black armor, long spear, and the great serpent coiling behind him. "
+        "Set in the dark stone halls of the Shadow Keep in the Land of Shadow, lit by ember-red fire and thin shafts of cold light. "
+        "Show Messmer raising his spear as living flame coils around the serpent and weapon; the serpent must be clearly visible and integrated into the composition. "
+        "Gothic FromSoftware dark fantasy, intricate armor, no generic fire knight, no text, no UI."
+    ),
+    "chefe_placidusax_lorde_dragao": (
+        "Dragonlord Placidusax, canonical ancient Elden Ring dragon: colossal two-headed dragon with missing necks and torn wings, weathered gold scales, immense talons and ancient stone-like anatomy. "
+        "Set in the storm beyond time at the heart of Crumbling Farum Azula, with broken dragon-temple pillars floating in a spiraling sky. "
+        "Red-gold lightning forks between the remaining heads and gathers around the body; communicate immense age and scale. "
+        "Ancient apocalyptic dark fantasy key art, no humanoid dragon, no text, no UI."
+    ),
+}

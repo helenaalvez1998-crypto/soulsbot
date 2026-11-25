@@ -48,14 +48,14 @@ class EldenGwentReworkTests(unittest.TestCase):
 
     def test_factions_and_default_leaders_are_consistent(self):
         self.assertEqual(gwent.FACTIONS["Força"], "Ordem Áurea")
-        self.assertEqual(gwent.FACTIONS["Magia"], "Lua Sombria")
+        self.assertEqual(gwent.FACTIONS["Magia"], "Lua Negra")
         self.assertEqual(gwent.FACTIONS["Destreza"], "Véu Carmesim")
-        self.assertEqual(gwent.canonical_faction("Casa Cariana"), "Lua Sombria")
+        self.assertEqual(gwent.canonical_faction("Casa Cariana"), "Lua Negra")
         self.assertEqual(gwent.canonical_faction("Dinastia Mohgwyn"), "Véu Carmesim")
         for faction, leader_id in gwent.DEFAULT_LEADERS.items():
             self.assertEqual(gwent.LEADERS[leader_id]["faction"], faction)
         legacy_state = gwent.novo_estado(901, 101, 201, {"101": [deepcopy(c) for c in list(self.catalog.values())[:12]], "201": [deepcopy(c) for c in list(self.catalog.values())[12:24]]}, {"101": {"faction": "Casa Cariana"}})
-        self.assertEqual(legacy_state["players"]["101"]["faction"], "Lua Sombria")
+        self.assertEqual(legacy_state["players"]["101"]["faction"], "Lua Negra")
 
     def test_blood_marks_trigger_on_second_application(self):
         state, special = self.make_state("elden_especial_sangramento")
@@ -282,7 +282,9 @@ class EldenGwentReworkTests(unittest.TestCase):
 
         state, mist = self.make_state("gwent_especial_nevoa")
         state = self.play_special(state, mist, row="melee")
-        self.assertEqual(state["weather"]["melee"], 3)
+        enemy = state["players"]["200"]["board"][0]
+        self.assertEqual(enemy["podrida"], 1)
+        self.assertEqual(state["weather"]["melee"], 0)
 
 
 if __name__ == "__main__":

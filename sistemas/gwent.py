@@ -6,9 +6,9 @@ ROWS = ("melee", "ranged", "siege")
 AI_PLAYER_ID = -1  # Identidade técnica reservada à NARA; nunca recebe ranking/recompensas.
 ROW_LABELS = {"melee": "Corpo a corpo", "ranged": "Longa distância", "siege": "Cerco"}
 TYPE_ROW = {"Força": "melee", "Destreza": "ranged", "Magia": "siege"}
-FACTIONS = {"Força": "Ordem Áurea", "Destreza": "Véu Carmesim", "Magia": "Lua Sombria"}
+FACTIONS = {"Força": "Ordem Áurea", "Destreza": "Véu Carmesim", "Magia": "Lua Negra"}
 FACTION_TYPES = {value: key for key, value in FACTIONS.items()}
-LEGACY_FACTION_ALIASES = {"Casa Cariana": "Lua Sombria", "Dinastia Mohgwyn": "Véu Carmesim"}
+LEGACY_FACTION_ALIASES = {"Casa Cariana": "Lua Negra", "Lua Sombria": "Lua Negra", "Dinastia Mohgwyn": "Véu Carmesim"}
 
 def canonical_faction(value: str | None) -> str | None:
     """Converte nomes antigos de facção para os nomes atuais sem quebrar decks salvos."""
@@ -20,6 +20,7 @@ def canonical_faction(value: str | None) -> str | None:
 # Contrato de cobertura: cada habilidade declarada no catálogo precisa estar ligada
 # a um ramo do motor (unidade, Primordial ou carta tática especial).
 HABILIDADES_UNIDADE_IMPLEMENTADAS = frozenset({
+    "",  # Unidade de força pura: não ativa habilidade especial.
     "primeira_luz", "retaliacao", "impeto", "ultimo_folego", "contragolpe",
     "encadeamento", "adaptacao", "sangue_frio", "instinto", "precisao",
     "drenagem", "cacador_arcano", "quebra_ritmo", "lei_primeva",
@@ -36,22 +37,26 @@ HABILIDADES_ESPECIAIS_IMPLEMENTADAS = frozenset({
     "gwent_egide", "gwent_requiem", "gwent_passo",
     "gwent_sangramento", "gwent_geada_cariana", "gwent_podrida", "gwent_loucura",
     "gwent_chama", "gwent_invocacao",
+    "reliquia_godrick", "reliquia_renala", "reliquia_morte", "reliquia_noite_chama", "reliquia_lamina_negra", "reliquia_algemas",
 })
 FACTION_ARCHETYPES = {
     "Ordem Áurea": {"name": "Formação e Resistência", "description": "Proteção de fileira, fortalecimento de aliados e +1 na primeira unidade da Ordem Áurea jogada em cada rodada."},
-    "Lua Sombria": {"name": "Feitiçaria e Controle", "description": "Magia lunar, cosmos, gravidade, congelamento e +1 na primeira unidade da Lua Sombria jogada em cada rodada."},
+    "Lua Negra": {"name": "Feitiçaria e Controle", "description": "Magia lunar, cosmos, gravidade, congelamento e +1 na primeira unidade da Lua Negra jogada em cada rodada."},
     "Véu Carmesim": {"name": "Sangue e Sacrifício", "description": "Sangramento, sacrifício, heresia e +1 na primeira unidade do Véu Carmesim jogada em cada rodada."},
 }
 LEADERS = {
-    "comandante_fornalha": {"name": "Godfrey, Primeiro Lorde Prístino", "faction": "Ordem Áurea", "description": "+2 às suas unidades de corpo a corpo.", "effect": "iron_command"},
-    "bastiao_ancestral": {"name": "Sentinela da Árvore Áurea", "faction": "Ordem Áurea", "description": "+1 às unidades de corpo a corpo e resistência climática +1.", "effect": "iron_bastion"},
-    "mestre_veu": {"name": "Mohg, Senhor do Sangue", "faction": "Véu Carmesim", "description": "+2 às suas unidades de longa distância.", "effect": "veil_master"},
-    "sombra_caminhante": {"name": "Cavaleiro de Sangue de Mohgwyn", "faction": "Véu Carmesim", "description": "+1 às unidades de longa distância; com 2 ou mais, concede +1 adicional.", "effect": "veil_shadow"},
-    "arquimaga_eclipse": {"name": "Rennala, Rainha da Lua Cheia", "faction": "Lua Sombria", "description": "Dissipa o clima e concede +1 ao cerco.", "effect": "arcane_archmage"},
-    "juiz_cerco": {"name": "Comandante de Leyndell", "faction": "Ordem Áurea", "description": "Concede escudo às suas unidades da fileira escolhida (até 3).", "effect": "iron_warden"},
-    "voz_caidos": {"name": "Nobre Sanguíneo de Mohgwyn", "faction": "Véu Carmesim", "description": "Traz do descarte, direto ao campo, a unidade mais forte de poder 6 ou menos, com +2.", "effect": "veil_chorus"},
-    "mestre_eclipse": {"name": "Ranni, Bruxa da Lua", "faction": "Lua Sombria", "description": "Compra uma carta, dissipa o clima e concede +1 (ou +2 se havia clima) às suas unidades da fileira escolhida.", "effect": "arcane_eclipse"},
-    "oraculo_tempestade": {"name": "Preceptora Cariana", "faction": "Lua Sombria", "description": "Dissipa o clima e concede +2 ao cerco se havia clima ativo; caso contrário, +1.", "effect": "arcane_oracle"},
+    # Ordem Áurea — força régia, proteção e purificação.
+    "comandante_fornalha": {"name": "Godfrey", "faction": "Ordem Áurea", "description": "Concede +2 de bônus a todas as suas unidades de Corpo a Corpo.", "effect": "godfrey_warlord"},
+    "bastiao_ancestral": {"name": "Morgott", "faction": "Ordem Áurea", "description": "Na fileira escolhida, concede Escudo a até 2 aliados mais fortes e +1 de bônus a eles.", "effect": "morgott_omen"},
+    "juiz_cerco": {"name": "Radagon", "faction": "Ordem Áurea", "description": "Remove Sangramento, Geada, Podridão e Loucura de todos os aliados; cada aliado purificado recebe +1 de bônus.", "effect": "radagon_purification"},
+    # Véu Carmesim — hemorragia, sacrifício e devoção blasfema.
+    "mestre_veu": {"name": "Mohg", "faction": "Véu Carmesim", "description": "Aplica uma marca de Sangramento aos 2 inimigos mais fortes da fileira escolhida; uma segunda marca causa Hemorragia (-2 de bônus).", "effect": "mohg_blood_rite"},
+    "sombra_caminhante": {"name": "Rykard", "faction": "Véu Carmesim", "description": "Sacrifica seu aliado mais fraco na fileira escolhida; os demais aliados dessa fileira recebem +2 de bônus.", "effect": "rykard_devour"},
+    "voz_caidos": {"name": "Esgar", "faction": "Véu Carmesim", "description": "Ressuscita do descarte a unidade mais forte de poder 5 ou menos na fileira escolhida, com +1 de bônus.", "effect": "esgar_blood_priest"},
+    # Lua Negra — feitiçaria, gravidade e domínio astral.
+    "arquimaga_eclipse": {"name": "Rennala", "faction": "Lua Negra", "description": "Remove Geada e Podridão dos aliados; cada aliado purificado em Cerco recebe +1 de bônus.", "effect": "rennala_full_moon"},
+    "mestre_eclipse": {"name": "Astel", "faction": "Lua Negra", "description": "A gravidade atinge os inimigos da fileira escolhida: aplica uma marca de Geada a até 3 unidades mais fortes.", "effect": "astel_gravity"},
+    "oraculo_tempestade": {"name": "Loretta", "faction": "Lua Negra", "description": "Concede +2 de bônus às 2 unidades aliadas mais fortes de Longa Distância.", "effect": "loretta_knight"},
 }
 # Arquétipos e combos nomeados. Os bônus são aplicados uma vez por combo/rodada.
 CARD_SYNERGY_TAGS = {
@@ -64,7 +69,7 @@ CARD_SYNERGY_TAGS = {
     "chefe_rei_afogado": {"abismo", "sangue_mohgwyn"},
     "covenant_coroa_abismo": {"abismo", "sangue_mohgwyn"},
     "covenant_lobos_cinza": {"cinzas"},
-    # Lua Sombria: mobilidade, ataques encadeados e caça.
+    # Lua Negra: mobilidade, ataques encadeados e caça.
     "chefe_cervo_sombrio": {"veu_sombrio"},
     "chefe_aparicao_veio": {"veu_sombrio"},
     "gwent_unidade_cavaleira": {"veu_sombrio"},
@@ -90,7 +95,7 @@ CARD_SYNERGY_TAGS = {
     "gwent_unidade_herdeiro_portao": {"muralha", "ordem_dourada"},
     "gwent_unidade_carniceiro_forja": {"banquete", "sangue_mohgwyn"},
     "gwent_unidade_intendente": {"banquete"},
-    # Etapa 2 — Lua Sombria.
+    # Etapa 2 — Lua Negra.
     "gwent_unidade_cacadora_fantasma": {"fantasmas"},
     "gwent_unidade_cantora_lamentos": {"fantasmas"},
     "gwent_unidade_senhor_cacada": {"fantasmas"},
@@ -106,8 +111,8 @@ CARD_SYNERGY_TAGS = {
 SYNERGY_COMBOS = {
     "cinzas_fornalha": {"name": "Aliança da Árvore Áurea", "tags": {"cinzas", "fornalha"}, "bonus": 2, "description": "Cavaleiro da Árvore Áurea ou Cavaleiros de Radahn e uma unidade da Fornalha coordenam a formação (+2)."},
     "veu_sombrio": {"name": "Caçada da Faca Negra", "tags": {"veu_sombrio"}, "minimum": 2, "bonus": 2, "description": "Duas unidades do Véu Sombrio entram em sintonia (+2)."},
-    "vazio_astral": {"name": "Alinhamento Astral", "tags": {"vazio", "astral"}, "bonus": 2, "description": "Ranni, Bruxa da Lua e uma unidade Astral convergem (+2)."},
-    "mare_abissal": {"name": "Maré Abissal", "tags": {"abismo"}, "minimum": 2, "bonus": 2, "description": "Godfrey, Primeiro Lorde Prístino e Cavaleiro de Sangue de Mohgwyn despertam a mesma força (+2)."},
+    "vazio_astral": {"name": "Alinhamento Astral", "tags": {"vazio", "astral"}, "bonus": 2, "description": "Ranni e uma unidade Astral convergem (+2)."},
+    "mare_abissal": {"name": "Maré Abissal", "tags": {"abismo"}, "minimum": 2, "bonus": 2, "description": "Godfrey e Cavaleiro Carmesim despertam a mesma força (+2)."},
     "juramento_estandarte": {"name": "Juramento de Leyndell", "tags": {"estandarte"}, "minimum": 2, "bonus": 1, "team_bonus": 1, "description": "Porta-estandarte e Guardas da Árvore Áurea fortalecem a formação (+1 para a carta que completa e +1 aos aliados na mesma fileira)."},
     "passos_duas_luas": {"name": "Dança da Lua Negra", "tags": {"duas_luas"}, "minimum": 2, "bonus": 2, "description": "Dançarina, Gêmea ou Cartógrafa sincronizam seus movimentos (+2)."},
     "eco_convergente": {"name": "Eco das Pedras Cintilantes", "tags": {"eco", "astral"}, "bonus": 2, "description": "O Erudito das Pedras Cintilantes e uma unidade Astral amplificam a mesma magia (+2)."},
@@ -120,7 +125,7 @@ SYNERGY_COMBOS = {
     "eclipse_voraz": {"name": "Eclipse Sanguíneo", "tags": {"eclipse_voraz"}, "minimum": 2, "bonus": 3, "description": "Cavaleiro de Sangue de Mohg e Bibliotecária eclipsam a mesma fonte (+3)."},
     "rota_peregrina": {"name": "Caminho do Maculado", "tags": {"peregrino"}, "minimum": 2, "bonus": 1, "description": "Duelista e Batedor da Mansão Vulcânica coordenam o avanço (+1)."},
     "juramento_erdtree": {"name": "Juramento da Árvore Áurea", "tags": {"ordem_dourada"}, "minimum": 2, "bonus": 2, "team_bonus": 1, "description": "Duas unidades da Ordem Áurea reforçam a formação: +2 para quem completa o combo e +1 aos aliados da mesma fileira."},
-    "convergencia_lunar": {"name": "Convergência da Lua Sombria", "tags": {"lua_cariana"}, "minimum": 2, "bonus": 2, "description": "Duas unidades ligadas à Lua Sombria convergem e recebem +2."},
+    "convergencia_lunar": {"name": "Convergência da Lua Negra", "tags": {"lua_cariana"}, "minimum": 2, "bonus": 2, "description": "Duas unidades ligadas à Lua Negra convergem e recebem +2."},
     "ritual_dinastia": {"name": "Ritual do Véu Carmesim", "tags": {"sangue_mohgwyn"}, "minimum": 2, "bonus": 2, "team_bonus": 1, "description": "Duas unidades do Véu Carmesim fortalecem a carta que completa o ritual (+2) e os aliados na fileira (+1)."},
 }
 
@@ -149,7 +154,7 @@ CARD_IDENTITY_ABILITIES = {
     "magia_trovao_oco": {"name": "Descarga Oca", "text": "Reduz em 1 o bônus de todas as unidades inimigas na sua fileira.", "effect": "hollow_thunder"},
     "magia_nevoa_antiga": {"name": "Névoa Ancestral", "text": "Recebe +2 se qualquer fileira estiver sob clima.", "effect": "ancient_mist"},
     "magia_sol_negro": {"name": "Eclipse Devorador", "text": "Recebe +2 se houver uma unidade inimiga com bônus positivo.", "effect": "devouring_eclipse"},
-    "magia_fagulha": {"name": "Faísca Condutora", "text": "Recebe +1 se houver outra unidade aliada da Lua Sombria em campo.", "effect": "conductive_spark"},
+    "magia_fagulha": {"name": "Faísca Condutora", "text": "Recebe +1 se houver outra unidade aliada da Lua Negra em campo.", "effect": "conductive_spark"},
     "magia_orbe_eco": {"name": "Orbe Refrator", "text": "Recebe +1 para cada carta especial no seu descarte, até +2.", "effect": "echo_orb"},
     "magia_chama_fria": {"name": "Contrafogo", "text": "Reduz em 1 o bônus de até duas unidades inimigas na mesma fileira.", "effect": "counterflame"},
     "covenant_lua_velada": {"name": "Aliança Lunar", "text": "Recebe +1 e concede +1 a uma unidade aliada em outra fileira.", "effect": "veiled_moon"},
@@ -157,8 +162,17 @@ CARD_IDENTITY_ABILITIES = {
     "covenant_ultimos": {"name": "Último Juramento", "text": "Recebe +2 se você tiver menos unidades em campo que o rival.", "effect": "last_oath"},
     "covenant_filhos_brasa": {"name": "Herança da Brasa", "text": "Recebe +1 e fortalece em +1 um aliado da Ordem Áurea na mesma fileira.", "effect": "ember_kin"},
     "covenant_peregrinos_nevoa": {"name": "Rastro na Névoa", "text": "Recebe +1 se sua última unidade foi jogada em outra fileira.", "effect": "mist_trail"},
+    "chefe_malenia_lamina_miquella": {"name": "Flor Escarlate", "text": "Ao entrar, aplica Podridão Escarlate às unidades inimigas da fileira; alvos já contaminados sofrem uma segunda marca.", "effect": "scarlet_bloom"},
+    "chefe_radahn_flagelo_estrelas": {"name": "Gravidade do Flagelo", "text": "Ao entrar, desloca a unidade inimiga mais forte para sua fileira e reduz seu bônus em 2.", "effect": "star_gravity"},
+    "chefe_maliketh_morte_destinada": {"name": "Morte Destinada", "text": "Ao entrar, remove até 2 pontos de bônus da unidade inimiga mais forte.", "effect": "destined_death"},
+    "chefe_messmer_impalador": {"name": "Lança do Impalador", "text": "Ao entrar, aplica Sangramento às unidades inimigas da fileira; uma segunda marca provoca Hemorragia.", "effect": "impaling_spear"},
+    "chefe_placidusax_lorde_dragao": {"name": "Tempestade do Tempo", "text": "Ao entrar, aplica Geada às unidades inimigas da fileira e recebe +1 por inimigo atingido, até +3.", "effect": "time_storm"},
 }
 
+
+# Cartas V18 de força pura não mantêm efeitos de identidade ocultos.
+from sistemas.cartas import CARTAS_SEM_EFEITO_IDS as _CARTAS_SEM_EFEITO_IDS
+CARD_IDENTITY_ABILITIES = {k: v for k, v in CARD_IDENTITY_ABILITIES.items() if k not in _CARTAS_SEM_EFEITO_IDS}
 
 def _aplicar_habilidade_identidade(player: dict, other: dict, card: dict, state: dict, row: str) -> str | None:
     data = CARD_IDENTITY_ABILITIES.get(str(card.get("id", "")))
@@ -244,15 +258,38 @@ def _aplicar_habilidade_identidade(player: dict, other: dict, card: dict, state:
         if ally: ally["bonus"] = int(ally.get("bonus", 0)) + 1
     elif effect == "mist_trail":
         if player.get("last_row") is not None and player.get("last_row") != row: card["bonus"] += 1
+    elif effect == "scarlet_bloom":
+        for unit in enemy_row:
+            marks = int(unit.get("podrida", 0))
+            unit["podrida"] = min(2, marks + (2 if marks else 1))
+            if unit["podrida"] >= 2 and int(unit.get("bonus", 0)) > 0:
+                unit["bonus"] = max(0, int(unit.get("bonus", 0)) - 1)
+    elif effect == "star_gravity" and strongest:
+        strongest["row"] = row
+        strongest["bonus"] = max(-2, int(strongest.get("bonus", 0)) - 2)
+    elif effect == "destined_death" and strongest:
+        strongest["bonus"] = max(-2, int(strongest.get("bonus", 0)) - 2)
+    elif effect == "impaling_spear":
+        for unit in enemy_row:
+            unit["sangramento"] = int(unit.get("sangramento", 0)) + 1
+            if unit["sangramento"] >= 2:
+                unit["bonus"] = max(-2, int(unit.get("bonus", 0)) - 2)
+                unit["sangramento"] = 0
+    elif effect == "time_storm":
+        atingidos = 0
+        for unit in enemy_row:
+            unit["geada"] = min(2, int(unit.get("geada", 0)) + 1)
+            atingidos += 1
+        card["bonus"] += min(3, atingidos)
     return str(data["name"])
 
 
 # Passiva de facção: a primeira unidade da própria facção recebe +1 por rodada.
-FACTION_BOOST = {"Ordem Áurea": 1, "Lua Sombria": 1, "Véu Carmesim": 1}
+FACTION_BOOST = {"Ordem Áurea": 1, "Lua Negra": 1, "Véu Carmesim": 1}
 
 DEFAULT_LEADERS = {
     "Ordem Áurea": "comandante_fornalha",
-    "Lua Sombria": "mestre_eclipse",
+    "Lua Negra": "arquimaga_eclipse",
     "Véu Carmesim": "mestre_veu",  # Etapa 3: padrão mais forte; quem já escolheu um líder não é afetado.
 }
 
@@ -321,9 +358,9 @@ def preparar_carta(card: dict) -> dict:
     texto_habilidade = str(identity.get("text", card.get("habilidade_texto", skill_data.get("texto", card.get("descricao", "")))) )[:180]
     if budget:
         upgrades = {
-            "gwent_nevoa": f" Raridade {raridade}: clima pode chegar a {min(3, 2 + budget)}.",
-            "gwent_chuva": f" Raridade {raridade}: clima de cerco pode chegar a {min(3, 2 + budget)}.",
-            "gwent_geada": f" Raridade {raridade}: clima pode chegar a {min(3, 1 + budget)} nas três fileiras.",
+            "gwent_nevoa": f" Raridade {raridade}: pode aplicar uma segunda marca de Podridão Escarlate.",
+            "gwent_chuva": f" Raridade {raridade}: mantém o Sangramento como ameaça de Hemorragia.",
+            "gwent_geada": f" Raridade {raridade}: pode aplicar uma segunda marca de Geada.",
             "gwent_medico": f" Raridade {raridade}: recupera unidade com poder-base até {min(8, 4 + budget)}.",
             "gwent_execucao": f" Raridade {raridade}: alcança poder efetivo até {min(9, 6 + budget)}.",
             "gwent_requiem": f" Raridade {raridade}: recupera unidade com poder-base até {min(10, 6 + budget)}.",
@@ -667,6 +704,7 @@ def aplicar_jogada(state: dict, user_id: int, card_id: str | None = None,
         legacy_player.setdefault("faction_boost_used", False)
         legacy_player.setdefault("mulligan_done", True)
         legacy_player.setdefault("leader_used", False)
+        legacy_player.setdefault("relic_used", False)
         legacy_player.setdefault("weather_used", False)
         legacy_player.setdefault("last_row", None)
         legacy_player.setdefault("synergy_used", {})
@@ -747,57 +785,106 @@ def aplicar_jogada(state: dict, user_id: int, card_id: str | None = None,
             return {"error": "A habilidade de líder já foi usada."}
         if row not in ROWS:
             return {"error": "Fileira inválida."}
-        player["leader_used"] = True
         leader_id = player.get("leader_id") or DEFAULT_LEADERS.get(player.get("faction"), "comandante_fornalha")
         leader = LEADERS.get(leader_id)
         if not leader or leader["faction"] != player.get("faction"):
             return {"error": "Líder incompatível com a facção deste deck."}
         effect = leader["effect"]
-        if effect in {"iron_command", "iron_bastion"}:
-            for unit in player["board"]:
-                if unit["row"] == "melee":
-                    unit["bonus"] = int(unit.get("bonus", 0)) + (2 if effect == "iron_command" else 1)
-                    if effect == "iron_bastion":
-                        unit["weather_resist"] = int(unit.get("weather_resist", 0)) + 1
-        elif effect in {"veil_master", "veil_shadow"}:
-            ranged_units = [unit for unit in player["board"] if unit["row"] == "ranged"]
-            bonus = 2 if effect == "veil_master" else (2 if len(ranged_units) >= 2 else 1)
-            for unit in ranged_units:
-                unit["bonus"] = int(unit.get("bonus", 0)) + bonus
-        elif effect in {"arcane_archmage", "arcane_oracle"}:
-            had_weather = any(int(v or 0) > 0 for v in state["weather"].values())
-            state["weather"] = {r: 0 for r in ROWS}
-            bonus = 2 if effect == "arcane_oracle" and had_weather else 1
-            for unit in player["board"]:
-                if unit["row"] == "siege":
-                    unit["bonus"] = int(unit.get("bonus", 0)) + bonus
-        elif effect == "iron_warden":
-            alvos = sorted((u for u in player["board"] if u["row"] == row and int(u.get("escudo", 0)) <= 0),
-                           key=lambda u: _poder_efetivo(u, state.get("weather")), reverse=True)[:3]
-            if not alvos:
-                return {"error": "Não há unidade sem escudo nessa fileira."}
-            for unit in alvos:
+        enemy = other
+        if effect == "godfrey_warlord":
+            targets = [u for u in player["board"] if u.get("row") == "melee"]
+            if not targets:
+                return {"error": "Godfrey precisa de ao menos um aliado em Corpo a Corpo."}
+            for unit in targets:
+                unit["bonus"] = int(unit.get("bonus", 0)) + 2
+        elif effect == "morgott_omen":
+            targets = sorted(
+                (u for u in player["board"] if u.get("row") == row and int(u.get("escudo", 0)) <= 0),
+                key=lambda u: _poder_efetivo(u, state.get("weather")), reverse=True
+            )[:2]
+            if not targets:
+                return {"error": "Não há aliados sem Escudo na fileira escolhida."}
+            for unit in targets:
                 unit["escudo"] = 1
-        elif effect == "veil_chorus":
-            pool = [c for c in player["discard"] if not c.get("especial") and int(c["poder"]) <= 6]
-            if not pool:
-                return {"error": "Não há unidade elegível (poder 6 ou menos) no descarte."}
-            revivida = deepcopy(max(pool, key=lambda c: int(c["poder"])))
-            player["discard"] = [c for c in player["discard"] if c["id"] != revivida["id"]]
-            revivida["bonus"] = 2
-            revivida.pop("escudo", None)
-            if revivida.get("row") not in ROWS:
-                revivida["row"] = row
-            player["board"].append(revivida)
-        elif effect == "arcane_eclipse":
-            had_weather = any(int(v or 0) > 0 for v in state["weather"].values())
-            state["weather"] = {r: 0 for r in ROWS}
-            if player.get("draw_pile"):
-                player["hand"].append(player["draw_pile"].pop(0))
+                unit["bonus"] = int(unit.get("bonus", 0)) + 1
+        elif effect == "radagon_purification":
+            status_keys = ("sangramento", "geada", "podrida", "loucura")
+            purified = []
             for unit in player["board"]:
-                if unit["row"] == row:
-                    unit["bonus"] = int(unit.get("bonus", 0)) + (2 if had_weather else 1)
-        state["last_event"] = f"Líder {leader['name']} ativado."
+                if any(int(unit.get(key, 0)) > 0 for key in status_keys):
+                    for key in status_keys:
+                        unit[key] = 0
+                    unit["bonus"] = int(unit.get("bonus", 0)) + 1
+                    purified.append(unit)
+            if not purified:
+                return {"error": "Nenhum aliado possui um efeito negativo para Radagon purificar."}
+        elif effect == "mohg_blood_rite":
+            targets = sorted(
+                enemy["board"], key=lambda u: _poder_efetivo(u, state.get("weather")), reverse=True
+            )
+            targets = [u for u in targets if u.get("row") == row][:2]
+            if not targets:
+                return {"error": "Não há inimigos na fileira escolhida para o ritual de sangue."}
+            for unit in targets:
+                unit["sangramento"] = int(unit.get("sangramento", 0)) + 1
+                if unit["sangramento"] >= 2:
+                    unit["bonus"] = max(-2, int(unit.get("bonus", 0)) - 2)
+                    unit["sangramento"] = 0
+        elif effect == "rykard_devour":
+            allies = [u for u in player["board"] if u.get("row") == row]
+            if len(allies) < 2:
+                return {"error": "Rykard precisa de ao menos 2 aliados na fileira para realizar o sacrifício."}
+            victim = min(allies, key=lambda u: _poder_efetivo(u, state.get("weather")))
+            victim_name = victim.get("nome", "Aliado")
+            _remover_unidade(player, victim, "sacrificio")
+            for unit in player["board"]:
+                if unit.get("row") == row:
+                    unit["bonus"] = int(unit.get("bonus", 0)) + 2
+        elif effect == "esgar_blood_priest":
+            pool = [c for c in player["discard"] if not c.get("especial") and int(c.get("poder", 99)) <= 5]
+            if not pool:
+                return {"error": "Não há unidade de poder 5 ou menos no descarte para Esgar ressuscitar."}
+            revived = deepcopy(max(pool, key=lambda c: int(c.get("poder", 0))))
+            player["discard"] = [c for c in player["discard"] if c.get("id") != revived.get("id")]
+            revived["row"] = row
+            revived["bonus"] = int(revived.get("bonus", 0)) + 1
+            revived.pop("escudo", None)
+            for key in ("sangramento", "geada", "podrida", "loucura"):
+                revived[key] = 0
+            player["board"].append(revived)
+        elif effect == "rennala_full_moon":
+            affected = [u for u in player["board"] if int(u.get("geada", 0)) > 0 or int(u.get("podrida", 0)) > 0]
+            if not affected:
+                return {"error": "Rennala precisa de aliados afetados por Geada ou Podridão."}
+            for unit in affected:
+                unit["geada"] = 0
+                unit["podrida"] = 0
+                if unit.get("row") == "siege":
+                    unit["bonus"] = int(unit.get("bonus", 0)) + 1
+        elif effect == "astel_gravity":
+            targets = sorted(
+                (u for u in enemy["board"] if u.get("row") == row),
+                key=lambda u: _poder_efetivo(u, state.get("weather")), reverse=True
+            )[:3]
+            if not targets:
+                return {"error": "Não há inimigos na fileira escolhida para Astel atingir."}
+            for unit in targets:
+                unit["geada"] = min(2, int(unit.get("geada", 0)) + 1)
+        elif effect == "loretta_knight":
+            if row != "ranged":
+                return {"error": "Loretta só pode ser ativada escolhendo a fileira de Longa Distância."}
+            targets = sorted(
+                (u for u in player["board"] if u.get("row") == "ranged"),
+                key=lambda u: _poder_efetivo(u, state.get("weather")), reverse=True
+            )[:2]
+            if not targets:
+                return {"error": "Loretta precisa de ao menos uma unidade aliada em Longa Distância."}
+            for unit in targets:
+                unit["bonus"] = int(unit.get("bonus", 0)) + 2
+        else:
+            return {"error": "Habilidade de líder não reconhecida."}
+        player["leader_used"] = True
+        state["last_event"] = f"Líder {leader['name']} ativou: {leader['description']}"
     elif action == "weather":
         if player["weather_used"]:
             return {"error": "Seu efeito climático já foi usado nesta partida."}
@@ -820,15 +907,77 @@ def aplicar_jogada(state: dict, user_id: int, card_id: str | None = None,
         eventos_especial: list[str] = []
         potencia_raridade = int(RARITY_EFFECT_BUDGET.get(str(card.get("raridade", "Comum")), 0))
         if card.get("especial") or str(card.get("categoria", "")).casefold() == "especial":
-            if skill == "gwent_nevoa":
+            if skill.startswith("reliquia_") and player.get("relic_used"):
+                return {"error": "Você já ativou uma Relíquia nesta partida."}
+            if skill == "reliquia_godrick":
+                if not player["board"]: return {"error": "A Grande Runa de Godrick exige uma unidade aliada em campo."}
+                for unit in player["board"]: unit["bonus"] = int(unit.get("bonus", 0)) + 1
+                player["relic_used"] = True
+                eventos_especial.append("Grande Runa de Godrick concedeu +1 a todas as unidades aliadas.")
+            elif skill == "reliquia_renala":
+                purificados = 0
+                for unit in player["board"]:
+                    if unit.get("geada", 0) or unit.get("podrida", 0):
+                        unit["geada"] = 0; unit["podrida"] = 0; unit["bonus"] = int(unit.get("bonus", 0)) + 1; purificados += 1
+                if not purificados: return {"error": "Não há aliados com Geada ou Podridão para purificar."}
+                player["relic_used"] = True
+                eventos_especial.append(f"Grande Runa dos Não Nascidos purificou {purificados} aliado(s) e concedeu +1.")
+            elif skill == "reliquia_morte":
+                alvos=[]
+                for fileira in ROWS:
+                    candidatos=[u for u in other["board"] if u.get("row")==fileira and int(u.get("bonus",0))>0]
+                    if candidatos:
+                        alvo=max(candidatos,key=lambda u:int(u.get("bonus",0))); alvo["bonus"]=max(0,int(alvo.get("bonus",0))-2); alvos.append(alvo["nome"])
+                if not alvos: return {"error": "A Runa da Morte só afeta unidades inimigas com bônus positivo."}
+                player["relic_used"]=True; eventos_especial.append("Runa da Morte corroeu bônus de: "+", ".join(alvos)+".")
+            elif skill == "reliquia_noite_chama":
+                if row not in ROWS: return {"error": "Escolha uma fileira inimiga."}
+                alvos=[u for u in other["board"] if u.get("row")==row]
+                if not alvos: return {"error": "Não há inimigos na fileira escolhida."}
+                if target_id == "noite":
+                    for unit in alvos: unit["geada"]=min(2,int(unit.get("geada",0))+1)
+                    eventos_especial.append("A postura da Noite aplicou Geada à fileira.")
+                else:
+                    alvo=max(alvos,key=lambda u:_poder_efetivo(u,state.get("weather")))
+                    if int(alvo.get("escudo",0))>0: alvo["escudo"]-=1; eventos_especial.append(f"O Escudo de {alvo['nome']} bloqueou a Chama.")
+                    else: alvo["poder"]=max(1,int(alvo.get("poder",1))-1); alvo["bonus"]=int(alvo.get("bonus",0))-2; eventos_especial.append(f"A Chama atingiu {alvo['nome']}.")
+                player["relic_used"]=True
+            elif skill == "reliquia_lamina_negra":
+                if row not in ROWS: return {"error": "Escolha a fileira do alvo."}
+                alvos=[u for u in other["board"] if u.get("row")==row]
+                alvo=next((u for u in alvos if u.get("id")==str(target_id)),None) if target_id else (max(alvos,key=lambda u:_poder_efetivo(u,state.get("weather"))) if alvos else None)
+                if not alvo: return {"error": "Alvo não encontrado."}
+                if int(alvo.get("escudo",0))>0: alvo["escudo"]-=1; return {"error": "O Escudo bloqueou a Lâmina Negra; a Relíquia não foi consumida."}
+                alvo["bonus"]=int(alvo.get("bonus",0))-3; player["relic_used"]=True; eventos_especial.append(f"Lâmina Negra reduziu o bônus de {alvo['nome']} em 3.")
+            elif skill == "reliquia_algemas":
+                if row not in ROWS: return {"error": "Escolha a fileira do alvo."}
+                alvos=[u for u in other["board"] if u.get("row")==row]
+                alvo=next((u for u in alvos if u.get("id")==str(target_id)),None) if target_id else (max(alvos,key=lambda u:int(u.get("bonus",0))) if alvos else None)
+                if not alvo: return {"error": "Não há alvo na fileira escolhida."}
+                alvo["bonus"]=min(0,int(alvo.get("bonus",0))); player["relic_used"]=True; eventos_especial.append(f"Algemas de Margit anularam os bônus de {alvo['nome']}.")
+            elif skill == "gwent_nevoa":
                 if row not in ROWS:
                     return {"error": "Escolha uma fileira válida."}
-                state["weather"][row] = max(int(state["weather"].get(row, 0)), min(3, 2 + potencia_raridade))
+                targets = [u for u in other["board"] if u.get("row") == row]
+                if not targets:
+                    return {"error": "Não há inimigos na fileira escolhida para receber Podridão Escarlate."}
+                for unit in targets:
+                    unit["podrida"] = min(2, int(unit.get("podrida", 0)) + 1 + (1 if potencia_raridade >= 2 else 0))
             elif skill == "gwent_chuva":
-                state["weather"]["siege"] = max(int(state["weather"].get("siege", 0)), min(3, 2 + potencia_raridade))
+                targets = [u for u in other["board"] if u.get("row") == "siege"]
+                if not targets:
+                    return {"error": "Não há inimigos em Cerco para receber Sangue Corrompido."}
+                for unit in targets:
+                    unit["sangramento"] = min(2, int(unit.get("sangramento", 0)) + 1)
+                    if unit["sangramento"] >= 2:
+                        unit["bonus"] = max(-2, int(unit.get("bonus", 0)) - 2)
+                        unit["sangramento"] = 0
             elif skill == "gwent_geada":
-                for r in ROWS:
-                    state["weather"][r] = max(int(state["weather"].get(r, 0)), min(3, 1 + potencia_raridade))
+                targets = list(other["board"])
+                if not targets:
+                    return {"error": "Não há inimigos para receber Geada."}
+                for unit in targets:
+                    unit["geada"] = min(2, int(unit.get("geada", 0)) + 1 + (1 if potencia_raridade >= 2 else 0))
             elif skill == "gwent_chifre":
                 if row not in ROWS:
                     return {"error": "Escolha uma fileira válida."}
@@ -906,7 +1055,7 @@ def aplicar_jogada(state: dict, user_id: int, card_id: str | None = None,
                 summoned = {
                     "id": f"espiritos_lobos_{uid}_{state['round']}_{len(player['board'])}",
                     "nome": "Lobos Espirituais", "categoria": "Unidade", "especial": False,
-                    "poder": min(6, 3 + potencia_raridade), "bonus": 0, "tipo": "Magia", "faccao": "Lua Sombria",
+                    "poder": min(6, 3 + potencia_raridade), "bonus": 0, "tipo": "Magia", "faccao": "Lua Negra",
                     "habilidade": "", "row": row, "fileira": row, "weather_resist": 0, "escudo": 0,
                 }
                 player["board"].append(summoned)
