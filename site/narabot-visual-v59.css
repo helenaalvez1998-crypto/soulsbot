@@ -1,0 +1,695 @@
+/* ==========================================================
+   NARABOT V59 — DIREÇÃO DE ARTE / SISTEMA VISUAL UNIFICADO
+   Camada visual incremental: não altera regras nem comportamento.
+   ========================================================== */
+:root{
+  --n59-bg:#080b11;
+  --n59-surface:#101722;
+  --n59-surface-2:#151f2c;
+  --n59-surface-3:#1b2837;
+  --n59-line:rgba(194,166,111,.22);
+  --n59-line-strong:rgba(216,187,122,.48);
+  --n59-gold:#d8bb7a;
+  --n59-gold-hi:#f0dba8;
+  --n59-text:#eee9df;
+  --n59-muted:#a8a9b1;
+  --n59-radius:16px;
+  --n59-shadow:0 18px 50px rgba(0,0,0,.34);
+  color-scheme:dark;
+}
+html{scroll-behavior:smooth;scroll-padding-top:100px}
+body{
+  background:
+    radial-gradient(ellipse at 50% -18%,rgba(104,83,52,.17),transparent 44%),
+    radial-gradient(ellipse at 100% 35%,rgba(48,65,91,.12),transparent 38%),
+    var(--n59-bg);
+  color:var(--n59-text);
+}
+body::after{
+  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.16;
+  background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.014) 1px,transparent 1px);
+  background-size:44px 44px;
+  mask-image:linear-gradient(to bottom,black,transparent 78%);
+}
+.app{position:relative;z-index:2}
+#embers{opacity:.35}
+::selection{background:rgba(216,187,122,.3);color:#fff}
+button,a,input,select,textarea{ -webkit-tap-highlight-color:transparent }
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{
+  outline:2px solid var(--n59-gold-hi)!important;outline-offset:3px!important;
+}
+button:disabled{cursor:not-allowed;filter:saturate(.45);opacity:.58}
+
+/* Barra principal */
+.hud{
+  background:rgba(8,12,19,.91)!important;
+  border-bottom:1px solid var(--n59-line-strong)!important;
+  box-shadow:0 10px 34px rgba(0,0,0,.42)!important;
+  backdrop-filter:blur(18px) saturate(125%);
+}
+.hud::after{height:1px!important;bottom:-1px!important;background:linear-gradient(90deg,transparent,var(--n59-gold),transparent)!important;opacity:.5}
+.brand .sigil{
+  border:1px solid rgba(216,187,122,.8)!important;
+  background:radial-gradient(circle at 35% 25%,#283347,#0a101a 72%)!important;
+  box-shadow:0 0 22px rgba(216,187,122,.13),inset 0 0 12px #000!important;
+}
+.brand b{color:var(--n59-gold-hi)!important;letter-spacing:.19em!important}
+.brand small{color:#9e9ca0!important;letter-spacing:.18em!important}
+.hud nav{gap:4px}
+.hud nav .nav{
+  position:relative;border:1px solid transparent!important;border-radius:10px!important;
+  color:#b9bac1!important;transition:background .2s,border-color .2s,color .2s,transform .2s!important;
+}
+.hud nav .nav:hover{
+  color:var(--n59-gold-hi)!important;background:rgba(216,187,122,.07)!important;
+  border-color:var(--n59-line)!important;transform:translateY(-1px);
+}
+.hud nav .nav.active{
+  color:var(--n59-gold-hi)!important;
+  background:linear-gradient(180deg,rgba(216,187,122,.12),rgba(216,187,122,.035))!important;
+  border-color:var(--n59-line)!important;
+  box-shadow:inset 0 -2px var(--n59-gold)!important;
+}
+.hud nav .nav i{color:inherit}
+.wallet span{
+  border:1px solid var(--n59-line)!important;background:rgba(19,27,39,.88)!important;
+  border-radius:10px!important;color:var(--n59-gold-hi)!important;
+}
+.wallet b{font-variant-numeric:tabular-nums}
+.vis-btn{
+  border:1px solid var(--n59-line-strong)!important;background:rgba(19,27,39,.9)!important;
+  border-radius:10px!important;transition:transform .2s,border-color .2s!important;
+}
+.vis-btn:hover{transform:translateY(-2px);border-color:var(--n59-gold)!important}
+.discord-btn,.logout-btn{border-radius:10px!important;transition:transform .2s,filter .2s!important}
+.discord-btn:hover,.logout-btn:hover{transform:translateY(-1px);filter:brightness(1.12)}
+
+/* Área de conteúdo e títulos */
+main{
+  max-width:1500px!important;
+  padding:clamp(20px,3vw,42px) clamp(14px,3.1vw,48px) 64px!important;
+}
+.screen-title{margin:0 0 18px}
+.screen-title .eyebrow,.eyebrow{
+  color:var(--n59-gold)!important;font-size:10px!important;font-weight:800;
+  letter-spacing:.2em!important;text-transform:uppercase;
+}
+.screen-title h1{
+  color:#f1e6cf!important;font-size:clamp(25px,3vw,36px)!important;
+  letter-spacing:.045em!important;text-shadow:0 5px 24px rgba(0,0,0,.4);
+}
+.notice{
+  border:1px solid var(--n59-line)!important;border-radius:12px!important;
+  background:linear-gradient(110deg,rgba(26,35,49,.96),rgba(17,23,33,.94))!important;
+  box-shadow:0 8px 24px rgba(0,0,0,.18)!important;color:#d3cbbd!important;
+}
+
+/* Superfícies do painel */
+.hub-card,.hub-hero,.hub-tops>*,.hub-recent>*,
+.gwent-solo-panel,.atelier-panel,.gwent-store,.challenge-panel,.pt-pane,
+.faction-card,.gwent-prep,.gwent-reward-panel{
+  border-color:var(--n59-line)!important;border-radius:var(--n59-radius)!important;
+  box-shadow:var(--n59-shadow)!important;
+}
+.hub-hero{
+  position:relative;isolation:isolate;overflow:hidden;
+  min-height:280px;padding:clamp(22px,3vw,38px)!important;
+  background:
+    radial-gradient(ellipse at 83% 25%,rgba(199,164,99,.13),transparent 32%),
+    linear-gradient(112deg,rgba(26,36,51,.98),rgba(13,19,29,.98) 66%,rgba(24,24,31,.98))!important;
+}
+.hub-hero::before{
+  content:"";position:absolute;inset:12px;z-index:-1;pointer-events:none;
+  border:1px solid rgba(216,187,122,.13);border-radius:11px;
+}
+.hub-hero::after{
+  content:"✦";position:absolute;right:8%;top:50%;transform:translateY(-50%);
+  color:rgba(216,187,122,.07);font:clamp(130px,22vw,280px)/1 Georgia,serif;
+  pointer-events:none;
+}
+.hub-hero-txt{position:relative;z-index:1;max-width:760px}
+.hub-hero h2{color:#f0dfbd!important;letter-spacing:.025em}
+.hub-hero p{max-width:58ch;color:#b9bdc5!important}
+.hub-icon{border-radius:18px!important;border:1px solid var(--n59-line-strong)!important;box-shadow:0 12px 32px #0008}
+.hub-chips span{
+  background:rgba(5,9,15,.42)!important;border-color:var(--n59-line)!important;
+  color:#c3c5ca!important;border-radius:999px!important;
+}
+.hub-cta{gap:9px!important}
+.hub-cta .big{border-radius:10px!important;min-height:42px;padding:10px 15px!important}
+.hub-card{
+  padding:clamp(16px,2vw,22px)!important;
+  background:linear-gradient(145deg,rgba(21,31,44,.97),rgba(12,18,27,.97))!important;
+}
+.hub-card h3,.section-head h3{color:#ead8b4!important;letter-spacing:.035em}
+.section-head{gap:12px}
+.section-head h3{font-size:clamp(16px,1.6vw,20px)!important}
+.section-head .eyebrow{margin-bottom:3px}
+.hub-tops{gap:14px!important}
+.hub-recent{display:grid;gap:10px}
+.stats article,.stat,.pt-card,.pt-sc-card{
+  border:1px solid var(--n59-line)!important;border-radius:14px!important;
+  background:linear-gradient(145deg,#172231,#101722)!important;box-shadow:0 10px 28px #0003!important;
+}
+.stats article{transition:transform .2s,border-color .2s}
+.stats article:hover{transform:translateY(-3px);border-color:var(--n59-line-strong)!important}
+.stats b{color:var(--n59-gold-hi)!important}
+.profile,.player{color:var(--n59-text)}
+
+/* Controles, filtros e botões */
+.primary,.secondary,.danger,.big,.text-btn,.seg button,.toolbar button{
+  transition:transform .18s ease,filter .18s ease,border-color .18s ease,box-shadow .18s ease!important;
+}
+.primary,.big.gold{
+  background:linear-gradient(135deg,#e4cf9e,#b18d51)!important;
+  border:1px solid #ecd9ad!important;color:#17140e!important;
+  box-shadow:0 5px 18px rgba(177,141,81,.13)!important;
+}
+.primary:hover,.big.gold:hover{transform:translateY(-2px);filter:brightness(1.07);box-shadow:0 9px 22px rgba(177,141,81,.2)!important}
+.secondary,.big:not(.gold){
+  background:linear-gradient(145deg,#1b2939,#121b28)!important;
+  border:1px solid var(--n59-line-strong)!important;color:#e8dfcf!important;
+}
+.secondary:hover,.big:not(.gold):hover{transform:translateY(-2px);border-color:var(--n59-gold)!important}
+.danger{background:linear-gradient(145deg,#542c31,#2b171d)!important;color:#f0d8d7!important}
+.text-btn{color:var(--n59-gold-hi)!important}
+.toolbar input,.toolbar select,input,select,textarea{
+  border-color:var(--n59-line)!important;border-radius:10px!important;
+  background:#0c131d!important;color:var(--n59-text)!important;
+}
+.toolbar input:focus,.toolbar select:focus,input:focus,select:focus,textarea:focus{
+  border-color:var(--n59-gold)!important;box-shadow:0 0 0 3px rgba(216,187,122,.09)!important;
+}
+.seg{padding:4px;border:1px solid var(--n59-line);border-radius:11px;background:#0c131d}
+.seg button{border-radius:8px!important;color:#b9bac1!important}
+.seg button.on{background:rgba(216,187,122,.15)!important;color:var(--n59-gold-hi)!important;box-shadow:inset 0 0 0 1px var(--n59-line)!important}
+
+/* Cartas e biblioteca */
+.gwent-unit,.game-card,.gwent-board-card{
+  border-color:rgba(216,187,122,.32)!important;border-radius:13px!important;
+  background:linear-gradient(155deg,#1a2635,#0c121b 76%)!important;
+  box-shadow:0 12px 28px rgba(0,0,0,.36)!important;
+}
+.gwent-unit:hover,.game-card:hover,.gwent-board-card:hover{
+  border-color:rgba(231,205,151,.78)!important;
+  box-shadow:0 18px 36px rgba(0,0,0,.48),0 0 0 1px rgba(216,187,122,.12)!important;
+}
+.gwent-unit>img,.game-card>img{background:#090e16}
+.gwent-unit.v51-card>small{color:#c1c0c3!important}
+.gwent-unit.v51-card>b{color:#f0e6d4!important}
+.v51-card-topline{background:linear-gradient(90deg,#1b2838,#111923)!important}
+.v51-card-bottomline{background:rgba(8,13,20,.97)!important}
+.v54-card-rarity-line{background:linear-gradient(90deg,rgba(216,187,122,.12),rgba(11,16,24,.55))!important}
+.modal{
+  border-color:var(--n59-line-strong)!important;border-radius:18px!important;
+  background:linear-gradient(145deg,#172231,#0c121b)!important;box-shadow:0 30px 100px #000d!important;
+}
+.modal-info h2{color:#f0dfbd}
+.modal-info dl div{border-color:var(--n59-line)!important}
+.modal-info dd{color:var(--n59-gold-hi)!important}
+.modal-backdrop{backdrop-filter:blur(8px)}
+
+/* Arena: clareza de tabuleiro sem competir com a arte das cartas */
+.gwent-arena,.gwent-arena-board,.gwent-board,.gwent-match{
+  border-color:var(--n59-line)!important;border-radius:16px!important;
+}
+.gwent-arena{
+  background:
+    radial-gradient(ellipse at 50% 0,rgba(126,104,69,.10),transparent 54%),
+    linear-gradient(145deg,#131e2b,#0b111a)!important;
+}
+.gwent-row{border-color:var(--n59-line)!important;background:linear-gradient(90deg,#142131,#0d151f)!important}
+.gwent-row h4{color:#e2c991!important}
+.gwent-score article{background:rgba(8,13,20,.62)!important}
+.gwent-hand-card{filter:drop-shadow(0 9px 10px rgba(0,0,0,.28))}
+
+/* Ferramentas e páginas auxiliares: mesma identidade do portal */
+body>main{
+  position:relative;z-index:1;
+  max-width:1240px!important;
+  padding:clamp(22px,4vw,46px) clamp(14px,3vw,28px) 76px!important;
+}
+body>main>.top{
+  position:relative;overflow:hidden;
+  padding:20px 22px!important;margin:0 0 24px!important;
+  border:1px solid var(--n59-line)!important;border-radius:16px!important;
+  background:linear-gradient(110deg,#182535,#101823 72%,#1b1b20)!important;
+  box-shadow:var(--n59-shadow)!important;
+}
+body>main>.top::after{
+  content:"✦";position:absolute;right:24px;top:50%;transform:translateY(-50%);
+  color:rgba(216,187,122,.07);font:100px/1 Georgia,serif;pointer-events:none;
+}
+body>main h1{color:#f0dfbd!important;letter-spacing:.035em}
+body>main h2,body>main h3{color:#e7d3a8!important}
+body>main .panel,body>main .recipe,body>main .card,body>main .filters,
+body>main .summary,body>main .report,body>main .stat,body>main .result{
+  border:1px solid var(--n59-line)!important;border-radius:15px!important;
+  background:linear-gradient(145deg,#172333,#101722)!important;
+  box-shadow:0 12px 32px rgba(0,0,0,.25)!important;
+}
+body>main button,body>main .btn{
+  border-radius:10px!important;transition:transform .18s,filter .18s,border-color .18s!important;
+}
+body>main button:hover:not(:disabled),body>main .btn:hover{
+  transform:translateY(-1px);filter:brightness(1.08)
+}
+body>main input,body>main select,body>main textarea{
+  border-radius:10px!important;background:#0c131d!important;border-color:var(--n59-line)!important;
+}
+body>main table{border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid var(--n59-line);border-radius:12px}
+body>main th{background:#1b2939;color:#e7d3a8}
+body>main td,body>main th{padding:10px 12px;border-bottom:1px solid rgba(194,166,111,.12)}
+body>main tr:last-child td{border-bottom:0}
+body>main a{color:var(--n59-gold-hi);text-underline-offset:3px}
+body>main .muted,body>main p{color:#b7bac2}
+body>main .top a,body>main .top button{position:relative;z-index:1}
+
+/* Microinterações discretas; respeita preferência de movimento */
+@media(hover:hover) and (pointer:fine){
+  .hub-card,.hub-tops>*{transition:transform .2s,border-color .2s,box-shadow .2s}
+  .hub-card:hover{transform:translateY(-2px);border-color:var(--n59-line-strong)!important}
+}
+@media(max-width:800px){
+  main{padding:18px 12px 88px!important}
+  .screen-title{margin-bottom:14px}
+  .hub-hero{padding:22px 18px!important;min-height:0}
+  .hub-hero::after{right:-4%;font-size:150px}
+  .hub-hero-txt{min-width:0}
+  .hub-chips span{font-size:11px}
+  .hub-cta .big{flex:1 1 135px}
+  .hub-card{padding:16px!important}
+  .section-head{align-items:center}
+  body>main{padding:20px 14px 70px!important}
+  body>main>.top{padding:16px!important}
+}
+@media(max-width:480px){
+  .screen-title h1{font-size:24px!important}
+  .hub-hero{gap:12px}
+  .hub-icon{width:64px;height:64px;border-radius:14px!important}
+  .hub-hero p{font-size:12px}
+  .wallet span{font-size:9px}
+  .hub-chips{gap:6px}
+  .hub-chips span{padding:6px 8px}
+  .section-head{flex-wrap:wrap}
+  .modal{grid-template-columns:minmax(0,1fr)!important;padding:16px!important;gap:12px!important}
+  .modal>img{max-height:42vh;object-fit:contain}
+}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+
+
+/* ===== V62 - Aproveitamento real da tela no Deck e Colecao ===== */
+@media (min-width:861px){
+ main{width:100%!important;max-width:1920px!important;padding-left:clamp(24px,2.4vw,52px)!important;padding-right:clamp(24px,2.4vw,52px)!important}
+ #tab-deck{width:100%;max-width:none}
+ #tab-deck .gwent-builder{width:100%;grid-template-columns:minmax(260px,310px) minmax(0,1fr)!important;gap:clamp(14px,1.25vw,24px)!important;align-items:start!important}
+ #tab-deck .gwent-builder>div{min-width:0;padding:clamp(13px,1.1vw,20px)!important}
+ #tab-deck .gwent-builder>div:first-child{position:sticky;top:92px;max-height:calc(100vh - 108px);overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(190,157,103,.45) transparent}
+ #tab-deck .gwent-builder>div:last-child{min-width:0}
+ #tab-deck #gwent-card-pool{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(clamp(150px,11.2vw,205px),1fr))!important;gap:clamp(10px,1vw,18px)!important;align-items:start}
+ #tab-deck #gwent-card-pool .gwent-card-tile{width:100%;min-width:0}
+}
+@media (min-width:1500px){
+ #tab-deck .gwent-builder{grid-template-columns:minmax(280px,330px) minmax(0,1fr)!important}
+ #tab-deck #gwent-card-pool{grid-template-columns:repeat(auto-fill,minmax(185px,1fr))!important}
+}
+@media (min-width:1900px){
+ main{max-width:2048px!important}
+ #tab-deck .gwent-builder{grid-template-columns:minmax(300px,350px) minmax(0,1fr)!important}
+ #tab-deck #gwent-card-pool{grid-template-columns:repeat(auto-fill,minmax(195px,1fr))!important}
+}
+@media (max-width:860px) and (min-width:561px){
+ #tab-deck .gwent-builder{grid-template-columns:minmax(0,1fr)!important;gap:14px!important}
+ #tab-deck .gwent-builder>div:first-child{position:static!important;max-height:none!important;display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.8fr);gap:12px;align-items:start}
+ #tab-deck .gwent-builder>div:first-child>.section-head,
+ #tab-deck .gwent-builder>div:first-child>.gwent-config,
+ #tab-deck .gwent-builder>div:first-child>#gwent-save-deck,
+ #tab-deck .gwent-builder>div:first-child>#gwent-deck-status{grid-column:1/-1}
+ #tab-deck #gwent-card-pool{grid-template-columns:repeat(auto-fill,minmax(165px,1fr))!important}
+}
+@media (max-width:560px){
+ main{padding-left:12px!important;padding-right:12px!important}
+ #tab-deck .gwent-builder{grid-template-columns:minmax(0,1fr)!important}
+ #tab-deck .gwent-builder>div:first-child{position:static!important;max-height:none!important;display:block}
+ #tab-deck #gwent-card-pool{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}
+}
+
+
+/* ===== V63 - Deck montado compacto: prioriza a coleção ===== */
+@media (min-width:861px){
+  #tab-deck .gwent-builder{
+    grid-template-columns:minmax(235px,275px) minmax(0,1fr)!important;
+    gap:18px!important;
+  }
+  #tab-deck .gwent-builder>div:first-child{
+    padding:14px!important;
+    max-height:calc(100vh - 112px);
+  }
+  #tab-deck .gwent-config{gap:8px!important;padding:10px!important}
+  #tab-deck .gwent-leader-card-preview{
+    width:100%!important;max-width:150px!important;margin:4px auto 8px!important;
+  }
+  #tab-deck .gwent-leader-relic{
+    min-height:175px!important;padding:10px 9px!important;gap:5px!important;
+  }
+  #tab-deck .gwent-leader-relic .leader-relic-sigil{margin-bottom:8px!important}
+  #tab-deck .gwent-leader-relic strong{margin-top:0!important;font-size:1rem!important}
+  #tab-deck .gwent-leader-relic p{font-size:.72rem!important;line-height:1.25!important;margin:3px 0!important}
+  #tab-deck #gwent-deck-selected{
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    gap:6px!important;padding:7px 0 10px!important;
+  }
+  #tab-deck #gwent-deck-selected .gwent-card-tile{padding:3px!important;border-radius:8px!important}
+  #tab-deck #gwent-deck-selected .gwent-card-tile-art img{
+    width:100%!important;height:88px!important;aspect-ratio:5/7!important;object-fit:contain!important;
+  }
+  #tab-deck #gwent-deck-selected .gwent-card-tile-hint{
+    font-size:7px!important;line-height:1.1!important;letter-spacing:.04em!important;padding:3px 0!important;
+  }
+  #tab-deck .gwent-relic-loadout{margin:10px 0!important;padding:10px!important}
+  #tab-deck .gwent-relic-preview{margin-top:7px!important;padding:9px!important}
+  #tab-deck #gwent-deck-status{font-size:11px!important;line-height:1.35!important}
+}
+@media (min-width:1500px){
+  #tab-deck .gwent-builder{grid-template-columns:minmax(250px,290px) minmax(0,1fr)!important}
+}
+@media (max-width:860px){
+  #tab-deck #gwent-deck-selected{
+    grid-template-columns:repeat(auto-fill,minmax(105px,1fr))!important;
+    gap:8px!important;
+  }
+  #tab-deck #gwent-deck-selected .gwent-card-tile-art img{
+    max-height:145px!important;object-fit:contain!important;
+  }
+  #tab-deck .gwent-leader-card-preview{max-width:190px!important;margin:8px auto!important}
+  #tab-deck .gwent-leader-relic{min-height:205px!important}
+}
+
+
+/* ===== V64 - Corrige miniaturas reais do deck selecionado ===== */
+@media (min-width:861px){
+  #tab-deck .gwent-builder{
+    grid-template-columns:minmax(250px,285px) minmax(0,1fr)!important;
+    gap:18px!important;
+  }
+  #tab-deck .gwent-builder>div:first-child{
+    min-width:0!important;
+    padding:12px!important;
+  }
+  #tab-deck #gwent-deck-selected.gwent-deck-selected{
+    display:grid!important;
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    gap:7px!important;
+    margin:9px 0 12px!important;
+    align-items:start!important;
+  }
+  #tab-deck #gwent-deck-selected.gwent-deck-selected>.gwent-card-tile{
+    display:block!important;
+    width:100%!important;
+    min-width:0!important;
+    padding:3px!important;
+    border-radius:7px!important;
+    overflow:hidden!important;
+  }
+  #tab-deck #gwent-deck-selected .gwent-card-tile-art,
+  #tab-deck #gwent-deck-selected .gwent-card-tile-art img{
+    display:block!important;width:100%!important;max-width:100%!important;
+    height:auto!important;aspect-ratio:5/7!important;object-fit:contain!important;
+  }
+  #tab-deck #gwent-deck-selected .gwent-card-tile-hint{
+    display:none!important;
+  }
+  #tab-deck .gwent-config>p.muted:nth-of-type(2){
+    display:none!important;
+  }
+  #tab-deck .gwent-leader-card-preview{
+    max-width:132px!important;margin:4px auto 7px!important;
+  }
+}
+@media (min-width:1500px){
+  #tab-deck .gwent-builder{grid-template-columns:minmax(260px,295px) minmax(0,1fr)!important}
+}
+@media (max-width:860px){
+  #tab-deck #gwent-deck-selected.gwent-deck-selected{
+    display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    gap:7px!important;margin:9px 0!important;
+  }
+  #tab-deck #gwent-deck-selected>.gwent-card-tile{padding:3px!important;min-width:0!important}
+  #tab-deck #gwent-deck-selected .gwent-card-tile-hint{display:none!important}
+}
+@media (max-width:560px){
+  #tab-deck #gwent-deck-selected.gwent-deck-selected{
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  }
+}
+
+
+/* ===== V65 - FIX DEFINITIVO DO TAMANHO DAS CARTAS DO DECK =====
+   Seletores conferidos com o HTML real: #gwent-deck-selected.gwent-deck-selected.
+   Esta folha recebe cache-busting v65 no index.html. */
+@media (min-width:861px){
+  #tab-deck .gwent-builder{
+    grid-template-columns: minmax(245px,285px) minmax(0,1fr) !important;
+    gap:18px !important;
+  }
+  #tab-deck #gwent-deck-selected.gwent-deck-selected{
+    display:grid !important;
+    grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+    gap:6px !important;
+    width:100% !important;
+    min-width:0 !important;
+    margin:8px 0 12px !important;
+    padding:4px !important;
+    align-items:start !important;
+  }
+  #tab-deck #gwent-deck-selected.gwent-deck-selected > button.gwent-card-tile{
+    display:block !important;
+    width:100% !important;
+    min-width:0 !important;
+    max-width:100% !important;
+    height:auto !important;
+    min-height:0 !important;
+    padding:2px !important;
+    margin:0 !important;
+    overflow:hidden !important;
+    border-radius:6px !important;
+  }
+  #tab-deck #gwent-deck-selected.gwent-deck-selected > button.gwent-card-tile > .gwent-card-tile-art{
+    display:block !important;
+    width:100% !important;
+    height:104px !important;
+    max-height:104px !important;
+    overflow:hidden !important;
+  }
+  #tab-deck #gwent-deck-selected.gwent-deck-selected .gwent-card-tile-art img{
+    display:block !important;
+    width:100% !important;
+    height:104px !important;
+    max-height:104px !important;
+    aspect-ratio:auto !important;
+    object-fit:contain !important;
+  }
+  #tab-deck #gwent-deck-selected .gwent-card-tile-hint{
+    display:none !important;
+  }
+}
+@media (min-width:1500px){
+  #tab-deck .gwent-builder{
+    grid-template-columns:minmax(255px,295px) minmax(0,1fr) !important;
+  }
+}
+@media (max-width:860px){
+  #tab-deck #gwent-deck-selected.gwent-deck-selected{
+    display:grid !important;
+    grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+    gap:6px !important;
+    width:100% !important;
+    min-width:0 !important;
+  }
+  #tab-deck #gwent-deck-selected.gwent-deck-selected > button.gwent-card-tile{
+    min-width:0 !important;max-width:100% !important;padding:2px !important;
+  }
+  #tab-deck #gwent-deck-selected .gwent-card-tile-art{
+    height:100px !important;max-height:100px !important;overflow:hidden !important;
+  }
+  #tab-deck #gwent-deck-selected .gwent-card-tile-art img{
+    width:100% !important;height:100px !important;max-height:100px !important;
+    aspect-ratio:auto !important;object-fit:contain !important;
+  }
+  #tab-deck #gwent-deck-selected .gwent-card-tile-hint{display:none!important}
+}
+
+
+/* ===== V66 - miniatura renderizada especificamente no deck montado =====
+   Não depende do estilo da galeria: o HTML do deck recebe .gwent-deck-mini. */
+#tab-deck #gwent-deck-selected {
+  display:grid !important;
+  grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  gap:7px !important;
+  align-items:start !important;
+}
+#tab-deck #gwent-deck-selected > button.gwent-deck-mini {
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:stretch !important;
+  justify-content:flex-start !important;
+  width:100% !important;
+  min-width:0 !important;
+  max-width:100% !important;
+  height:auto !important;
+  min-height:0 !important;
+  margin:0 !important;
+  padding:3px !important;
+  overflow:hidden !important;
+  border:1px solid rgba(190,157,103,.55) !important;
+  border-radius:6px !important;
+  background:#111827 !important;
+  box-shadow:0 2px 7px rgba(0,0,0,.35) !important;
+  cursor:pointer;
+}
+#tab-deck #gwent-deck-selected > button.gwent-deck-mini .gwent-card-tile-art {
+  display:block !important;
+  width:100% !important;
+  height:106px !important;
+  max-height:106px !important;
+  overflow:hidden !important;
+}
+#tab-deck #gwent-deck-selected > button.gwent-deck-mini .gwent-card-tile-art img {
+  display:block !important;
+  width:100% !important;
+  height:106px !important;
+  max-height:106px !important;
+  aspect-ratio:auto !important;
+  object-fit:contain !important;
+  border:0 !important;
+  border-radius:3px !important;
+}
+#tab-deck #gwent-deck-selected > button.gwent-deck-mini .gwent-deck-mini-name {
+  display:block !important;
+  width:100% !important;
+  height:22px !important;
+  overflow:hidden !important;
+  padding:4px 1px 1px !important;
+  color:#d8c49a !important;
+  font:600 8px/1.2 Inter,sans-serif !important;
+  text-align:center !important;
+  text-overflow:ellipsis !important;
+  white-space:nowrap !important;
+}
+@media(max-width:860px) {
+  #tab-deck #gwent-deck-selected { grid-template-columns:repeat(4,minmax(0,1fr)) !important; }
+  #tab-deck #gwent-deck-selected > button.gwent-deck-mini .gwent-card-tile-art,
+  #tab-deck #gwent-deck-selected > button.gwent-deck-mini .gwent-card-tile-art img {
+    height:94px !important; max-height:94px !important;
+  }
+}
+
+
+/* ===== V67 - Construtor de deck: hierarquia, escala e leitura ===== */
+#tab-deck { width:100% !important; max-width:none !important; }
+#tab-deck .gwent-builder {
+  width:100% !important;
+  max-width:none !important;
+  grid-template-columns:minmax(310px,360px) minmax(0,1fr) !important;
+  gap:clamp(16px,1.5vw,26px) !important;
+  align-items:start !important;
+}
+#tab-deck .gwent-builder > div {
+  min-width:0 !important;
+  border:1px solid rgba(190,157,103,.34) !important;
+  border-radius:12px !important;
+  background:linear-gradient(155deg,rgba(20,29,45,.97),rgba(9,14,23,.98)) !important;
+  box-shadow:0 12px 30px rgba(0,0,0,.22) !important;
+}
+#tab-deck .gwent-builder > div:first-child {
+  position:sticky !important;
+  top:84px !important;
+  max-height:calc(100vh - 100px) !important;
+  overflow-y:auto !important;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(190,157,103,.45) transparent;
+}
+#tab-deck .gwent-builder > div:last-child { padding:16px !important; }
+#tab-deck .gwent-builder .section-head { margin-bottom:12px !important; }
+#tab-deck .gwent-leader-card-preview {
+  max-width:116px !important;
+  margin:7px auto 9px !important;
+}
+#tab-deck #gwent-relic-preview {
+  min-height:0 !important;
+  padding:10px !important;
+}
+#tab-deck #gwent-deck-selected.gwent-deck-selected {
+  display:grid !important;
+  grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+  gap:7px !important;
+  width:100% !important;
+  margin:10px 0 14px !important;
+  padding:8px !important;
+  border:1px solid rgba(190,157,103,.22) !important;
+  border-radius:9px !important;
+  background:rgba(4,8,14,.42) !important;
+  align-items:start !important;
+}
+#tab-deck #gwent-deck-selected > button.gwent-deck-mini {
+  min-width:0 !important;
+  padding:3px !important;
+  border-radius:6px !important;
+  background:#101a29 !important;
+}
+#tab-deck #gwent-deck-selected > button.gwent-deck-mini .gwent-card-tile-art,
+#tab-deck #gwent-deck-selected > button.gwent-deck-mini .gwent-card-tile-art img {
+  width:100% !important;
+  height:76px !important;
+  max-height:76px !important;
+  object-fit:cover !important;
+}
+#tab-deck #gwent-deck-selected > button.gwent-deck-mini .gwent-deck-mini-name {
+  height:24px !important;
+  font-size:8px !important;
+  line-height:1.15 !important;
+}
+#tab-deck #gwent-save-deck {
+  width:100% !important;
+  min-height:42px !important;
+  margin-top:5px !important;
+}
+#tab-deck .gwent-filters {
+  display:grid !important;
+  grid-template-columns:minmax(220px,1.5fr) repeat(2,minmax(130px,.8fr)) !important;
+  gap:9px !important;
+  margin:12px 0 15px !important;
+}
+#tab-deck #gwent-card-pool {
+  display:grid !important;
+  grid-template-columns:repeat(auto-fill,minmax(155px,1fr)) !important;
+  gap:14px !important;
+  align-items:start !important;
+}
+#tab-deck #gwent-card-pool .gwent-card-tile { width:100% !important; min-width:0 !important; }
+@media (min-width:1500px) {
+  #tab-deck .gwent-builder { grid-template-columns:minmax(330px,370px) minmax(0,1fr) !important; }
+  #tab-deck #gwent-card-pool { grid-template-columns:repeat(auto-fill,minmax(165px,1fr)) !important; }
+}
+@media (max-width:1000px) {
+  #tab-deck .gwent-builder { grid-template-columns:minmax(270px,320px) minmax(0,1fr) !important; }
+  #tab-deck #gwent-card-pool { grid-template-columns:repeat(auto-fill,minmax(135px,1fr)) !important; }
+}
+@media (max-width:760px) {
+  #tab-deck .gwent-builder { grid-template-columns:minmax(0,1fr) !important; }
+  #tab-deck .gwent-builder > div:first-child {
+    position:static !important; max-height:none !important; overflow:visible !important;
+  }
+  #tab-deck #gwent-deck-selected { grid-template-columns:repeat(6,minmax(0,1fr)) !important; }
+  #tab-deck .gwent-filters { grid-template-columns:1fr 1fr !important; }
+  #tab-deck .gwent-filters .deck-search { grid-column:1/-1 !important; }
+}
+@media (max-width:480px) {
+  #tab-deck #gwent-deck-selected { grid-template-columns:repeat(4,minmax(0,1fr)) !important; }
+  #tab-deck #gwent-card-pool { grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:9px !important; }
+  #tab-deck .gwent-builder > div:last-child { padding:11px !important; }
+}

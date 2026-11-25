@@ -1,0 +1,68 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ateliê de Arte — Narabot</title><style>
+:root{color-scheme:dark;--bg:#111318;--panel:#1b1e26;--line:#343945;--muted:#a6adbb;--gold:#d6b66d}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#f2f3f5;font:15px/1.5 system-ui,sans-serif}
+main{max-width:950px;margin:auto;padding:28px 18px}h1{font:clamp(28px,4vw,42px) Georgia,serif;color:var(--gold);margin:0}
+.muted{color:var(--muted)}.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin:16px 0}
+textarea{width:100%;min-height:330px;background:#101218;color:#f2f3f5;border:1px solid var(--line);border-radius:8px;padding:13px;resize:vertical}
+button,input{background:#101218;color:#f2f3f5;border:1px solid var(--line);border-radius:8px;padding:11px}
+button{cursor:pointer;background:#51452b;border-color:#8d7540}button:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.row button{flex:1}
+.preview{width:100%;max-width:620px;aspect-ratio:5/4;object-fit:contain;background:#0b0c10;border:1px solid var(--line);border-radius:10px}
+#status{white-space:pre-wrap;color:var(--muted)}.danger{color:#e5a0a0}
+</style><link rel="stylesheet" href="/elden-ui.css?v=v49">  <link rel="stylesheet" href="/narabot-visual-v59.css?v=59">
+</head><body><main>
+<h1>Ateliê de Arte</h1><p class="muted">Gere o prompt exclusivo da sua carta, crie a ilustração na ferramenta de sua preferência e envie o arquivo para vinculá-lo à sua carta.</p>
+<section class="panel"><h2 id="cardName">Carregando carta…</h2><div id="cardMeta" class="muted"></div>
+<p>O briefing é dividido em análise artística, prompt profissional e negative prompt. Use os campos B e C no gerador de imagens.</p>
+<label>Análise artística (PT)<textarea id="analysis" readonly placeholder="A análise aparecerá aqui."></textarea></label>
+<label>Prompt profissional (EN)<textarea id="prompt" readonly placeholder="O prompt aparecerá aqui."></textarea></label>
+<label>Negative prompt específico (EN)<textarea id="negative" readonly placeholder="As restrições aparecerão aqui."></textarea></label>
+<div class="row"><button id="copy" disabled>Copiar prompt</button><button id="copyNegative" disabled>Copiar negative</button><button id="copyAll" disabled>Copiar pacote A+B+C</button><button id="reload">Atualizar prompt</button></div>
+<p class="muted" id="format">Formato obrigatório: horizontal 5:4.</p></section>
+<section class="panel"><h2>Enviar ilustração</h2>
+<p class="muted">PNG, JPG ou WEBP · até 12 MB · mínimo 500 × 400 · proporção horizontal 5:4; a imagem será ajustada para 1200 × 960 px. A imagem será normalizada e armazenada em PNG.</p>
+<input type="file" id="file" accept="image/png,image/jpeg,image/webp">
+<div class="row" style="margin-top:12px"><button id="upload">Enviar e validar imagem</button><button id="replace" hidden>Substituir arte atual</button></div>
+<p id="status" role="status"></p><img id="preview" class="preview" hidden alt="Prévia da arte enviada">
+</section>
+</main><script>
+const cardId=new URLSearchParams(location.search).get('card_id');
+const $=id=>document.getElementById(id);
+let currentArt=false;
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function load(){
+ if(!cardId){$('status').textContent='ID da carta ausente na URL.';return}
+ const [cardRes,promptRes]=await Promise.all([
+  fetch('/api/gwent/cartas-geradas/'+encodeURIComponent(cardId),{credentials:'same-origin'}),
+  fetch('/api/gwent/cartas-geradas/'+encodeURIComponent(cardId)+'/prompt',{credentials:'same-origin'})
+ ]);
+ if(!cardRes.ok||!promptRes.ok){$('status').textContent='Carta não encontrada ou sem permissão de acesso.';return}
+ const card=await cardRes.json(),p=await promptRes.json();
+ $('cardName').textContent=card.name||card.definition?.nome||cardId;
+ $('cardMeta').textContent=[card.faction,card.rarity,'Poder '+card.power,'ID '+cardId].join(' · ');
+ $('analysis').value=p.analysis||'';$('prompt').value=p.prompt||'';$('negative').value=p.negative_prompt||'';$('copy').disabled=!p.prompt;$('copyNegative').disabled=!p.negative_prompt;$('copyAll').disabled=!(p.analysis&&p.prompt&&p.negative_prompt);$('format').textContent=`Formato obrigatório: horizontal ${p.recommended_aspect_ratio||'5:4'} · ${p.recommended_width||1200} × ${p.recommended_height||960}px.`;
+ currentArt=['validated','stored'].includes(card.art_status)&&!!card.art_path;
+ $('replace').hidden=!currentArt;$('upload').hidden=currentArt;
+ if(currentArt){$('preview').src='/api/gwent/cartas-geradas/'+encodeURIComponent(cardId)+'/arte';$('preview').hidden=false}
+}
+async function upload(replace=false){
+ const f=$('file').files[0];if(!f){$('status').textContent='Selecione uma imagem primeiro.';return}
+ const form=new FormData();form.append('image',f);
+ $('upload').disabled=true;$('replace').disabled=true;$('status').textContent='Enviando e validando…';
+ try{
+  const url='/api/gwent/cartas-geradas/'+encodeURIComponent(cardId)+'/arte'+(replace?'?replace=1':'');
+  const r=await fetch(url,{method:'POST',body:form,credentials:'same-origin'});
+  const d=await r.json();
+  if(!r.ok)throw new Error(d.error||'Falha no envio.');
+  $('status').textContent=`Arte registrada. ${d.width} × ${d.height}px · SHA-256 ${d.sha256}`;
+  $('preview').src=d.art_url+'?v='+Date.now();$('preview').hidden=false;$('replace').hidden=false;
+ }catch(e){$('status').textContent=e.message}
+ finally{$('upload').disabled=false;$('replace').disabled=false}
+}
+$('copy').onclick=async()=>{await navigator.clipboard.writeText($('prompt').value);$('status').textContent='Prompt profissional copiado.'};
+$('copyNegative').onclick=async()=>{await navigator.clipboard.writeText($('negative').value);$('status').textContent='Negative prompt copiado.'};
+$('copyAll').onclick=async()=>{const all=`A. ANÁLISE ARTÍSTICA\n${$('analysis').value}\n\nB. PROMPT PROFISSIONAL\n${$('prompt').value}\n\nC. NEGATIVE PROMPT\n${$('negative').value}`;await navigator.clipboard.writeText(all);$('status').textContent='Pacote completo copiado.'};
+$('reload').onclick=load;$('upload').onclick=()=>upload(false);$('replace').onclick=()=>upload(true);
+load();
+</script></body></html>
