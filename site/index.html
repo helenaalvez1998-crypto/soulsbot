@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#07080d"><title>NARABOT — Comunidade e Gwent do Coliseu</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800;900&family=Cormorant+Garamond:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css?v=gwent-experience-v25">
+  <link rel="stylesheet" href="/style.css?v=gwent-experience-v26">
 <link rel="stylesheet" href="/elden-ui.css?v=v49">
 <script>try{const v=JSON.parse(localStorage.getItem('vis')||'{}'),r=document.documentElement;r.dataset.theme=v.tema||'cinzas';if(/^#[0-9a-f]{6}$/i.test(v.cor||'')){r.style.setProperty('--gold',v.cor);r.style.setProperty('--gold-bright','color-mix(in srgb,'+v.cor+' 70%,#fff)')}}catch(e){}</script>
 
@@ -98,7 +98,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
   </label>
   <article id="gwent-relic-preview" class="gwent-relic-preview"><b>Nenhuma Relíquia selecionada</b><p>Escolha uma peça do arsenal para ver seu efeito.</p></article>
   <p id="gwent-relic-status" class="muted">A seleção fica salva neste navegador.</p>
-</div><p id="gwent-faction-description" class="muted">Escolha uma facção para definir sua sinergia e seus líderes disponíveis.</p><p class="muted">Cada exemplar aparece separadamente. Você pode escolher a raridade e o poder exatos que deseja usar; o deck aceita apenas um exemplar de cada modelo.</p></div><div id="gwent-deck-selected" class="gwent-deck-selected"></div><button id="gwent-save-deck" class="primary" type="button" disabled>Salvar deck Gwent</button><p id="gwent-deck-status" class="muted">Carregando deck...</p></div><div><div class="section-head"><div><small class="eyebrow">COLEÇÃO</small><h3>Escolha unidades e especiais</h3></div></div><div class="gwent-filters">
+</div><p id="gwent-faction-description" class="muted">Escolha uma facção para definir sua sinergia e seus líderes disponíveis.</p><p class="muted">Cada exemplar aparece separadamente. Você pode escolher a raridade e o poder exatos que deseja usar; o deck aceita apenas um exemplar de cada modelo.</p></div><div id="gwent-deck-selected" class="gwent-deck-selected"></div><div class="gwent-deck-actions"><button id="gwent-save-deck" class="primary" type="button" disabled>Salvar deck Gwent</button><button id="gwent-reset-deck" class="danger" type="button" disabled>Redefinir deck</button></div><p id="gwent-deck-status" class="muted">Carregando deck...</p></div><div><div class="section-head"><div><small class="eyebrow">COLEÇÃO</small><h3>Escolha unidades e especiais</h3></div></div><div class="gwent-filters">
           <input id="gwent-card-search" class="deck-search" type="search" placeholder="Buscar por nome, habilidade ou facção...">
           <select id="gwent-filter-faction" aria-label="Filtrar por facção"><option value="">Todas as facções</option><option>Ordem Áurea</option><option>Véu Carmesim</option><option>Lua Negra</option></select>
           <select id="gwent-filter-rarity" aria-label="Filtrar por raridade"><option value="">Todas as raridades</option><option>Comum</option><option>Rara</option><option>Épica</option><option>Lendária</option><option>Mítica</option><option>Primordial</option><option>Singular</option></select>
@@ -145,7 +145,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
       <small class="muted">Mínimo 512 × 512, proporção horizontal 5:4 após normalização, máximo 8 MB. Até 3 pendentes por conta.</small></div>
   </div>
   <div class="atelier-lower"><div><h4>Minhas submissões</h4><div id="atelier-history" class="atelier-history"><p class="muted">Entre com Discord para consultar.</p></div></div>
-  <div id="atelier-review-panel" hidden><h4>Fila de aprovação</h4><div id="atelier-review-queue" class="atelier-history"></div></div></div>
+  <div id="atelier-review-panel" hidden><h4>Fila de aprovação</h4><div class="atelier-maintenance"><div><b>Manutenção das artes oficiais</b><small>Retira das cartas todas as ilustrações comunitárias atualmente aprovadas. O histórico, os créditos e os arquivos enviados serão preservados.</small></div><button id="atelier-remove-all-art" class="danger" type="button">Remover todas as artes aplicadas</button></div><div id="atelier-review-queue" class="atelier-history"></div></div></div>
 </section></div>
   <div class="tab" id="tab-portal" data-title="Meu Portal"><div class="pt-nav"><button class="pt-pill on" data-p="profile" type="button">👤 Perfil</button><button class="pt-pill" data-p="sanctuary" type="button">🏛 Santuário</button><button class="pt-pill" data-p="store" type="button">🛒 Loja</button><button class="pt-pill" data-p="submit" type="button">📤 Envios</button><button class="pt-pill" data-p="contrib" type="button">✍ Contribuições</button><button class="pt-pill" data-p="notif" type="button">🔔 Notificações</button></div>
 <section class="pt-pane" data-p="profile" id="pt-profile"></section><section class="pt-pane" data-p="sanctuary" id="pt-sanctuary" hidden></section><section class="pt-pane" data-p="store" id="pt-store" hidden></section>
@@ -166,7 +166,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
     <footer>NARABOT · GWENT DO COLISEU <span>Jogo principal · conectado ao servidor oficial</span></footer>
   </main>
 </div>
-<script src="/app.js?v=art-direction-v70" defer></script>
+<script src="/app.js?v=maintenance-actions-v72" defer></script>
 <script>
 (()=>{const io=new IntersectionObserver(e=>e.forEach(x=>{if(x.isIntersecting){x.target.classList.add('in');io.unobserve(x.target)}}),{threshold:.12});
 const sc=()=>document.querySelectorAll('.reveal:not(.in),.gwent-store,.atelier-panel,.gwent-drop-history,.challenge-panel').forEach(el=>{if(!el.dataset.o){el.dataset.o=1;el.classList.add('reveal');io.observe(el)}});sc();
