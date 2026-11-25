@@ -182,50 +182,51 @@ SYNERGY_COMBOS = {
 }
 
 
-# Habilidades de identidade: efeitos próprios de cartas-chave, além das habilidades
-# gerais e dos combos de facção. Cada efeito é resolvido uma vez ao entrar em campo.
+# Habilidades de identidade: efeitos próprios de cartas-chave. Quando uma carta
+# possui uma habilidade de identidade, ela substitui a habilidade genérica do catálogo.
+# Os combos compatíveis continuam sendo verificados separadamente.
 CARD_IDENTITY_ABILITIES = {
-    "chefe_guardiao_cinzas": {"name": "Égide das Cinzas", "text": "Ao entrar em campo, dá +1 de bônus a um aliado da mesma fileira. Se já houver um aliado nessa fileira, esta carta também ganha +1.", "effect": "ash_guardian"},
-    "chefe_dama_vazio": {"name": "Fenda do Vazio", "text": "Ao entrar em campo, tira 2 pontos de bônus da unidade inimiga mais forte. O bônus dela não pode ficar abaixo de -2.", "effect": "void_rend"},
-    "chefe_cervo_sombrio": {"name": "Passagem Sombria", "text": "Ganha +1 para cada outra fileira que tenha um aliado seu, até +2.", "effect": "shadow_paths"},
-    "chefe_rei_afogado": {"name": "Dízimo do Abismo", "text": "Ganha +2 se você tiver uma unidade no descarte. Se não tiver, ganha +1 caso o adversário tenha mais unidades em campo.", "effect": "abyss_tithe"},
-    "chefe_oraculo_ruina": {"name": "Presságio da Ruína", "text": "Tira 1 ponto de bônus da unidade inimiga mais forte. Também ganha +1 se o adversário estiver vencendo.", "effect": "ruin_omen"},
-    "chefe_cacador_sem_rosto": {"name": "Marca da Presa", "text": "Ganha +2 se o adversário tiver uma unidade com poder atual maior que o poder-base desta carta.", "effect": "faceless_hunt"},
-    "chefe_vigia_cinzento": {"name": "Vigília Cinzenta", "text": "Dá +1 de bônus a todos os seus outros aliados na mesma fileira.", "effect": "grey_watch"},
-    "chefe_aparicao_veio": {"name": "Deslocamento Espectral", "text": "Ganha +2 se sua unidade anterior foi jogada em outra fileira.", "effect": "veil_shift"},
-    "arma_lamina_peregrino": {"name": "Duelo do Peregrino", "text": "Ganha +2 se o adversário jogou uma unidade na mesma fileira no turno anterior.", "effect": "pilgrim_duel"},
-    "arma_martelo_fornalha": {"name": "Martelo de Cadência", "text": "Ganha +1 para cada aliado da Ordem Áurea na mesma fileira, até +2.", "effect": "forge_rhythm"},
-    "arma_cajado_marulho": {"name": "Ressonância das Marés", "text": "Ganha +2 se o adversário tiver uma unidade do Véu Carmesim. Caso contrário, ganha +1 se ele tiver mais unidades em campo.", "effect": "tide_resonance"},
-    "arma_duas_luas": {"name": "Dança Espelhada", "text": "Ganha +1 se você tiver outro aliado em uma fileira diferente.", "effect": "twin_dance"},
-    "arma_grande_sino": {"name": "Sino do Último Bastião", "text": "Ganha +2 quando sua pontuação total for menor que a do adversário.", "effect": "last_bell"},
-    "arma_agulha_astro": {"name": "Fio Astral", "text": "Marca o inimigo mais forte e tira 1 ponto de bônus dele. A próxima unidade Astral que você jogar ganha +1 nesta rodada.", "effect": "astral_thread"},
-    "arma_lanca_fornalha": {"name": "Investida da Fornalha", "text": "Ganha +1 se já houver outra unidade da Ordem Áurea em campo.", "effect": "furnace_charge"},
-    "arma_arco_peregrino": {"name": "Tiro de Cobertura", "text": "Dá +1 de bônus ao seu aliado mais fraco que esteja em outra fileira.", "effect": "covering_shot"},
-    "magia_brasa_errante": {"name": "Brasa Persistente", "text": "Ganha +1 para cada fileira que tenha inimigos e esteja sob efeito climático, até +2.", "effect": "wandering_ember"},
-    "magia_selo_vigilia": {"name": "Selo de Vigília", "text": "Reduz em 1 o dano do clima sofrido por esta carta e dá +1 de bônus a um aliado da mesma fileira.", "effect": "vigil_seal"},
-    "magia_trovao_oco": {"name": "Descarga Oca", "text": "Tira 1 ponto de bônus de cada unidade inimiga na mesma fileira.", "effect": "hollow_thunder"},
-    "magia_nevoa_antiga": {"name": "Névoa Ancestral", "text": "Ganha +2 se houver efeito climático em qualquer fileira.", "effect": "ancient_mist"},
-    "magia_sol_negro": {"name": "Eclipse Devorador", "text": "Ganha +2 se algum inimigo tiver bônus acima de zero.", "effect": "devouring_eclipse"},
-    "magia_fagulha": {"name": "Faísca Condutora", "text": "Ganha +1 se houver outra unidade da Lua Negra do seu lado do campo.", "effect": "conductive_spark"},
-    "magia_orbe_eco": {"name": "Orbe Refrator", "text": "Ganha +1 para cada carta especial no seu descarte, até +2.", "effect": "echo_orb"},
-    "magia_chama_fria": {"name": "Contrafogo", "text": "Tira 1 ponto de bônus de até dois inimigos na mesma fileira.", "effect": "counterflame"},
-    "covenant_lua_velada": {"name": "Aliança Lunar", "text": "Esta carta ganha +1 e dá +1 de bônus a um aliado em outra fileira.", "effect": "veiled_moon"},
-    "covenant_sentinelas": {"name": "Sentinela Compartilhada", "text": "Ganha +1 se você tiver pelo menos um aliado em cada uma das outras duas fileiras.", "effect": "shared_sentinel"},
-    "covenant_ultimos": {"name": "Último Juramento", "text": "Ganha +2 se você tiver menos unidades em campo que o adversário.", "effect": "last_oath"},
-    "covenant_filhos_brasa": {"name": "Herança da Brasa", "text": "Esta carta ganha +1 e dá +1 de bônus a um aliado da Ordem Áurea na mesma fileira.", "effect": "ember_kin"},
-    "covenant_peregrinos_nevoa": {"name": "Rastro na Névoa", "text": "Ganha +1 se sua unidade anterior foi jogada em outra fileira.", "effect": "mist_trail"},
-    "chefe_malenia_lamina_miquella": {"name": "Flor Escarlate", "text": "Ao entrar em campo, aplica Podridão Escarlate aos inimigos da fileira. Quem já estiver contaminado recebe uma segunda marca.", "effect": "scarlet_bloom"},
-    "chefe_radahn_flagelo_estrelas": {"name": "Gravidade do Flagelo", "text": "Ao entrar em campo, move o inimigo mais forte para sua fileira e tira 2 pontos de bônus dele.", "effect": "star_gravity"},
-    "chefe_maliketh_morte_destinada": {"name": "Morte Destinada", "text": "Ao entrar em campo, tira até 2 pontos de bônus do inimigo mais forte.", "effect": "destined_death"},
-    "chefe_messmer_impalador": {"name": "Lança do Impalador", "text": "Ao entrar em campo, marca os inimigos da fileira com Sangramento. A segunda marca causa Hemorragia.", "effect": "impaling_spear"},
-    "chefe_placidusax_lorde_dragao": {"name": "Tempestade do Tempo", "text": "Ao entrar em campo, aplica Geada aos inimigos da fileira e ganha +1 para cada inimigo atingido, até +3.", "effect": "time_storm"},
+    "chefe_guardiao_cinzas": {"name": "Égide das Cinzas", "text": "Ao entrar, esta carta e o primeiro aliado da mesma fileira ganham +1 de bônus. Sem aliado, ela não ganha bônus.", "effect": "ash_guardian"},
+    "chefe_dama_vazio": {"name": "Fenda do Vazio", "text": "Ao entrar, tira 2 pontos do bônus do inimigo mais forte do campo. O bônus dele não pode ficar abaixo de -2.", "effect": "void_rend"},
+    "chefe_cervo_sombrio": {"name": "Passagem Sombria", "text": "Ganha +1 de bônus para cada uma das outras fileiras que já tenha um aliado seu. Pode ganhar até +2.", "effect": "shadow_paths"},
+    "chefe_rei_afogado": {"name": "Dízimo do Abismo", "text": "Se houver uma unidade no seu descarte, ganha +2 de bônus. Se o descarte estiver vazio, ganha +1 apenas se o inimigo tiver mais unidades em campo.", "effect": "abyss_tithe"},
+    "chefe_oraculo_ruina": {"name": "Presságio da Ruína", "text": "Tira 1 ponto do bônus do inimigo mais forte. Se sua equipe estiver perdendo, esta carta também ganha +1 de bônus.", "effect": "ruin_omen"},
+    "chefe_cacador_sem_rosto": {"name": "Marca da Presa", "text": "Recebe +2 de bônus se algum inimigo tiver força atual maior que o poder-base desta carta.", "effect": "faceless_hunt"},
+    "chefe_vigia_cinzento": {"name": "Vigília Cinzenta", "text": "Ao entrar, dá +1 de bônus a cada aliado que já esteja nesta fileira.", "effect": "grey_watch"},
+    "chefe_aparicao_veio": {"name": "Deslocamento Espectral", "text": "Ganha +2 de bônus se sua última unidade foi jogada em outra fileira.", "effect": "veil_shift"},
+    "arma_lamina_peregrino": {"name": "Duelo do Peregrino", "text": "Ganha +2 de bônus se a última unidade jogada pelo inimigo nesta rodada entrou nesta fileira.", "effect": "pilgrim_duel"},
+    "arma_martelo_fornalha": {"name": "Martelo de Cadência", "text": "Ganha +1 de bônus para cada aliado da Ordem Áurea que já esteja nesta fileira, até +2.", "effect": "forge_rhythm"},
+    "arma_cajado_marulho": {"name": "Ressonância das Marés", "text": "Se houver um inimigo do Véu Carmesim, ganha +2 de bônus. Se não houver, ganha +1 caso o inimigo tenha mais unidades em campo que você.", "effect": "tide_resonance"},
+    "arma_duas_luas": {"name": "Dança Espelhada", "text": "Ganha +1 de bônus se já houver outro aliado seu em uma fileira diferente.", "effect": "twin_dance"},
+    "arma_grande_sino": {"name": "Sino do Último Bastião", "text": "Ganha +2 de bônus se sua equipe estiver perdendo quando esta carta entrar.", "effect": "last_bell"},
+    "arma_agulha_astro": {"name": "Fio Astral", "text": "Se houver um inimigo em campo, tira 1 ponto do bônus do mais forte. Sua próxima carta ganha +1 de bônus se tiver a marca Astral. Se você jogar outra carta antes, perde essa chance.", "effect": "astral_thread"},
+    "arma_lanca_fornalha": {"name": "Investida da Fornalha", "text": "Ganha +1 de bônus se já houver outra unidade da Ordem Áurea em campo.", "effect": "furnace_charge"},
+    "arma_arco_peregrino": {"name": "Tiro de Cobertura", "text": "Dá +1 de bônus ao aliado mais fraco que esteja em outra fileira. Se não houver, nada acontece.", "effect": "covering_shot"},
+    "magia_brasa_errante": {"name": "Brasa Persistente", "text": "Ganha +1 de bônus para cada fileira que tenha inimigos e clima ativo, até +2.", "effect": "wandering_ember"},
+    "magia_selo_vigilia": {"name": "Selo de Vigília", "text": "O clima tira 1 ponto a menos desta carta. O primeiro aliado que já esteja na mesma fileira também ganha +1 de bônus.", "effect": "vigil_seal"},
+    "magia_trovao_oco": {"name": "Descarga Oca", "text": "Tira 1 ponto do bônus de cada inimigo nesta fileira. Nenhum bônus pode ficar abaixo de -2.", "effect": "hollow_thunder"},
+    "magia_nevoa_antiga": {"name": "Névoa Ancestral", "text": "Ganha +2 de bônus se houver clima ativo em qualquer fileira.", "effect": "ancient_mist"},
+    "magia_sol_negro": {"name": "Eclipse Devorador", "text": "Ganha +2 de bônus se pelo menos um inimigo tiver bônus acima de 0.", "effect": "devouring_eclipse"},
+    "magia_fagulha": {"name": "Faísca Condutora", "text": "Ganha +1 de bônus se já houver outro aliado da Lua Negra em campo.", "effect": "conductive_spark"},
+    "magia_orbe_eco": {"name": "Orbe Refrator", "text": "Ganha +1 de bônus para cada carta Especial no seu descarte, até +2.", "effect": "echo_orb"},
+    "magia_chama_fria": {"name": "Contrafogo", "text": "Tira 1 ponto do bônus de até 2 inimigos com os maiores bônus nesta fileira. Nenhum fica abaixo de -2.", "effect": "counterflame"},
+    "covenant_lua_velada": {"name": "Aliança Lunar", "text": "Esta carta sempre ganha +1 de bônus. O aliado mais fraco em outra fileira também ganha +1, se houver.", "effect": "veiled_moon"},
+    "covenant_sentinelas": {"name": "Sentinela Compartilhada", "text": "Ganha +1 de bônus se você já tiver pelo menos um aliado em cada uma das outras duas fileiras.", "effect": "shared_sentinel"},
+    "covenant_ultimos": {"name": "Último Juramento", "text": "Ganha +2 de bônus se sua equipe tiver menos unidades em campo que o inimigo.", "effect": "last_oath"},
+    "covenant_filhos_brasa": {"name": "Herança da Brasa", "text": "Esta carta sempre ganha +1 de bônus. O primeiro aliado da Ordem Áurea na mesma fileira também ganha +1, se houver.", "effect": "ember_kin"},
+    "covenant_peregrinos_nevoa": {"name": "Rastro na Névoa", "text": "Ganha +1 de bônus se sua última unidade foi jogada em outra fileira.", "effect": "mist_trail"},
+    "chefe_malenia_lamina_miquella": {"name": "Flor Escarlate", "text": "Aplica Podridão Escarlate a todos os inimigos desta fileira. Cada marca reduz o poder atual em 1. Com 2 marcas, também tira 1 ponto do bônus positivo. As marcas somem no fim da rodada.", "effect": "scarlet_bloom"},
+    "chefe_radahn_flagelo_estrelas": {"name": "Gravidade do Flagelo", "text": "Ao entrar, move o inimigo mais forte para esta fileira e tira 2 pontos do bônus dele (até -2).", "effect": "star_gravity"},
+    "chefe_maliketh_morte_destinada": {"name": "Morte Destinada", "text": "Ao entrar, tira 2 pontos do bônus do inimigo mais forte do campo. O bônus dele não pode ficar abaixo de -2.", "effect": "destined_death"},
+    "chefe_messmer_impalador": {"name": "Lança do Impalador", "text": "Aplica Sangramento a todos os inimigos desta fileira. A segunda marca causa Hemorragia: tira 2 pontos do bônus (até -2) e apaga as marcas. As marcas restantes somem no fim da rodada.", "effect": "impaling_spear"},
+    "chefe_placidusax_lorde_dragao": {"name": "Tempestade do Tempo", "text": "Aplica Geada a todos os inimigos desta fileira. Cada marca reduz o poder atual em 1 nesta rodada. Esta carta ganha +1 de bônus por inimigo atingido, até +3.", "effect": "time_storm"},
     # Expansão V75 — efeitos individuais das doze novas unidades.
-    "gwent_v75_ordem_veterano_juramento": {"name": "Juramento Dourado", "text": "Ao entrar, recebe +1; se houver aliado na mesma fileira, o aliado mais fraco também recebe +1.", "effect": "v75_golden_vow"},
-    "gwent_v75_ordem_confessora_graca": {"name": "Regressão Serena", "text": "Purifica até dois aliados da mesma fileira de estados negativos; cada aliado purificado recebe +1. Se ninguém precisar de purificação, fortalece o aliado mais fraco em +1.", "effect": "v75_grace_mender"},
-    "gwent_v75_veu_acolito_sangue": {"name": "Marca da Dinastia", "text": "Aplica uma marca de Sangramento ao inimigo mais forte da fileira; a segunda marca provoca Hemorragia e reduz 2 de bônus.", "effect": "v75_blood_mark"},
-    "gwent_v75_veu_carrasco_preco": {"name": "Preço em Sangue", "text": "Sacrifica o aliado mais fraco da mesma fileira e recebe bônus igual ao seu poder efetivo, até +3; sem aliado, recebe +1.", "effect": "v75_blood_price"},
-    "gwent_v75_lua_oraculo_geada": {"name": "Presságio da Geada", "text": "Aplica uma marca de Geada ao inimigo mais forte da fileira; se já tinha uma marca, completa a segunda e recebe +1.", "effect": "v75_frost_oracle"},
-    "gwent_v75_lua_graviturgista": {"name": "Cisalhamento Gravitacional", "text": "Reduz em 1 o bônus de até dois inimigos com bônus positivo na fileira; se atingir dois, recebe +1.", "effect": "v75_gravity_shear"},
+    "gwent_v75_ordem_veterano_juramento": {"name": "Juramento Dourado", "text": "Ao entrar, esta carta ganha +1 de bônus. O aliado mais fraco da mesma fileira também ganha +1, se houver.", "effect": "v75_golden_vow"},
+    "gwent_v75_ordem_confessora_graca": {"name": "Regressão Serena", "text": "Remove Sangramento, Geada, Podridão e Loucura de até 2 aliados desta fileira. Cada um ganha +1 de bônus. Se nenhum aliado tiver marcas, o mais fraco ganha +1. Se não houver outro aliado na fileira, esta carta ganha +1.", "effect": "v75_grace_mender"},
+    "gwent_v75_veu_acolito_sangue": {"name": "Marca da Dinastia", "text": "Aplica Sangramento ao inimigo mais forte desta fileira. Se ele já tiver uma marca, causa Hemorragia: tira 2 pontos do bônus (até -2), apaga as marcas e esta carta ganha +1.", "effect": "v75_blood_mark"},
+    "gwent_v75_veu_carrasco_preco": {"name": "Preço em Sangue", "text": "Sacrifica o aliado mais fraco desta fileira e ganha bônus igual à força atual dele, até +3. Se não houver aliado, ganha +1. O escudo não impede o sacrifício.", "effect": "v75_blood_price"},
+    "gwent_v75_lua_oraculo_geada": {"name": "Presságio da Geada", "text": "Aplica Geada ao inimigo mais forte desta fileira. Se ele já tiver Geada, esta carta ganha +1 de bônus.", "effect": "v75_frost_oracle"},
+    "gwent_v75_lua_graviturgista": {"name": "Cisalhamento Gravitacional", "text": "Tira 1 ponto do bônus de até 2 inimigos com bônus positivo nesta fileira. Se atingir 2 inimigos, esta carta ganha +1.", "effect": "v75_gravity_shear"},
 }
 
 
@@ -239,7 +240,7 @@ def _aplicar_habilidade_identidade(player: dict, other: dict, card: dict, state:
         return None
     effect = data["effect"]
     allies, enemies = player.get("board", []), other.get("board", [])
-    same_row = [unit for unit in allies if unit.get("row") == row]
+    same_row = [unit for unit in allies if unit.get("row") == row and unit is not card]
     enemy_row = [unit for unit in enemies if unit.get("row") == row]
     weather = state.get("weather", {})
     strongest = max(enemies, key=lambda unit: _poder_efetivo(unit, weather), default=None)
@@ -268,7 +269,7 @@ def _aplicar_habilidade_identidade(player: dict, other: dict, card: dict, state:
     elif effect == "pilgrim_duel":
         if other.get("last_row") == row: card["bonus"] += 2
     elif effect == "forge_rhythm":
-        card["bonus"] += min(2, sum(1 for u in allies if canonical_faction(u.get("faccao") or FACTIONS.get(str(u.get("tipo", "")))) == "Ordem Áurea" and u.get("row") == row))
+        card["bonus"] += min(2, sum(1 for u in allies if u is not card and canonical_faction(u.get("faccao") or FACTIONS.get(str(u.get("tipo", "")))) == "Ordem Áurea" and u.get("row") == row))
     elif effect == "tide_resonance":
         if any(canonical_faction(u.get("faccao") or FACTIONS.get(str(u.get("tipo", "")))) == "Véu Carmesim" for u in enemies):
             card["bonus"] += 2
@@ -282,7 +283,7 @@ def _aplicar_habilidade_identidade(player: dict, other: dict, card: dict, state:
         if strongest: strongest["bonus"] = max(-2, int(strongest.get("bonus", 0)) - 1)
         player["astral_thread_ready"] = True
     elif effect == "furnace_charge":
-        if any(canonical_faction(u.get("faccao") or FACTIONS.get(str(u.get("tipo", "")))) == "Ordem Áurea" for u in allies): card["bonus"] += 1
+        if any(u is not card and canonical_faction(u.get("faccao") or FACTIONS.get(str(u.get("tipo", "")))) == "Ordem Áurea" for u in allies): card["bonus"] += 1
     elif effect == "covering_shot" and weakest_other_row:
         weakest_other_row["bonus"] = int(weakest_other_row.get("bonus", 0)) + 1
     elif effect == "wandering_ember":
@@ -297,7 +298,7 @@ def _aplicar_habilidade_identidade(player: dict, other: dict, card: dict, state:
     elif effect == "devouring_eclipse":
         if any(int(u.get("bonus", 0)) > 0 for u in enemies): card["bonus"] += 2
     elif effect == "conductive_spark":
-        if any(canonical_faction(u.get("faccao") or FACTIONS.get(str(u.get("tipo", "")))) == "Lua Negra" for u in allies): card["bonus"] += 1
+        if any(u is not card and canonical_faction(u.get("faccao") or FACTIONS.get(str(u.get("tipo", "")))) == "Lua Negra" for u in allies): card["bonus"] += 1
     elif effect == "echo_orb":
         card["bonus"] += min(2, sum(1 for c in player.get("discard", []) if c.get("especial")))
     elif effect == "counterflame":
@@ -437,8 +438,9 @@ DEFAULT_LEADERS = {
 }
 
 
-# Potência adicional por raridade. O bônus é um orçamento por ativação:
-# é distribuído entre os alvos que a habilidade já afetou, sem criar alvos novos.
+# Orçamento numérico da raridade. É usado tanto por efeitos com limites próprios
+# (compra, recuperação, invocação, escudos e marcas) quanto pelo reforço de bônus.
+# Não deve ser interpretado como poder-base nem como quantidade fixa de pontos.
 RARITY_EFFECT_BUDGET = {
     # Curva com retornos decrescentes: raridade já eleva poder-base.
     # O teto de 3 evita que raridades altas dupliquem a vantagem em efeitos.
@@ -451,11 +453,11 @@ RARITY_EFFECT_BUDGET = {
 def _aplicar_potencia_raridade(card: dict, player: dict, other: dict,
                                 bonus_antes: dict[int, int],
                                 bonus_card_antes: int = 0) -> int:
-    """Amplia buffs/debuffs numéricos já produzidos pela habilidade, com teto por carta.
+    """Reforça mudanças numéricas de bônus já produzidas durante a ativação.
 
-    Não aumenta poder-base, não cria alvos e não altera custos, duração, compra,
-    invocação, escudos ou condições. O orçamento segue o nível exclusivo
-    da raridade e respeita o teto individual de cada alvo/efeito.
+    Este helper não altera poder-base, alvos, custos, duração, compra, invocação,
+    escudos ou condições. Outros efeitos consultam o mesmo orçamento para seus
+    próprios limites, descritos separadamente em preparar_carta.
     """
     budget = int(RARITY_EFFECT_BUDGET.get(str(card.get("raridade", "Comum")), 0))
     if budget <= 0:
@@ -484,9 +486,96 @@ def _aplicar_potencia_raridade(card: dict, player: dict, other: dict,
     return applied
 
 
+def _texto_raridade_carta(skill: str, identity: dict, has_synergy: bool,
+                           raridade: str, budget: int, special: bool) -> str:
+    """Explica somente o que a raridade altera no efeito realmente executado."""
+    if skill.startswith("reliquia_"):
+        return "A raridade não muda o efeito desta Relíquia."
+
+    if skill in {"gwent_nevoa", "gwent_geada"}:
+        nome = "Podridão Escarlate" if skill == "gwent_nevoa" else "Geada"
+        if budget >= 2:
+            return f"Raridade {raridade}: cada inimigo atingido recebe até 2 marcas de {nome}."
+        return f"Raridade {raridade}: cada inimigo atingido recebe 1 marca de {nome}. A partir da Lendária, recebe até 2."
+
+    # Estas cartas usam a raridade para alterar um limite próprio do efeito.
+    if skill == "gwent_execucao":
+        if budget <= 0:
+            return f"Raridade {raridade}: não aumenta o limite do alvo, que continua em 6 de poder atual."
+        return (f"Raridade {raridade}: o alvo continua limitado a 6 de poder atual. "
+                f"Se a unidade removida ativar Vingança, a raridade também pode reforçar até {budget} bônus dessa reação.")
+    if skill == "gwent_medico":
+        limite = min(8, 4 + budget)
+        return f"Raridade {raridade}: permite recuperar unidades com poder-base de até {limite}."
+    if skill == "gwent_requiem":
+        limite = min(10, 6 + budget)
+        return f"Raridade {raridade}: permite trazer de volta unidades com poder-base de até {limite}."
+    if skill == "gwent_batedor":
+        quantidade = min(2, 1 + budget)
+        return f"Raridade {raridade}: compra até {quantidade} cartas do topo da sua reserva."
+    if skill == "gwent_invocacao":
+        poder_lobo = min(6, 3 + budget)
+        return f"Raridade {raridade}: a unidade Lobos Espirituais entra com {poder_lobo} de poder-base."
+    if skill == "gwent_egide":
+        quantidade = min(3, 1 + budget)
+        return f"Raridade {raridade}: pode dar escudo a até {quantidade} aliados sem escudo."
+    if skill == "gwent_passo":
+        quantidade = min(3, 1 + budget)
+        return f"Raridade {raridade}: pode mover até {quantidade} aliados para a fileira escolhida."
+
+    # Algumas táticas aplicam marcas extras somente aos primeiros alvos elegíveis.
+    if skill in {"gwent_sangramento", "gwent_geada_cariana", "gwent_podrida", "gwent_loucura"}:
+        marca = {
+            "gwent_sangramento": "Sangramento",
+            "gwent_geada_cariana": "Geada",
+            "gwent_podrida": "Podridão Escarlate",
+            "gwent_loucura": "Loucura",
+        }[skill]
+        if budget <= 0:
+            return f"Raridade {raridade}: não aplica marcas extras de {marca}."
+        alvos = "no primeiro inimigo" if budget == 1 else f"nos primeiros {budget} inimigos"
+        condicao = f"se ele ainda não tiver {marca}" if budget == 1 else f"se eles ainda não tiverem {marca}"
+        extra = (f"Raridade {raridade}: além da marca normal, pode aplicar outra marca {alvos} "
+                 f"da fileira, {condicao}.")
+        if skill == "gwent_sangramento":
+            extra += " A segunda marca causa Hemorragia, reduz o bônus em 2 e apaga as marcas; a raridade pode reduzir mais 1 (até -2)."
+        elif skill == "gwent_podrida":
+            extra += " A segunda marca reduz em 1 o bônus positivo; a raridade pode tirar mais 1 ponto."
+        elif skill == "gwent_loucura":
+            extra += " A segunda marca zera o bônus positivo; a raridade pode tirar mais 1 ponto."
+        return extra
+
+    # Estas habilidades não têm um bônus numérico próprio para a raridade reforçar.
+    # Quando também participam de um combo, a raridade ainda pode reforçar o combo.
+    sem_reforco = {"escudo_ferro", "ressurgir", "sobrevivente", "espolios", "gwent_purificar"}
+    if skill in sem_reforco:
+        if has_synergy and budget > 0:
+            quantidade = "1 unidade afetada" if budget == 1 else f"até {budget} unidades afetadas"
+            return (f"Raridade {raridade}: não muda o efeito próprio desta carta. "
+                    f"Se ela completar um combo, pode reforçar o bônus de {quantidade} por ele.")
+        return f"Raridade {raridade}: não altera o efeito desta carta."
+
+    if budget <= 0:
+        if not skill and not identity and has_synergy:
+            return f"Raridade {raridade}: não reforça os bônus gerados pelo combo desta carta."
+        if identity or skill or has_synergy:
+            return f"Raridade {raridade}: não reforça os efeitos de bônus desta carta."
+        return ""
+
+    quantidade = "1 unidade afetada" if budget == 1 else f"até {budget} unidades afetadas"
+    return (f"Raridade {raridade}: pode reforçar o bônus de {quantidade} por esta carta ou por seu combo. "
+            "Quem ganhar bônus recebe +1 extra; quem perder bônus perde mais 1 ponto (até -2). "
+            "Não muda o poder-base nem os escudos.")
+
+
 def preparar_carta(card: dict) -> dict:
     special = str(card.get("categoria", "")).casefold() == "especial"
-    skill = str(card.get("habilidade", ""))
+    card_id = str(card.get("id", ""))
+    skill_original = str(card.get("habilidade", ""))
+    identity = CARD_IDENTITY_ABILITIES.get(card_id, {})
+    # Regra do motor: quando existe habilidade de identidade, a habilidade genérica
+    # gravada no catálogo não é executada. A ficha também não pode mostrá-la.
+    skill = "" if identity else skill_original
     try:
         from sistemas.cartas import HABILIDADES
         skill_data = HABILIDADES.get(skill, {})
@@ -498,88 +587,71 @@ def preparar_carta(card: dict) -> dict:
     kind = str(card.get("tipo", "Força"))
     faction = str(card.get("faccao") or FACTIONS.get(kind, "Ordem Áurea"))
     category = "Especial" if special else "Unidade"
-    identity = CARD_IDENTITY_ABILITIES.get(str(card["id"]), {})
     raridade = str(card.get("raridade", "Comum"))
-    # Sem habilidade, só recebe orçamento se puder completar um combo registrado.
-    has_synergy = bool(CARD_SYNERGY_TAGS.get(str(card.get("id", "")), set()))
-    # Relíquias possuem potência fixa no próprio texto do item; a raridade não
-    # acrescenta modificadores ocultos como ocorre com cartas especiais comuns.
+    has_synergy = bool(CARD_SYNERGY_TAGS.get(card_id, set()))
+    # Relíquias têm efeito fixo. As demais cartas recebem o orçamento original
+    # quando possuem habilidade, identidade ou participação em combos.
     budget = (0 if skill.startswith("reliquia_") else
               int(RARITY_EFFECT_BUDGET.get(raridade, 0)) if (skill or identity or has_synergy) else 0)
-    # Lore (descricao) nunca deve ser usada como fallback de regra mecânica.
-    # Isso evita que frases narrativas sejam exibidas como se fossem efeitos de combate.
-    textos_habilidade = []
-    if identity.get("text"):
-        textos_habilidade.append(str(identity["text"]))
-    if skill_data.get("texto") and identity:
-        textos_habilidade.append(f"Habilidade adicional: {skill_data['texto']}")
-    elif not identity and card.get("habilidade_texto"):
-        textos_habilidade.append(str(card["habilidade_texto"]))
-    elif not identity and skill_data.get("texto"):
-        textos_habilidade.append(str(skill_data["texto"]))
-    texto_habilidade = str(" ".join(textos_habilidade) or "Sem habilidade especial.")[:420]
-    if budget:
-        quantidade_alteracoes = "alteração" if budget == 1 else "alterações"
-        upgrades = {
-            "gwent_nevoa": f" Raridade {raridade}: pode aplicar uma segunda marca de Podridão Escarlate.",
-            "gwent_chuva": " Aplica Sangramento às unidades inimigas da fileira de Cerco; a segunda marca provoca Hemorragia.",
-            "gwent_geada": f" Raridade {raridade}: pode aplicar uma segunda marca de Geada.",
-            "gwent_medico": f" Raridade {raridade}: recupera unidade com poder-base até {min(8, 4 + budget)}.",
-            "gwent_execucao": f" Raridade {raridade}: alcança poder efetivo até {min(6, 6 + budget)}.",
-            "gwent_requiem": f" Raridade {raridade}: recupera unidade com poder-base até {min(10, 6 + budget)}.",
-            "gwent_batedor": f" Raridade {raridade}: compra até {min(2, 1 + budget)} cartas.",
-            "gwent_invocacao": f" Raridade {raridade}: invoca lobos com {min(6, 3 + budget)} de poder.",
-            "gwent_egide": f" Raridade {raridade}: protege até {min(3, 1 + budget)} unidades.",
-            "gwent_passo": f" Raridade {raridade}: move até {min(3, 1 + budget)} unidades.",
-            "gwent_sangramento": f" Raridade {raridade}: aplica uma marca extra a até {min(3, budget)} alvo(s), podendo ativar hemorragia imediatamente.",
-            "gwent_geada_cariana": f" Raridade {raridade}: aplica uma segunda marca a até {min(3, budget)} alvo(s).",
-            "gwent_queima": "",
-            "gwent_purificar": "",
-            "gwent_podrida": f" Raridade {raridade}: pode aplicar a segunda marca imediatamente a até {min(3, budget)} alvo(s).",
-            "gwent_loucura": f" Raridade {raridade}: pode aplicar a segunda marca imediatamente a até {min(3, budget)} alvo(s).",
-        }
-        if skill in {"gwent_nevoa", "gwent_geada"}:
-            # Esses dois efeitos globais só aplicam a segunda marca a partir
-            # do orçamento 2 (Lendária+), não em Rara/Épica.
-            if budget >= 2:
-                label = "Podridão Escarlate" if skill == "gwent_nevoa" else "Geada"
-                texto_habilidade = (texto_habilidade + f" Raridade {raridade}: aplica a segunda marca de {label} a todas as unidades elegíveis da fileira/campo afetado.").strip()
-        elif skill in upgrades:
-            texto_habilidade = (texto_habilidade + upgrades[skill]).strip()
-        elif skill:
-            texto_habilidade = (texto_habilidade + f" Raridade {raridade}: reforça até {budget} bônus já alterados pela habilidade: +1 nos positivos ou -1 nos negativos. Não muda o poder inicial nem os escudos.").strip()
-        elif identity:
-            texto_habilidade = (texto_habilidade + f" Raridade {raridade}: reforça até {budget} bônus já alterados pela habilidade: +1 nos positivos ou -1 nos negativos. Não muda o poder inicial nem os escudos.").strip()
-        elif has_synergy:
-            texto_habilidade = (texto_habilidade + f" Raridade {raridade}: ao completar combo compatível, reforça até {budget} bônus já alterados: +1 nos positivos ou -1 nos negativos.").strip()
+
+    if identity:
+        habilidade_nome = str(identity.get("name") or "Habilidade de identidade")
+        habilidade_texto = str(identity.get("text") or "Sem habilidade especial.")
+    elif skill and skill_data.get("texto"):
+        habilidade_nome = str(skill_data.get("nome") or skill.replace("_", " ").title())
+        habilidade_texto = str(skill_data["texto"])
+    elif has_synergy:
+        habilidade_nome = "Sem habilidade individual"
+        habilidade_texto = "Esta carta não tem efeito sozinha. Ela só funciona em um combo compatível; veja os combos compatíveis desta carta."
+    else:
+        habilidade_nome = "Sem habilidade especial"
+        habilidade_texto = "Esta carta não possui uma habilidade de combate própria."
+
+    # Personaliza apenas os valores que o motor realmente calcula para a raridade atual.
+    if skill == "gwent_medico":
+        habilidade_texto = "Escolha uma unidade do seu descarte para colocá-la na sua mão."
+    elif skill == "gwent_requiem":
+        habilidade_texto = "Escolha uma unidade do seu descarte para voltar ao campo, na mesma fileira em que estava antes de sair. Ela retorna sem bônus e sem escudo."
+    elif skill == "gwent_batedor":
+        habilidade_texto = "Compra cartas do topo da sua reserva. A quantidade depende da raridade."
+    elif skill == "gwent_invocacao":
+        habilidade_texto = "Invoca a unidade Lobos Espirituais na fileira escolhida."
+    elif skill == "gwent_egide":
+        habilidade_texto = "Dá escudo a aliados que ainda não tenham um. Você escolhe o primeiro; depois, os mais fortes são protegidos."
+    elif skill == "gwent_passo":
+        habilidade_texto = "Move aliados de outras fileiras para a escolhida. Você pode escolher quem vai primeiro; os demais seguem a ordem em que aparecem no campo. Sem escolha, o mais fraco vai primeiro."
+
+    raridade_texto = _texto_raridade_carta(skill, identity, has_synergy, raridade, budget, special)
+    sem_reforco = {"escudo_ferro", "ressurgir", "sobrevivente", "espolios", "gwent_purificar"}
+    raridade_ativa = bool(budget > 0 and not skill.startswith("reliquia_")
+                          and (skill not in sem_reforco or has_synergy))
+
+
     return {
-        "id": str(card["id"]), "nome": str(card.get("nome", "Carta")),
+        "id": card_id, "nome": str(card.get("nome", "Carta")),
         "categoria": category,
         "papel_gwent": str(card.get("papel_gwent", "Tática" if special else ROW_LABELS[row])),
         "especial": special,
         "poder": 0 if special else max(1, min(15, int(card.get("poder", 1)))),
-        "raridade": raridade, "potencia_raridade": budget, "tipo": kind,
-        "faccao": faction,
+        "raridade": raridade, "potencia_raridade": budget,
+        "potencia_raridade_ativa": raridade_ativa,
+        "raridade_texto": raridade_texto,
+        "tipo": kind, "faccao": faction,
         "arquetipo_faccao": FACTION_ARCHETYPES.get(faction, {}).get("name", "Estratégia Geral"),
         "arquetipo_descricao": FACTION_ARCHETYPES.get(faction, {}).get("description", ""),
-        "fileira": row,
-        "row": row, "row_label": ROW_LABELS[row], "habilidade": skill,
-        "habilidade_nome": str(
-            f"{identity['name']} + {skill_data['nome']}" if identity and skill_data.get("nome")
-            else identity.get("name", card.get("habilidade_nome", skill_data.get("nome", skill.replace("_", " ").title())))
-        ),
-        "habilidade_texto": texto_habilidade,
+        "fileira": row, "row": row, "row_label": ROW_LABELS[row],
+        "habilidade": skill, "habilidade_nome": habilidade_nome,
+        "habilidade_texto": habilidade_texto[:420],
         "habilidade_identidade": bool(identity),
-        "sinergias": sorted(CARD_SYNERGY_TAGS.get(str(card["id"]), set())),
+        "sinergias": sorted(CARD_SYNERGY_TAGS.get(card_id, set())),
         "combos_compativeis": [
             {"id": combo_id, "nome": combo["name"], "descricao": combo["description"]}
             for combo_id, combo in SYNERGY_COMBOS.items()
-            if CARD_SYNERGY_TAGS.get(str(card["id"]), set()) & set(combo["tags"])
+            if CARD_SYNERGY_TAGS.get(card_id, set()) & set(combo["tags"])
         ],
         "descricao": str(card.get("descricao", ""))[:240],
-        "image_url": f"/api/gwent/cards/{card['id']}/image",
+        "image_url": f"/api/gwent/cards/{card_id}/image",
     }
-
 
 
 def preparar_carta_pessoal(definition: dict, exemplar: dict, *, owner_id: int | None = None) -> dict | None:
@@ -1291,7 +1363,7 @@ def aplicar_jogada(state: dict, user_id: int, card_id: str | None = None,
             elif skill == "gwent_medico":
                 candidates = [c for c in player["discard"] if not c.get("especial") and int(c["poder"]) <= min(8, 4 + potencia_raridade)]
                 if not candidates:
-                    return {"error": "Não há unidade elegível no descarte."}
+                    return {"error": f"Não há unidade com poder-base até {min(8, 4 + potencia_raridade)} no seu descarte."}
                 if target_id:
                     revived = next((c for c in candidates if c["id"] == str(target_id)), None)
                     if revived is None:
@@ -1315,7 +1387,7 @@ def aplicar_jogada(state: dict, user_id: int, card_id: str | None = None,
                     return {"error": "Não há unidade inimiga nessa fileira."}
                 elegiveis = [c for c in targets if _poder_efetivo(c, state.get("weather")) <= min(6, 6 + potencia_raridade)]
                 if not elegiveis:
-                    return {"error": f"A Lâmina da Morte Destinada só alcança unidades com poder efetivo {min(6, 6 + potencia_raridade)} ou menos."}
+                    return {"error": "A Lâmina da Morte Destinada só alcança unidades com força efetiva 6 ou menos."}
                 if target_id:
                     victim = next((c for c in elegiveis if c["id"] == str(target_id)), None)
                     if victim is None:
@@ -1449,7 +1521,7 @@ def aplicar_jogada(state: dict, user_id: int, card_id: str | None = None,
             elif skill == "gwent_requiem":
                 elegiveis = [c for c in player["discard"] if not c.get("especial") and int(c["poder"]) <= min(10, 6 + potencia_raridade)]
                 if not elegiveis:
-                    return {"error": "Não há unidade elegível (poder 6 ou menos) no descarte."}
+                    return {"error": f"Não há unidade com poder-base até {min(10, 6 + potencia_raridade)} no seu descarte."}
                 if target_id:
                     revivida = next((c for c in elegiveis if c["id"] == str(target_id)), None)
                     if revivida is None:
@@ -1538,9 +1610,9 @@ def aplicar_jogada(state: dict, user_id: int, card_id: str | None = None,
                 for enemy in other["board"]:
                     enemy["bonus"] = max(-2, int(enemy.get("bonus", 0)) - 2)
             elif skill == "guardiao_fileira":
-                card["bonus"] += min(3, sum(1 for ally in player["board"] if ally["row"] == row))
+                card["bonus"] += min(3, sum(1 for ally in player["board"] if ally["row"] == row and ally is not card))
             elif skill == "cacador_solitario":
-                if not any(ally["row"] == row for ally in player["board"]):
+                if not any(ally["row"] == row and ally is not card for ally in player["board"]):
                     card["bonus"] += 2
             elif skill == "estandarte":
                 for ally in player["board"]:
@@ -1556,7 +1628,7 @@ def aplicar_jogada(state: dict, user_id: int, card_id: str | None = None,
             elif skill == "escudo_ferro":
                 card["escudo"] = 1
             elif skill == "devorar":
-                presas = [a for a in player["board"] if a["row"] == row]
+                presas = [a for a in player["board"] if a["row"] == row and a is not card]
                 if presas:
                     presa = min(presas, key=lambda u: _poder_efetivo(u, state.get("weather")))
                     ganho = min(4, max(1, _poder_efetivo(presa, state.get("weather"))))
@@ -1575,12 +1647,12 @@ def aplicar_jogada(state: dict, user_id: int, card_id: str | None = None,
                     unidade_revivida = revivida
                     extras_entrada.append(f"Ressurgiu {revivida['nome']} do descarte.")
             # Sinergias de cartas: recompensam composições e posicionamento coordenado.
-            if skill == "dupla_fornalha" and any(c.get("tipo") == "Força" and c.get("row") == row for c in player["board"]):
+            if skill == "dupla_fornalha" and any(c is not card and c.get("tipo") == "Força" and c.get("row") == row for c in player["board"]):
                 card["bonus"] += 2
             elif skill == "irmandade_veu" and any(c.get("tipo") == "Destreza" and c.get("row") != row for c in player["board"]):
                 card["bonus"] += 2
             elif skill == "circulo_arcano" and (
-                any(c.get("tipo") == "Magia" and c.get("row") == row for c in player["board"])
+                any(c is not card and c.get("tipo") == "Magia" and c.get("row") == row for c in player["board"])
                 or any(c.get("especial") for c in player["discard"])
             ):
                 card["bonus"] += 2

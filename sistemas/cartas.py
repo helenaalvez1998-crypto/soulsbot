@@ -13,7 +13,7 @@ from typing import Any
 
 from levels import PATENTES
 
-VERSAO_ARTES = 29
+VERSAO_ARTES = 33
 
 TIPOS = ("Destreza", "Força", "Magia")
 
@@ -66,65 +66,65 @@ HABILIDADES_PRIMORDIAIS = (
 )
 
 HABILIDADES: dict[str, dict[str, str]] = {
-    "primeira_luz": {"nome": "Graça Dourada", "texto": "Na primeira rodada, ganha +1 de poder ao entrar em campo."},
-    "retaliacao": {"nome": "Retaliação dos Semideuses", "texto": "Ganha +1 de poder quando sua pontuação total é menor que a do adversário."},
-    "impeto": {"nome": "Ímpeto do Lorde", "texto": "Ganha +1 de poder quando sua pontuação total é maior que a do adversário."},
-    "ultimo_folego": {"nome": "Último Suspiro", "texto": "Na terceira rodada, ganha +1 de poder ao entrar em campo."},
-    "contragolpe": {"nome": "Contragolpe", "texto": "Ganha +2 de poder quando sua pontuação total é menor que a do adversário."},
-    "encadeamento": {"nome": "Postura Encadeada", "texto": "Ganha +2 de poder se for jogada na mesma fileira que sua última unidade."},
-    "adaptacao": {"nome": "Passo do Peregrino", "texto": "Ganha +1 de poder se for jogada em uma fileira diferente da sua última unidade."},
-    "sangue_frio": {"nome": "Concentração", "texto": "Ganha +2 de poder quando os dois jogadores estão com a mesma pontuação."},
-    "instinto": {"nome": "Instinto de Caçador", "texto": "Ganha +2 de poder quando sua pontuação total é menor que a do adversário."},
-    "precisao": {"nome": "Mira Cariana", "texto": "Ganha +1 de poder ao entrar na fileira de Longa Distância."},
-    "drenagem": {"nome": "Selo Enfraquecedor", "texto": "Diminui em 1 o bônus dos inimigos, até o mínimo de -2."},
-    "cacador_arcano": {"nome": "Caçador de Feitiços", "texto": "Ganha +1 de poder se o adversário tiver uma unidade da Lua Negra ou uma unidade com bônus acima de zero."},
-    "quebra_ritmo": {"nome": "Ruptura de Postura", "texto": "Ganha +1 de poder se o adversário jogou uma unidade na mesma fileira no turno anterior."},
+    "primeira_luz": {"nome": "Graça Dourada", "texto": "Na primeira rodada, ganha +1 de bônus ao entrar em campo."},
+    "retaliacao": {"nome": "Retaliação dos Semideuses", "texto": "Se sua equipe estiver perdendo quando esta carta entrar, ganha +1 de bônus."},
+    "impeto": {"nome": "Ímpeto do Lorde", "texto": "Se sua equipe estiver vencendo quando esta carta entrar, ganha +1 de bônus."},
+    "ultimo_folego": {"nome": "Último Suspiro", "texto": "Na terceira rodada, ganha +1 de bônus ao entrar em campo."},
+    "contragolpe": {"nome": "Contragolpe", "texto": "Se sua equipe estiver perdendo quando esta carta entrar, ganha +2 de bônus."},
+    "encadeamento": {"nome": "Postura Encadeada", "texto": "Ganha +2 de bônus se sua última unidade foi jogada nesta mesma fileira."},
+    "adaptacao": {"nome": "Passo do Peregrino", "texto": "Ganha +1 de bônus se sua última unidade foi jogada em outra fileira."},
+    "sangue_frio": {"nome": "Concentração", "texto": "Se as equipes estiverem empatadas quando esta carta entrar, ganha +2 de bônus."},
+    "instinto": {"nome": "Instinto de Caçador", "texto": "Se sua equipe estiver perdendo quando esta carta entrar, ganha +2 de bônus."},
+    "precisao": {"nome": "Mira Cariana", "texto": "Ao entrar na fileira de Longa Distância, ganha +1 de bônus."},
+    "drenagem": {"nome": "Selo Enfraquecedor", "texto": "Ao entrar, tira 1 ponto do bônus de cada inimigo. O bônus não pode ficar abaixo de -2."},
+    "cacador_arcano": {"nome": "Caçador de Feitiços", "texto": "Ganha +1 de bônus se o inimigo tiver uma unidade da Lua Negra ou qualquer unidade com bônus acima de 0."},
+    "quebra_ritmo": {"nome": "Ruptura de Postura", "texto": "Ganha +1 de bônus se a última unidade jogada pelo inimigo nesta rodada entrou nesta fileira."},
     # Efeitos exclusivos: somente a respectiva Primordial pode utilizá-los.
-    "lei_primeva": {"nome": "Lei Primeva", "texto": "Recebe +2 de poder ao entrar na primeira rodada."},
-    "decreto_soberano": {"nome": "Decreto Soberano", "texto": "Reduz em 2 o bônus de todas as unidades inimigas, até o limite de -2."},
-    "olho_tempestade": {"nome": "Olho da Tempestade", "texto": "Recebe +2 quando sua fileira estiver sob efeito climático."},
-    "fome_abismo": {"nome": "Fome do Abismo", "texto": "Ganha +2 de poder quando sua pontuação total é menor que a do adversário."},
-    "paradoxo_eterno": {"nome": "Paradoxo Eterno", "texto": "Recebe +2 na terceira rodada se o adversário venceu a segunda."},
-    "guardiao_fileira": {"nome": "Guardião da Fileira", "texto": "+1 para cada outra unidade sua na mesma fileira, até +3."},
-    "cacador_solitario": {"nome": "Caçador Solitário", "texto": "+2 se não houver outra unidade sua na fileira."},
-    "estandarte": {"nome": "Estandarte", "texto": "Concede +1 às outras unidades aliadas da mesma fileira."},
-    "resistencia_climatica": {"nome": "Resistência Climática", "texto": "Ignora até 2 pontos de penalidade climática; sem clima ativo ao entrar, recebe +1."},
-    "eco_arcano": {"nome": "Eco Arcano", "texto": "+2 se você tiver uma carta especial no descarte."},
-    "gwent_nevoa": {"nome": "Névoa de Sellia", "texto": "Aplica 1 marca de Podridão Escarlate a todas as unidades inimigas da fileira escolhida; raridades Lendárias ou superiores aplicam uma segunda marca."},
-    "gwent_geada": {"nome": "Lua Gélida", "texto": "Aplica 1 marca de Geada a todas as unidades inimigas em campo; raridades Lendárias ou superiores aplicam uma segunda marca."},
-    "gwent_chuva": {"nome": "Sangue Corrompido", "texto": "Aplica uma marca de Sangramento a todas as unidades inimigas na fileira de Cerco; a segunda marca reduz 2 de bônus (mínimo -2) e consome as marcas."},
-    "gwent_chifre": {"nome": "Rugido de Godfrey", "texto": "Concede +2 às suas unidades na fileira escolhida até o fim da rodada."},
-    "gwent_medico": {"nome": "Lágrima Sagrada", "texto": "Devolve à sua mão uma unidade do seu descarte com poder-base 4 ou menos; você pode escolher o alvo."},
-    "gwent_queima": {"nome": "Chama Negra", "texto": "Tenta remover a unidade de maior poder efetivo de cada lado; um escudo pode bloquear cada remoção."},
-    "gwent_purificar": {"nome": "Lei da Regressão", "texto": "Remove todos os efeitos climáticos."},
-    "gwent_execucao": {"nome": "Lâmina da Morte Destinada", "texto": "Remove uma unidade inimiga escolhida da fileira selecionada se ela tiver poder efetivo 6 ou menos; um escudo pode bloquear a remoção."},
-    "gwent_vinculo": {"nome": "Juramento do Crisol", "texto": "Se houver ao menos duas unidades aliadas na fileira escolhida, concede +2 a todas elas até o fim da rodada."},
-    "gwent_batedor": {"nome": "Passo do Cão de Caça", "texto": "Compra uma carta da reserva, se disponível."},
-    "gwent_muralha": {"nome": "Bastião de Leyndell", "texto": "Concede +1 às suas unidades na fileira escolhida até o fim da rodada."},
-    "vinganca": {"nome": "Vingança", "texto": "Ao cair, concede +1 às unidades aliadas da mesma fileira."},
-    "escudo_ferro": {"nome": "Escudo de Ferro", "texto": "Entra com escudo: ignora a primeira remoção sofrida."},
-    "ressurgir": {"nome": "Ressurgir", "texto": "Se houver uma unidade elegível, traz do descarte a mais forte com poder base 5 ou menos diretamente ao campo."},
-    "devorar": {"nome": "Devorar", "texto": "Ao entrar, consome a unidade aliada de menor poder efetivo na mesma fileira e recebe bônus igual ao poder dela, até +4."},
-    "sobrevivente": {"nome": "Sobrevivente", "texto": "Ao fim da rodada, permanece no campo (a mais forte, se houver várias)."},
-    "espolios": {"nome": "Espólios", "texto": "Se você vencer a rodada com ela em campo, compra uma carta."},
-    "gwent_egide": {"nome": "Bênção da Árvore Áurea", "texto": "Concede escudo a uma unidade sua."},
-    "gwent_requiem": {"nome": "Chamado dos Mortos", "texto": "Traz do descarte diretamente ao campo uma unidade com poder base 6 ou menos."},
-    "gwent_passo": {"nome": "Passo do Lobo", "texto": "Move uma unidade sua para a fileira escolhida."},
-    "dupla_fornalha": {"nome": "Pacto da Fornalha", "texto": "+2 se houver outra unidade de Força na mesma fileira."},
-    "irmandade_veu": {"nome": "Formação do Véu", "texto": "+2 se houver uma unidade de Destreza em outra fileira."},
-    "circulo_arcano": {"nome": "Círculo de Ressonância", "texto": "+2 se houver Magia aliada na mesma fileira ou especial no descarte."},
-    "gwent_sangramento": {"nome": "Sangramento", "texto": "Marca as unidades inimigas da fileira; a segunda marca reduz o bônus em 2 (mínimo -2) e consome as marcas. Marcas expiram no fim da rodada."},
-    "gwent_geada_cariana": {"nome": "Geada Cariana", "texto": "Aplica até duas marcas às unidades inimigas da fileira escolhida; cada marca reduz 1 de poder efetivo até o fim da rodada."},
-    "gwent_podrida": {"nome": "Podridão Escarlate", "texto": "Cada marca reduz 1 de poder efetivo; a segunda também corrói 1 ponto de bônus positivo, se houver. Marcas expiram no fim da rodada."},
-    "gwent_loucura": {"nome": "Loucura Frenética", "texto": "Cada marca reduz 1 de poder efetivo; a segunda remove todos os bônus positivos da unidade. Marcas expiram no fim da rodada."},
-    "gwent_chama": {"nome": "Chama do Gigante", "texto": "Remove Geada de todas as suas unidades; cada unidade purificada recebe +1 de poder até o fim da rodada."},
-    "gwent_invocacao": {"nome": "Cinzas dos Lobos Solitários", "texto": "Invoca Lobos Espirituais com 3 de poder na fileira escolhida."},
-    "reliquia_godrick": {"nome": "Grande Runa de Godrick", "texto": "Exige ao menos uma unidade aliada em campo. Concede +1 de bônus a todas as unidades aliadas."},
-    "reliquia_renala": {"nome": "Grande Runa dos Não Nascidos", "texto": "Remove Geada e Podridão das unidades aliadas afetadas; cada unidade purificada recebe +1 de bônus."},
-    "reliquia_morte": {"nome": "Runa da Morte", "texto": "Em cada fileira, reduz em até 2 o bônus positivo da unidade inimiga que tiver o maior bônus naquela fileira."},
-    "reliquia_noite_chama": {"nome": "Espada da Noite e da Chama", "texto": "Na postura da Noite, aplica Geada a todas as unidades inimigas da fileira escolhida. Na postura da Chama, atinge a unidade de maior poder efetivo: reduz 1 de poder-base e 2 de bônus; Escudo bloqueia o golpe."},
-    "reliquia_lamina_negra": {"nome": "Lâmina Negra", "texto": "Na fileira escolhida, reduz em 3 o bônus de uma unidade inimiga (a escolhida ou a de maior poder efetivo). Escudo bloqueia o efeito sem consumir a Relíquia."},
-    "reliquia_algemas": {"nome": "Algemas de Margit", "texto": "Na fileira escolhida, zera o bônus positivo de uma unidade inimiga (a escolhida ou a de maior bônus); bônus negativos permanecem inalterados."},
+    "lei_primeva": {"nome": "Lei Primeva", "texto": "Na primeira rodada, ganha +2 de bônus ao entrar em campo."},
+    "decreto_soberano": {"nome": "Decreto Soberano", "texto": "Ao entrar, tira 2 pontos do bônus de cada inimigo. Nenhum bônus pode ficar abaixo de -2."},
+    "olho_tempestade": {"nome": "Olho da Tempestade", "texto": "Se houver clima na fileira escolhida, ganha +2 de bônus ao entrar."},
+    "fome_abismo": {"nome": "Fome do Abismo", "texto": "Se sua equipe estiver perdendo quando esta carta entrar, ganha +2 de bônus."},
+    "paradoxo_eterno": {"nome": "Paradoxo Eterno", "texto": "Na terceira rodada, ganha +2 de bônus se o inimigo venceu a segunda rodada."},
+    "guardiao_fileira": {"nome": "Guardião da Fileira", "texto": "Ganha +1 de bônus para cada aliado que já esteja nesta fileira, até +3."},
+    "cacador_solitario": {"nome": "Caçador Solitário", "texto": "Ganha +2 de bônus se não houver outro aliado nesta fileira quando entrar."},
+    "estandarte": {"nome": "Estandarte", "texto": "Ao entrar, dá +1 de bônus a cada aliado que já esteja na mesma fileira."},
+    "resistencia_climatica": {"nome": "Resistência Climática", "texto": "O clima tira até 2 pontos a menos desta carta. Se não houver clima em nenhuma fileira, ela ganha +1 de bônus ao entrar."},
+    "eco_arcano": {"nome": "Eco Arcano", "texto": "+2 de bônus se houver pelo menos uma carta Especial no seu descarte."},
+    "gwent_nevoa": {"nome": "Névoa de Sellia", "texto": "Escolha a fileira desejada. Todos os inimigos da fileira escolhida recebem Podridão Escarlate. Cada marca reduz o poder atual em 1 até o fim da rodada."},
+    "gwent_geada": {"nome": "Lua Gélida", "texto": "Todos os inimigos em campo recebem 1 marca de Geada. Cada marca reduz o poder atual em 1 até o fim da rodada."},
+    "gwent_chuva": {"nome": "Sangue Corrompido", "texto": "Todos os inimigos em Cerco recebem Sangramento. A segunda marca causa Hemorragia: tira 2 pontos do bônus (até -2) e apaga as marcas. As marcas restantes somem no fim da rodada."},
+    "gwent_chifre": {"nome": "Rugido de Godfrey", "texto": "Escolha uma fileira. Todos os seus aliados nela ganham +2 de bônus nesta rodada."},
+    "gwent_medico": {"nome": "Lágrima Sagrada", "texto": "Escolha uma unidade do seu descarte e coloque-a na sua mão. O poder-base máximo permitido depende da raridade."},
+    "gwent_queima": {"nome": "Chama Negra", "texto": "Remove a unidade mais forte de cada lado do campo. Se ela tiver escudo, perde o escudo e continua em campo."},
+    "gwent_purificar": {"nome": "Lei da Regressão", "texto": "Acaba com o clima nas três fileiras. Não remove as marcas de Geada, Sangramento, Podridão ou Loucura das unidades."},
+    "gwent_execucao": {"nome": "Lâmina da Morte Destinada", "texto": "Escolha uma fileira e remova 1 inimigo com poder atual de até 6. Se ele tiver escudo, perde o escudo e continua em campo."},
+    "gwent_vinculo": {"nome": "Juramento do Crisol", "texto": "Escolha uma fileira com pelo menos 2 aliados. Todos os seus aliados nela ganham +2 de bônus nesta rodada."},
+    "gwent_batedor": {"nome": "Passo do Cão de Caça", "texto": "Compra cartas do topo do seu baralho. A raridade define quantas cartas você compra."},
+    "gwent_muralha": {"nome": "Bastião de Leyndell", "texto": "Escolha uma fileira. Todos os seus aliados nela ganham +1 de bônus nesta rodada."},
+    "vinganca": {"nome": "Vingança", "texto": "Quando esta unidade sair do campo, cada aliado que continuar na mesma fileira ganha +1 de bônus."},
+    "escudo_ferro": {"nome": "Escudo de Ferro", "texto": "Entra em campo com 1 escudo. O escudo bloqueia a primeira tentativa de destruição ou execução. Sacrifícios ignoram o escudo."},
+    "ressurgir": {"nome": "Ressurgir", "texto": "Ao entrar, se houver uma unidade no seu descarte com poder-base até 5, traz de volta a mais forte entre elas. Ela retorna à fileira original."},
+    "devorar": {"nome": "Devorar", "texto": "Ao entrar, sacrifica o aliado mais fraco da mesma fileira e ganha bônus igual à força atual dele, até +4. O escudo não impede o sacrifício. Sem aliado, não ganha bônus."},
+    "sobrevivente": {"nome": "Sobrevivente", "texto": "No fim da rodada, a unidade com esta habilidade que tiver maior força atual permanece para a próxima rodada. Todas as outras unidades aliadas vão para o descarte. Bônus, escudos e marcas são removidos."},
+    "espolios": {"nome": "Espólios", "texto": "Se sua equipe vencer a rodada e pelo menos uma unidade com esta habilidade estiver em campo, você compra 1 carta."},
+    "gwent_egide": {"nome": "Bênção da Árvore Áurea", "texto": "Dá escudo aos aliados que ainda não tenham um. Você escolhe o primeiro; se não escolher, o mais forte recebe primeiro. Depois, os mais fortes são protegidos até o limite da raridade."},
+    "gwent_requiem": {"nome": "Chamado dos Mortos", "texto": "Escolha uma unidade do seu descarte para voltar ao campo, na fileira em que caiu. Ela retorna sem bônus e sem escudo. O poder-base máximo depende da raridade."},
+    "gwent_passo": {"nome": "Passo do Lobo", "texto": "Move aliados de outras fileiras para a fileira escolhida. Você pode escolher quem será movido primeiro; depois, os demais seguem a ordem em que aparecem no campo. Sem escolha, o mais fraco é movido primeiro."},
+    "dupla_fornalha": {"nome": "Pacto da Fornalha", "texto": "Ganha +2 de bônus se já houver outra unidade do tipo Força nesta fileira."},
+    "irmandade_veu": {"nome": "Formação do Véu", "texto": "Ganha +2 de bônus se já houver outra unidade do tipo Destreza em outra fileira."},
+    "circulo_arcano": {"nome": "Círculo de Ressonância", "texto": "Ganha +2 de bônus se já houver uma unidade do tipo Magia nesta fileira ou uma carta Especial no seu descarte."},
+    "gwent_sangramento": {"nome": "Sangramento", "texto": "Escolha uma fileira. Todos os inimigos nela recebem Sangramento. A segunda marca causa Hemorragia: tira 2 pontos do bônus (até -2) e apaga as marcas. As marcas restantes somem no fim da rodada."},
+    "gwent_geada_cariana": {"nome": "Geada Cariana", "texto": "Escolha uma fileira. Todos os inimigos nela recebem Geada. Cada marca reduz o poder atual em 1; cada inimigo pode ter até 2 marcas. Elas somem no fim da rodada."},
+    "gwent_podrida": {"nome": "Podridão Escarlate", "texto": "Escolha uma fileira. Todos os inimigos nela recebem Podridão Escarlate. Cada marca reduz o poder atual em 1; a segunda também tira 1 ponto do bônus positivo. As marcas somem no fim da rodada."},
+    "gwent_loucura": {"nome": "Loucura Frenética", "texto": "Escolha uma fileira. Todos os inimigos nela recebem Loucura. Cada marca reduz o poder atual em 1; a segunda zera o bônus positivo. As marcas somem no fim da rodada."},
+    "gwent_chama": {"nome": "Chama do Gigante", "texto": "Remove Geada de todos os aliados que tenham essa marca. Cada aliado purificado ganha +1 de bônus nesta rodada."},
+    "gwent_invocacao": {"nome": "Cinzas dos Lobos Solitários", "texto": "Invoca a unidade Lobos Espirituais na fileira escolhida. O poder-base dela depende da raridade."},
+    "reliquia_godrick": {"nome": "Grande Runa de Godrick", "texto": "Uma vez por partida: se você tiver ao menos 1 aliado em campo, todos os seus aliados recebem +1 de bônus."},
+    "reliquia_renala": {"nome": "Grande Runa dos Não Nascidos", "texto": "Uma vez por partida: remove Geada e Podridão de todos os aliados afetados. Cada aliado purificado recebe +1 de bônus."},
+    "reliquia_morte": {"nome": "Runa da Morte", "texto": "Uma vez por partida: em cada fileira, encontra o inimigo com maior bônus positivo e reduz esse bônus em 2, sem deixá-lo abaixo de 0."},
+    "reliquia_noite_chama": {"nome": "Espada da Noite e da Chama", "texto": "Uma vez por partida, escolha fileira e postura. Noite: aplica 1 marca de Geada a todos os inimigos da fileira (-1 de poder atual até o fim da rodada). Chama: tira 1 do poder-base (mín. 1) e 2 do bônus do inimigo mais forte. Escudo bloqueia Chama, mas a Relíquia é consumida."},
+    "reliquia_lamina_negra": {"nome": "Lâmina Negra", "texto": "Uma vez por partida, escolha um inimigo da fileira: o bônus dele cai em 3. Sem alvo escolhido, atinge o mais forte da fileira. Se houver escudo, ele é gasto e a Relíquia não é consumida."},
+    "reliquia_algemas": {"nome": "Algemas de Margit", "texto": "Uma vez por partida, escolha um inimigo da fileira. Se o bônus for positivo, cai para 0; bônus negativos não mudam. Sem alvo escolhido, atinge quem tem o maior bônus na fileira."},
 }
 
 
@@ -327,27 +327,27 @@ _CARTAS_BASE = [
     # Ordem Áurea — muralha (escudo/sobrevivência/vingança) e banquete (devorar/espólios).
     Carta("gwent_unidade_sentinela_rubra", "Cavaleiro de Radahn", "Covenant", "Força", 4, "Comum", 1, "escudo_ferro", "Um cavaleiro da hoste de Radahn mantém sua posição sob o estandarte vermelho de Caelid."),
     Carta("gwent_unidade_veterano_cercos", "Cavaleiro Draconiano", "Chefe", "Força", 5, "Rara", 2, "sobrevivente", "Já viu mais muralhas caírem do que rostos conhecidos."),
-    Carta("gwent_unidade_herdeiro_portao", "Godwyn, o Dourado", "Chefe", "Força", 6, "Épica", 3, "vinganca", "Quando cai, a formação inteira jura vingá-lo."),
-    Carta("gwent_unidade_carniceiro_forja", "Carrasco de Volcano Manor", "Arma", "Força", 4, "Rara", 2, "devorar", "Consome os restos da batalha para ampliar a própria força."),
+    Carta("gwent_unidade_herdeiro_portao", "Godwyn, o Dourado", "Chefe", "Força", 6, "Épica", 3, "vinganca", "Godwyn, herdeiro da linhagem dourada, carrega o peso de uma antiga promessa ligada à capital."),
+    Carta("gwent_unidade_carniceiro_forja", "Carrasco de Volcano Manor", "Arma", "Força", 4, "Rara", 2, "devorar", "Um carrasco de Volcano Manor cumpre ordens entre as fornalhas e os juramentos dos recusantes."),
     Carta("gwent_unidade_intendente", "Mercador Nômade", "Covenant", "Força", 3, "Comum", 1, "espolios", "Um mercador nômade percorre as Terras Intermédias levando provisões e notícias entre assentamentos."),
     # Lua Negra — fantasmas (retorno e persistência) e caravana (saque e blindagem).
     Carta("gwent_unidade_cacadora_fantasma", "Assassina de Ravenmount", "Chefe", "Destreza", 5, "Rara", 2, "sobrevivente", "Uma assassina de Ravenmount atravessa a névoa sem deixar rastros fáceis de seguir."),
     Carta("gwent_unidade_cantora_lamentos", "Fia, Companheira do Leito de Morte", "Covenant", "Destreza", 4, "Rara", 2, "ressurgir", "Fia, Companheira do Leito de Morte, entoa lamentos pelos que encontraram repouso entre os mortos."),
-    Carta("gwent_unidade_senhor_cacada", "Blaidd, o Meio-Lobo", "Chefe", "Destreza", 6, "Épica", 3, "vinganca", "A presa que o derruba desperta a matilha inteira."),
+    Carta("gwent_unidade_senhor_cacada", "Blaidd, o Meio-Lobo", "Chefe", "Destreza", 6, "Épica", 3, "vinganca", "Blaidd, o Meio-Lobo, é um guerreiro ligado a Ranni e à antiga linhagem dos lobos das Terras Intermédias."),
     Carta("gwent_unidade_saqueadora_veu", "Ladina da Cidade Eterna", "Arma", "Destreza", 4, "Comum", 1, "espolios", "Nenhuma rota é cara demais para quem leva o butim."),
     Carta("gwent_unidade_contrabandista", "Recusante da Mansão Vulcânica", "Covenant", "Destreza", 4, "Comum", 1, "escudo_ferro", "Um recusante de Volcano Manor, acostumado a negociar favores e segredos nas encostas do Monte Gelmir."),
     # Véu Carmesim — rúnico (proteção e retorno) e eclipse (consumo e conhecimento).
     Carta("gwent_unidade_guardiao_runas", "Guardião da Ordem Áurea", "Magia", "Magia", 5, "Comum", 1, "escudo_ferro", "Um guardião da Ordem Áurea carrega inscrições rúnicas ligadas aos ensinamentos da capital."),
-    Carta("gwent_unidade_necromante", "Servo dos que Vivem na Morte", "Magia", "Magia", 4, "Rara", 2, "ressurgir", "Desperta no campo os que o descarte ainda guarda."),
-    Carta("gwent_unidade_detonador", "Guerreiro da Chama Frenética", "Arma", "Magia", 6, "Épica", 3, "vinganca", "Sua queda libera a energia que ele guardava."),
+    Carta("gwent_unidade_necromante", "Servo dos que Vivem na Morte", "Magia", "Magia", 4, "Rara", 2, "ressurgir", "Um servo dos que Vivem na Morte segue os ritos que desafiam a ordem natural da morte."),
+    Carta("gwent_unidade_detonador", "Guerreiro da Chama Frenética", "Arma", "Magia", 6, "Épica", 3, "vinganca", "Um guerreiro marcado pela Chama Frenética percorre as Terras Intermédias em busca de novos devotos."),
     Carta("gwent_unidade_devorador_mana", "Cavaleiro de Sangue de Mohg", "Magia", "Magia", 5, "Rara", 2, "devorar", "Um cavaleiro ligado ao sangue de Mohg participa dos rituais sombrios da dinastia subterrânea."),
     Carta("gwent_unidade_bibliotecaria", "Bibliotecária de Raya Lucaria", "Covenant", "Magia", 4, "Comum", 1, "espolios", "O conhecimento reunido na guerra vale mais que ouro."),
 
     # Etapa 2: cartas especiais novas (todas funcionam sem alvo escolhido; `target_id` apenas refina).
-    Carta("gwent_especial_egide", "Bênção da Árvore Áurea", "Especial", "Força", 0, "Rara", 2, "gwent_egide", "Concede escudo a uma unidade sua (a escolhida, ou a mais forte sem escudo)."),
-    Carta("gwent_especial_requiem", "Chamado dos Mortos", "Especial", "Magia", 0, "Épica", 3, "gwent_requiem", "Traz direto ao campo uma unidade com poder base 6 ou menos do seu descarte (a escolhida, ou a mais forte)."),
-    Carta("gwent_especial_passo", "Passo do Lobo", "Especial", "Destreza", 0, "Rara", 2, "gwent_passo", "Move uma unidade sua para a fileira escolhida (a escolhida, ou a mais fraca fora dela)."),
-    Carta("gwent_mitica_coroa", "Cavaleiro Consagrado do Haligtree", "Relíquia", "Força", 8, "Mítica", 5, "estandarte", "Uma presença mítica que fortalece a formação aliada."),
+    Carta("gwent_especial_egide", "Bênção da Árvore Áurea", "Especial", "Força", 0, "Rara", 2, "gwent_egide", "Uma bênção da Árvore Áurea, invocada pelos guerreiros que buscam a proteção da capital."),
+    Carta("gwent_especial_requiem", "Chamado dos Mortos", "Especial", "Magia", 0, "Épica", 3, "gwent_requiem", "Um chamado antigo ecoa entre os mortos e convida os guerreiros caídos a retornarem à batalha."),
+    Carta("gwent_especial_passo", "Passo do Lobo", "Especial", "Destreza", 0, "Rara", 2, "gwent_passo", "O Passo do Lobo representa a velocidade e a precisão dos caçadores que cruzam as Terras Intermédias."),
+    Carta("gwent_mitica_coroa", "Cavaleiro Consagrado do Haligtree", "Relíquia", "Força", 8, "Mítica", 5, "estandarte", "Um cavaleiro consagrado guarda os caminhos do Haligtree e permanece fiel à promessa de Miquella."),
     Carta("gwent_singular_primeiro", "Juramento Primordial do Crisol", "Relíquia", "Destreza", 10, "Singular", 0, "cacador_solitario", "Exemplar singular conquistado por um feito extraordinário."),
     Carta("gwent_singular_intocavel", "Adaga da Faca Negra", "Relíquia", "Destreza", 9, "Singular", 0, "precisao", "Conquistada ao concluir um desafio sem sofrer dano."),
     Carta("gwent_singular_nivel1", "Vontade de Marika", "Relíquia", "Força", 10, "Singular", 0, "ultimo_folego", "Conquistada ao vencer um desafio no nível um."),
@@ -387,22 +387,22 @@ CARTAS_PRIMORDIAIS = [c for c in _cartas_v18 if c.id in {x.id for x in CARTAS_PR
 # As cartas entram após o balanceamento legado V18 para preservar suas habilidades próprias.
 CARTAS_EXPANSAO_V75 = [
     # ORDEM ÁUREA — formação, proteção e purificação.
-    Carta("gwent_v75_ordem_veterano_juramento", "Veterano do Juramento Dourado", "Covenant", "Força", 4, "Rara", 2, "", "Veterano de Leyndell que mantém a formação unida: ao entrar, fortalece a si e o aliado mais fraco da mesma fileira.", fileira="melee"),
-    Carta("gwent_v75_ordem_guardiao_crisol", "Guardião do Crisol Menor", "Chefe", "Força", 4, "Rara", 2, "", "Não possui habilidade individual. Pode completar combos da Ordem Áurea quando estiver em campo com a unidade compatível.", fileira="melee"),
-    Carta("gwent_v75_ordem_confessora_graca", "Confessora da Graça Serena", "Magia", "Força", 5, "Épica", 3, "", "Uma Confessora treinada na Lei da Regressão remove condições negativas de até dois aliados na fileira de Cerco e os fortalece.", fileira="siege"),
-    Carta("gwent_v75_ordem_arauto_estandarte", "Arauto do Estandarte Áureo", "Covenant", "Força", 5, "Épica", 3, "", "Não possui habilidade individual. Pode completar combos de formação da Ordem Áurea com a unidade compatível.", fileira="ranged"),
+    Carta("gwent_v75_ordem_veterano_juramento", "Veterano do Juramento Dourado", "Covenant", "Força", 4, "Rara", 2, "", "Veterano de Leyndell, endurecido pelas campanhas da capital e fiel à Árvore Áurea.", fileira="melee"),
+    Carta("gwent_v75_ordem_guardiao_crisol", "Guardião do Crisol Menor", "Chefe", "Força", 4, "Rara", 2, "", "Guardião treinado nos antigos rituais do Crisol, mantém a disciplina entre os guerreiros de Leyndell.", fileira="melee"),
+    Carta("gwent_v75_ordem_confessora_graca", "Confessora da Graça Serena", "Magia", "Força", 5, "Épica", 3, "", "Confessora da Ordem Áurea, estuda a Lei da Regressão e protege os ritos de purificação da capital.", fileira="siege"),
+    Carta("gwent_v75_ordem_arauto_estandarte", "Arauto do Estandarte Áureo", "Covenant", "Força", 5, "Épica", 3, "", "Arauto de Leyndell, carrega o estandarte dourado que reúne os soldados da capital.", fileira="ranged"),
 
     # VÉU CARMESIM — marcas de Sangramento, pressão e sacrifício calculado.
-    Carta("gwent_v75_veu_acolito_sangue", "Acólito da Dinastia Sanguínea", "Magia", "Destreza", 4, "Rara", 2, "", "Servo do Palácio de Mohgwyn que marca o inimigo mais forte da fileira; a segunda marca provoca Hemorragia.", fileira="ranged"),
-    Carta("gwent_v75_veu_devota_hemorragia", "Devota da Hemorragia", "Covenant", "Destreza", 4, "Rara", 2, "", "Não possui habilidade individual. Pode completar o combo Banquete da Hemorragia com a unidade compatível.", fileira="siege"),
-    Carta("gwent_v75_veu_carrasco_preco", "Carrasco da Procissão Carmesim", "Chefe", "Destreza", 5, "Épica", 3, "", "O carrasco sacrifica o aliado mais fraco da mesma fileira para absorver parte de seu poder, com ganho limitado.", fileira="melee"),
-    Carta("gwent_v75_veu_cacador_sangue", "Caçador das Catacumbas de Mohgwyn", "Arma", "Destreza", 5, "Épica", 3, "", "Não possui habilidade individual. Pode completar combos de marca de Sangramento com a unidade compatível.", fileira="ranged"),
+    Carta("gwent_v75_veu_acolito_sangue", "Acólito da Dinastia Sanguínea", "Magia", "Destreza", 4, "Rara", 2, "", "Servo do Palácio de Mohgwyn, participa dos rituais de sangue dedicados ao Senhor do Sangue.", fileira="ranged"),
+    Carta("gwent_v75_veu_devota_hemorragia", "Devota da Hemorragia", "Covenant", "Destreza", 4, "Rara", 2, "", "Devota da Hemorragia, oferece preces ao Senhor do Sangue nos salões subterrâneos de Mohgwyn.", fileira="siege"),
+    Carta("gwent_v75_veu_carrasco_preco", "Carrasco da Procissão Carmesim", "Chefe", "Destreza", 5, "Épica", 3, "", "Carrasco da Procissão Carmesim, executa sentenças em nome da dinastia sanguínea.", fileira="melee"),
+    Carta("gwent_v75_veu_cacador_sangue", "Caçador das Catacumbas de Mohgwyn", "Arma", "Destreza", 5, "Épica", 3, "", "Caçador das Catacumbas de Mohgwyn, persegue aqueles que tentam escapar dos rituais da dinastia.", fileira="ranged"),
 
     # LUA NEGRA — Geada, leitura de campo e controle gravitacional.
-    Carta("gwent_v75_lua_oraculo_geada", "Oráculo Gélido de Sellia", "Magia", "Magia", 4, "Rara", 2, "", "Uma astróloga de Sellia aplica Geada ao inimigo mais forte da fileira; completar a segunda marca fortalece o oráculo.", fileira="siege"),
-    Carta("gwent_v75_lua_cartografo_lunar", "Cartógrafo das Cidades Eternas", "Covenant", "Magia", 4, "Rara", 2, "", "Não possui habilidade individual. Pode completar combos de mobilidade lunar com a unidade compatível.", fileira="ranged"),
-    Carta("gwent_v75_lua_graviturgista", "Graviturgista de Nokron", "Magia", "Magia", 5, "Épica", 3, "", "Dobra a gravidade sobre até dois inimigos fortalecidos na fileira escolhida; se atingir dois, recebe poder adicional.", fileira="siege"),
-    Carta("gwent_v75_lua_guardia", "Guardiã do Juramento Lunar", "Chefe", "Magia", 5, "Épica", 3, "", "Não possui habilidade individual. Pode completar combos de mobilidade lunar com a unidade compatível.", fileira="melee"),
+    Carta("gwent_v75_lua_oraculo_geada", "Oráculo Gélido de Sellia", "Magia", "Magia", 4, "Rara", 2, "", "Astróloga de Sellia, estuda as correntes de frio associadas às antigas artes lunares.", fileira="siege"),
+    Carta("gwent_v75_lua_cartografo_lunar", "Cartógrafo das Cidades Eternas", "Covenant", "Magia", 4, "Rara", 2, "", "Cartógrafo das Cidades Eternas, registra passagens subterrâneas e caminhos sob as estrelas.", fileira="ranged"),
+    Carta("gwent_v75_lua_graviturgista", "Graviturgista de Nokron", "Magia", "Magia", 5, "Épica", 3, "", "Graviturgista de Nokron, pesquisa forças capazes de curvar o movimento dos corpos celestes.", fileira="siege"),
+    Carta("gwent_v75_lua_guardia", "Guardiã do Juramento Lunar", "Chefe", "Magia", 5, "Épica", 3, "", "Guardiã juramentada à Lua Negra, protege os caminhos lunares e as alianças das Cidades Eternas.", fileira="melee"),
 ]
 
 _CARTAS_BASE = [*_CARTAS_BASE, *CARTAS_EXPANSAO_V75]
@@ -458,17 +458,12 @@ def carta_jogo(nome_jogo: str, marco: str) -> Carta:
     titulo = f"{nome_base} {epiteto} · Selo {selo}"
 
     descricoes = {
-        "Força": "Combatente da Ordem Áurea, treinado para sustentar a formação e proteger seus aliados.",
-        "Destreza": "Combatente do Véu Carmesim, habituado a emboscadas, riscos calculados e confrontos de curta distância.",
-        "Magia": "Estudioso da Lua Negra, dedicado à feitiçaria, à observação dos astros e ao controle do campo.",
+        "Força": "Guerreiro da Ordem Áurea, vindo das estradas de Leyndell e marcado pelos juramentos da capital.",
+        "Destreza": "Guerreiro do Véu Carmesim, vindo dos salões de Mohgwyn e das rotas do Monte Gelmir.",
+        "Magia": "Estudioso da Lua Negra, ligado às tradições carianas e às bibliotecas de Liurnia.",
     }
     descricao = descricoes[tipo]
-    if habilidade:
-        nome_habilidade = HABILIDADES.get(habilidade, {}).get("nome", "técnica especial")
-        descricao += f" Habilidade: {nome_habilidade}."
-    else:
-        descricao += " Sem habilidade especial; seu valor vem do poder-base e dos bônus de combate."
-    descricao += " Recompensa por domínio completo." if marco == "platina" else " Recompensa por conquista."
+    descricao += " Recompensa concedida após alcançar a platina." if marco == "platina" else " Recompensa concedida após concluir o jogo."
 
     return Carta(
         id=f"jogo_{slug}_{marco}", nome=titulo[:95], categoria="Chefe", tipo=tipo,
@@ -513,7 +508,7 @@ def carta_patente(indice: int, nivel_minimo: int, nome_patente: str) -> Carta:
         raridade=raridade,
         custo=CUSTO_RARIDADE[raridade],
         habilidade=habilidade,
-        descricao=(f"Recompensa por alcançar o nível {nivel_minimo}. " + (HABILIDADES.get(habilidade, {}).get("texto", "") if habilidade else "Esta carta não tem habilidade especial; seu efeito vem do poder e dos bônus recebidos em combate.")),
+        descricao=(f"Recompensa de patente concedida ao alcançar o nível {nivel_minimo}. " + {"Força": "Combatente de Leyndell, reconhecido pelos juramentos da Árvore Áurea.", "Destreza": "Guerreiro do Véu Carmesim, vindo dos caminhos subterrâneos de Mohgwyn.", "Magia": "Estudioso da Lua Negra, ligado às tradições arcanas de Liurnia."}[tipo]),
     )
 
 

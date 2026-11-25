@@ -7,7 +7,7 @@ def test_descricao_narrativa_nao_vira_habilidade_mecanica():
     preparada = preparar_carta(carta.para_dict())
     assert preparada["descricao"] == "Uma presença colossal na linha de frente."
     assert preparada["habilidade_texto"] != preparada["descricao"]
-    assert "Recebe +2" in preparada["habilidade_texto"]
+    assert "+2 de bônus" in preparada["habilidade_texto"]
 
 
 def test_carta_sem_texto_de_habilidade_nao_usa_lore_como_fallback():
@@ -18,4 +18,4 @@ def test_carta_sem_texto_de_habilidade_nao_usa_lore_como_fallback():
     }
     preparada = preparar_carta(carta)
     assert preparada["descricao"] == "Uma frase apenas narrativa."
-    assert preparada["habilidade_texto"] == "Sem habilidade especial."
+    assert preparada["habilidade_texto"] == "Esta carta não possui uma habilidade de combate própria."

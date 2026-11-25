@@ -4,7 +4,7 @@ let currentUser = null;
 const text = (value, fallback = '—') => value === null || value === undefined || value === '' ? fallback : String(value);
 const number = (value) => new Intl.NumberFormat('pt-BR').format(Number(value || 0));
 // Manter sincronizado com VERSAO_ARTES em sistemas/cartas.py.
-const CARD_IMAGE_VERSION = 28;
+const CARD_IMAGE_VERSION = 33;
 const imageUrl = (card) => {
   const raw = card.image_url || `/api/gwent/cards/${encodeURIComponent(card.card_id || String(card.id || '').split('::')[0])}/image`;
   if (!raw.includes('/api/gwent/cards/')) return raw;
@@ -37,9 +37,7 @@ const cardSigil = value => {
     : key.includes('cura') || key.includes('purif') ? '✧'
     : key.includes('Especial') ? '◇' : '✦');
 };
-const RARITY_POWER = {'Comum':0,'Rara':1,'Épica':2,'Lendária':3,'Mítica':4,'Primordial':5,'Singular':6};
-const rarityPower = card => Number.isFinite(Number(card?.potencia_raridade)) ? Number(card.potencia_raridade) : (RARITY_POWER[card?.raridade] ?? 0);
-const rarityPowerMarkup = card => `<span class=\"v54-rarity-power\" title=\"Potência da raridade: amplia habilidades; não é poder de ataque\"><i>✦</i> Potência ${rarityPower(card)}</span>`;
+const rarityPowerMarkup = card => `<span class=\"v54-rarity-power\" title=\"Abra os detalhes da carta para ver exatamente o que a raridade altera\"><i>✦</i> Bônus da raridade</span>`;
 const cardInsigniaMarkup = card => {
   const category = card.categoria === 'Especial' ? 'Especial' : 'Unidade';
   const faction = card.faccao || card.tipo || 'Sem facção';
@@ -48,9 +46,9 @@ const cardInsigniaMarkup = card => {
   const ability = card.habilidade_nome || card.efeito_nome || card.habilidade || card.efeito || '';
   if (category === 'Especial') {
     const effect = card.habilidade_texto || card.texto_efeito || 'Efeito especial';
-    return `<div class="v51-special-banner"><span><i>◇</i> CARTA ESPECIAL</span><span>${escapeHTML(rarity)}</span></div><div class="v54-card-rarity-line">${rarityPowerMarkup(card)}<small>Escala do efeito · não soma ao poder-base</small></div><div class="v51-card-bottomline v51-special-effect"><span title="${escapeHTML(effect)}"><i>${cardSigil(effect)}</i>${escapeHTML(effect)}</span></div>`;
+    return `<div class="v51-special-banner"><span><i>◇</i> CARTA ESPECIAL</span><span>${escapeHTML(rarity)}</span></div><div class="v54-card-rarity-line">${rarityPowerMarkup(card)}<small>Veja os detalhes para entender o efeito</small></div><div class="v51-card-bottomline v51-special-effect"><span title="${escapeHTML(effect)}"><i>${cardSigil(effect)}</i>${escapeHTML(effect)}</span></div>`;
   }
-  return `<div class="v51-card-topline"><span class="v51-card-faction" title="${escapeHTML(faction)}"><i>${cardSigil(faction)}</i>${escapeHTML(faction)}</span><span class="v51-card-rarity">${escapeHTML(rarity)}</span></div><div class="v54-card-rarity-line">${rarityPowerMarkup(card)}<small>Escala do efeito · não soma ao poder-base</small></div><div class="v51-card-bottomline"><span title="${escapeHTML(row)}"><i>${cardSigil(row)}</i>${escapeHTML(row)}</span>${ability ? `<span class="v51-card-ability" title="${escapeHTML(ability)}"><i>${cardSigil(ability)}</i>${escapeHTML(ability)}</span>` : `<span class="v51-card-ability v51-no-ability"><i>—</i>Força pura</span>`}</div>`;
+  return `<div class="v51-card-topline"><span class="v51-card-faction" title="${escapeHTML(faction)}"><i>${cardSigil(faction)}</i>${escapeHTML(faction)}</span><span class="v51-card-rarity">${escapeHTML(rarity)}</span></div><div class="v54-card-rarity-line">${rarityPowerMarkup(card)}<small>Veja os detalhes para entender o efeito</small></div><div class="v51-card-bottomline"><span title="${escapeHTML(row)}"><i>${cardSigil(row)}</i>${escapeHTML(row)}</span>${ability ? `<span class="v51-card-ability" title="${escapeHTML(ability)}"><i>${cardSigil(ability)}</i>${escapeHTML(ability)}</span>` : `<span class="v51-card-ability v51-no-ability"><i>—</i>Força pura</span>`}</div>`;
 };
 const CARD_IMAGE_FALLBACK = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 620"><rect width="420" height="620" rx="20" fill="#17131c"/><rect x="18" y="18" width="384" height="584" rx="16" fill="none" stroke="#9b805a" stroke-width="4"/><path d="M210 190l55 55-55 55-55-55z" fill="none" stroke="#9b805a" stroke-width="8"/><text x="210" y="390" fill="#d8c6a6" font-family="sans-serif" font-size="22" text-anchor="middle">ARTE INDISPONÍVEL</text><text x="210" y="425" fill="#978a9b" font-family="sans-serif" font-size="16" text-anchor="middle">Tente recarregar a página</text></svg>')}`;
 const CARD_IMAGE_RETRY_DELAYS = [700, 1600];
@@ -349,7 +347,6 @@ function openGwentCollectionCardModal(cardId) {
   const special = card.categoria === 'Especial';
   const abilityName = card.habilidade_nome || card.efeito_nome || (special ? 'Efeito especial' : 'Sem habilidade especial');
   const abilityText = card.habilidade_texto || card.texto_efeito || (special ? 'Efeito não informado.' : 'Esta unidade não possui habilidade especial.');
-  const rarityBudget = rarityPower(card);
   const evolveCost = ({Comum:20,Rara:40,'Épica':80,'Lendária':160})[card.raridade];
   const upgradeCost = ({Comum:10,Rara:20,'Épica':40,'Lendária':80,'Mítica':150,'Primordial':250})[card.raridade];
   const canEvolve = !!card.exemplar_id && !special && !!evolveCost;
@@ -374,7 +371,6 @@ function openGwentCollectionCardModal(cardId) {
     special ? 'Especial' : (card.row_label || card.fileira || 'Unidade')
   ];
   const combos = Array.isArray(card.combos_compativeis) ? card.combos_compativeis : [];
-  const synergies = Array.isArray(card.sinergias) ? card.sinergias : [];
   modal.innerHTML = `
     <section class="gwent-collection-card-dialog">
       <button type="button" class="gwent-collection-close" data-gwent-collection-close aria-label="Fechar">×</button>
@@ -392,15 +388,17 @@ function openGwentCollectionCardModal(cardId) {
         <section class="gwent-collection-power">
           <div><small>PODER-BASE</small><strong>${special ? '—' : number(card.poder)}</strong></div>
           <div><small>PODER MÁXIMO</small><strong>${special ? '—' : number(card.max_power || card.poder)}</strong></div>
-          <div><small>POTÊNCIA DA RARIDADE</small><strong>${number(rarityBudget)} / 6</strong></div>
+          <div><small>RARIDADE</small><strong>${escapeHTML(card.raridade || 'Comum')}</strong></div>
         </section>
         <section class="gwent-collection-section gwent-collection-effect">
-          <small>EFEITO DE COMBATE</small>
+          <small>O QUE ESTA CARTA FAZ</small>
           <h3>${escapeHTML(abilityName)}</h3>
           <p>${escapeHTML(abilityText)}</p>
         </section>
-        ${card.descricao ? `<section class="gwent-collection-section"><small>LORE</small><p class="gwent-collection-lore">${escapeHTML(card.descricao)}</p></section>` : ''}
-        ${(synergies.length || combos.length) ? `<section class="gwent-collection-section"><small>SINERGIAS</small>${synergies.length ? `<div class="gwent-collection-chips">${synergies.map(x=>`<span>${escapeHTML(x)}</span>`).join('')}</div>` : ''}${combos.map(x=>`<article class="gwent-collection-combo"><b>${escapeHTML(x.nome || 'Combo')}</b><p>${escapeHTML(x.descricao || '')}</p></article>`).join('')}</section>` : ''}
+        ${card.raridade_texto ? `<section class="gwent-collection-section gwent-collection-rarity"><small>BÔNUS DA RARIDADE</small><p>${escapeHTML(card.raridade_texto)}</p></section>` : ''}
+        ${card.descricao ? `<section class="gwent-collection-section"><small>HISTÓRIA</small><p class="gwent-collection-lore">${escapeHTML(card.descricao)}</p></section>` : ''}
+        ${card.arquetipo_descricao ? `<section class="gwent-collection-section gwent-collection-faction"><small>ESTILO DA FACÇÃO</small><p>${escapeHTML(card.arquetipo_descricao)}</p></section>` : ''}
+        ${combos.length ? `<section class="gwent-collection-section"><small>COMBOS POSSÍVEIS</small>${combos.map(x=>`<article class="gwent-collection-combo"><b>${escapeHTML(x.nome || 'Combo')}</b><p>${escapeHTML(x.descricao || '')}</p></article>`).join('')}</section>` : ''}
         <footer class="gwent-collection-actions">
           ${inDeck
             ? `<button type="button" class="secondary" data-gwent-collection-remove="${escapeHTML(card.id)}">REMOVER DO DECK</button>`
@@ -1524,11 +1522,14 @@ function openGwentBoardCardModal(cardId) {
 
   const basePower = Number(card.poder || 0);
   const bonus = Number(card.bonus || 0);
-  const currentPower = Math.max(1, basePower + bonus);
+  const weatherValue = Number((currentGwentData?.weather || {})[card.row || ''] || 0);
+  const weatherPenalty = Math.max(0, weatherValue - Number(card.weather_resist || 0));
+  const statusPenalty = Math.min(3, Number(card.geada || 0) + Number(card.podrida || 0) + Number(card.loucura || 0));
+  const currentPower = gwentEffectivePower(card, weatherValue);
   const shield = Number(card.escudo || 0);
-  const rarityBudget = rarityPower(card);
   const rowLabel = card.row_label || gwentRowLabel(card.row || '');
   const isSpecial = !!card.especial || card.categoria === 'Especial';
+  const combos = Array.isArray(card.combos_compativeis) ? card.combos_compativeis : [];
   const modalCard = {...card};
   const src = imageUrl(card);
   if (src.includes('/api/gwent/cards/')) {
@@ -1555,15 +1556,17 @@ function openGwentBoardCardModal(cardId) {
           <article><small>PODER ATUAL</small><strong>${number(currentPower)}</strong></article>
           <article><small>BÔNUS</small><strong>${bonus > 0 ? '+' : ''}${number(bonus)}</strong></article>
           <article><small>ESCUDO</small><strong>${number(shield)}</strong></article>
-          <article class="gwent-rarity-potency"><small>POTÊNCIA DA RARIDADE</small><strong>${number(rarityBudget)} / 6</strong></article>
+          <article class="gwent-rarity-potency"><small>RARIDADE</small><strong>${escapeHTML(card.raridade || 'Comum')}</strong></article>
         </div>
         <section class="gwent-board-card-ability">
-          <small>HABILIDADE</small>
+          <small>O QUE ESTA CARTA FAZ</small>
           <strong>${escapeHTML(card.habilidade_nome || 'Sem habilidade especial')}</strong>
           <p>${escapeHTML(card.habilidade_texto || 'Sem habilidade especial.')}</p>
         </section>
-        ${card.descricao ? `<section class="gwent-board-card-ability gwent-board-card-lore"><small>DESCRIÇÃO</small><p>${escapeHTML(card.descricao)}</p></section>` : ''}
-        <p class="gwent-board-card-note"><strong>Como ler o poder:</strong> o número impresso na carta é o poder-base (${number(basePower)}). O bônus de combate é ${bonus > 0 ? "+" : ""}${number(bonus)}. Por isso, o poder atual é ${number(currentPower)} (poder-base + bônus, com mínimo de 1). A potência da raridade melhora apenas os efeitos da habilidade; ela não é somada ao poder.</p>
+        ${card.raridade_texto ? `<section class="gwent-board-card-ability gwent-board-card-rarity"><small>BÔNUS DA RARIDADE</small><p>${escapeHTML(card.raridade_texto)}</p></section>` : ''}
+        ${combos.length ? `<section class="gwent-board-card-ability"><small>COMBOS POSSÍVEIS</small>${combos.map(x=>`<article class="gwent-collection-combo"><b>${escapeHTML(x.nome || 'Combo')}</b><p>${escapeHTML(x.descricao || '')}</p></article>`).join('')}</section>` : ''}
+        ${card.descricao ? `<section class="gwent-board-card-ability gwent-board-card-lore"><small>HISTÓRIA</small><p>${escapeHTML(card.descricao)}</p></section>` : ''}
+        <p class="gwent-board-card-note"><strong>Como ler o poder:</strong> poder-base ${number(basePower)} + bônus ${bonus > 0 ? "+" : ""}${number(bonus)} − clima ${number(weatherPenalty)} − marcas de Geada, Podridão e Loucura ${number(statusPenalty)} = ${number(currentPower)} de poder atual (mínimo 1). Sangramento não reduz o poder por si só; quando causa Hemorragia, reduz o bônus. A raridade não é somada diretamente ao poder-base.</p>
         <button type="button" class="gwent-board-card-dismiss" data-gwent-board-close>FECHAR INSPEÇÃO</button>
       </div>
     </section>`;
@@ -1597,6 +1600,7 @@ function openGwentPlayCardModal(cardId) {
   modal.setAttribute('aria-modal', 'true');
   modal.setAttribute('aria-label', `Preparar jogada: ${card.nome || 'carta'}`);
   const isSpecial = !!(card.especial || String(card.categoria || '').toLowerCase() === 'especial');
+  const combos = Array.isArray(card.combos_compativeis) ? card.combos_compativeis : [];
   const row = ['melee','ranged','siege'].includes(card.row || card.fileira) ? (card.row || card.fileira) : 'melee';
   const rowNames = {melee:'Corpo a corpo',ranged:'Longa distância',siege:'Cerco'};
   const rowTargetSkills = new Set(['gwent_nevoa','gwent_chifre','gwent_execucao','gwent_vinculo','gwent_muralha','gwent_sangramento','gwent_geada_cariana','gwent_podrida','gwent_loucura','gwent_invocacao','gwent_passo']);
@@ -1626,11 +1630,13 @@ function openGwentPlayCardModal(cardId) {
         <h2>${escapeHTML(card.nome || 'Carta')}</h2>
         <div class="gwent-play-card-tags"><span>${escapeHTML(card.raridade || 'Carta')}</span><span>${escapeHTML(power)}</span></div>
         <section class="gwent-play-card-ability">
-          <small>HABILIDADE</small>
+          <small>O QUE ESTA CARTA FAZ</small>
           <strong>${escapeHTML(card.habilidade_nome || 'Sem habilidade especial')}</strong>
           <p>${escapeHTML(card.habilidade_texto || 'Sem habilidade especial.')}</p>
         </section>
-        ${card.descricao ? `<section class="gwent-play-card-ability gwent-play-card-lore"><small>DESCRIÇÃO</small><p>${escapeHTML(card.descricao)}</p></section>` : ''}
+        ${card.raridade_texto ? `<section class="gwent-play-card-ability gwent-play-card-rarity"><small>BÔNUS DA RARIDADE</small><p>${escapeHTML(card.raridade_texto)}</p></section>` : ''}
+        ${combos.length ? `<section class="gwent-play-card-ability"><small>COMBOS POSSÍVEIS</small>${combos.map(x=>`<article class="gwent-collection-combo"><b>${escapeHTML(x.nome || 'Combo')}</b><p>${escapeHTML(x.descricao || '')}</p></article>`).join('')}</section>` : ''}
+        ${card.descricao ? `<section class="gwent-play-card-ability gwent-play-card-lore"><small>HISTÓRIA</small><p>${escapeHTML(card.descricao)}</p></section>` : ''}
         <p class="gwent-play-card-state">${escapeHTML(stateText)}</p>
         <label class="gwent-play-card-row" style="${(!isSpecial || !needsRowChoice) ? 'display:none' : ''}"><span>FILEIRA DO EFEITO</span>
           <select data-gwent-modal-row ${canPlay && !prep && needsRowChoice ? '' : 'disabled'}>${options}</select>

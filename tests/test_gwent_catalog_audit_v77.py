@@ -57,16 +57,16 @@ def test_v75_has_six_identity_cards_and_six_combo_only_cards():
         else:
             assert card.id not in CARD_IDENTITY_ABILITIES
             assert prepared["habilidade_identidade"] is False
-            assert "combo compatível" in prepared["habilidade_texto"].casefold()
+            assert "combos compatíveis" in prepared["habilidade_texto"].casefold()
 
 
-def test_identity_cards_also_display_their_general_skill():
+def test_identity_cards_display_only_the_effect_the_engine_executes():
     card = CARTAS_POR_ID["chefe_guardiao_cinzas"]
     prepared = preparar_carta(card.para_dict())
-    assert "Égide das Cinzas" in prepared["habilidade_nome"]
-    assert "Ruptura de Postura" in prepared["habilidade_nome"]
-    assert "Habilidade adicional:" in prepared["habilidade_texto"]
-    assert "Ganha +1 de poder se o adversário jogou uma unidade na mesma fileira" in prepared["habilidade_texto"]
+    assert prepared["habilidade_nome"] == CARD_IDENTITY_ABILITIES[card.id]["name"]
+    assert prepared["habilidade_texto"] == CARD_IDENTITY_ABILITIES[card.id]["text"]
+    assert prepared["habilidade"] == ""
+    assert "Habilidade adicional:" not in prepared["habilidade_texto"]
 
 
 def test_balance_pass_cards_do_not_claim_effects_that_the_engine_removes():
