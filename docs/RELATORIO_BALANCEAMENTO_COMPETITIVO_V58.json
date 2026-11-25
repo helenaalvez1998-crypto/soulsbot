@@ -1,0 +1,261 @@
+{
+  "version": "V58",
+  "catalog_source": "docs/AUDITORIA_CATALOGO_V57.json",
+  "catalog_total": 110,
+  "units": 84,
+  "specials": 26,
+  "rarity_counts": {
+    "Rara": 35,
+    "Épica": 21,
+    "Comum": 28,
+    "Lendária": 11,
+    "Primordial": 8,
+    "Mítica": 3,
+    "Singular": 4
+  },
+  "units_by_rarity": {
+    "Comum": {
+      "count": 26,
+      "min_power": 3,
+      "max_power": 5,
+      "avg_power": 4.62,
+      "avg_cost": 1
+    },
+    "Rara": {
+      "count": 23,
+      "min_power": 4,
+      "max_power": 6,
+      "avg_power": 5.65,
+      "avg_cost": 2
+    },
+    "Épica": {
+      "count": 14,
+      "min_power": 5,
+      "max_power": 7,
+      "avg_power": 6.29,
+      "avg_cost": 3
+    },
+    "Lendária": {
+      "count": 8,
+      "min_power": 6,
+      "max_power": 8,
+      "avg_power": 7.5,
+      "avg_cost": 4
+    },
+    "Mítica": {
+      "count": 1,
+      "min_power": 8,
+      "max_power": 8,
+      "avg_power": 8,
+      "avg_cost": 5
+    },
+    "Primordial": {
+      "count": 8,
+      "min_power": 8,
+      "max_power": 9,
+      "avg_power": 8.38,
+      "avg_cost": 4
+    },
+    "Singular": {
+      "count": 4,
+      "min_power": 9,
+      "max_power": 10,
+      "avg_power": 9.5,
+      "avg_cost": 0
+    }
+  },
+  "units_by_faction": {
+    "Ordem Áurea": {
+      "count": 31,
+      "avg_base_power": 6.42,
+      "rarity_counts": {
+        "Rara": 7,
+        "Épica": 6,
+        "Comum": 7,
+        "Primordial": 4,
+        "Lendária": 5,
+        "Mítica": 1,
+        "Singular": 1
+      },
+      "by_rarity": {
+        "Comum": {
+          "count": 7,
+          "avg_power": 4.71,
+          "min": 4,
+          "max": 5
+        },
+        "Rara": {
+          "count": 7,
+          "avg_power": 5.71,
+          "min": 5,
+          "max": 6
+        },
+        "Épica": {
+          "count": 6,
+          "avg_power": 6,
+          "min": 5,
+          "max": 7
+        },
+        "Lendária": {
+          "count": 5,
+          "avg_power": 7.8,
+          "min": 7,
+          "max": 8
+        },
+        "Mítica": {
+          "count": 1,
+          "avg_power": 8,
+          "min": 8,
+          "max": 8
+        },
+        "Primordial": {
+          "count": 4,
+          "avg_power": 8.25,
+          "min": 8,
+          "max": 9
+        },
+        "Singular": {
+          "count": 1,
+          "avg_power": 10,
+          "min": 10,
+          "max": 10
+        }
+      }
+    },
+    "Véu Carmesim": {
+      "count": 26,
+      "avg_base_power": 6,
+      "rarity_counts": {
+        "Comum": 10,
+        "Rara": 9,
+        "Primordial": 3,
+        "Épica": 2,
+        "Singular": 2
+      },
+      "by_rarity": {
+        "Comum": {
+          "count": 10,
+          "avg_power": 4.9,
+          "min": 4,
+          "max": 5
+        },
+        "Rara": {
+          "count": 9,
+          "avg_power": 5.56,
+          "min": 4,
+          "max": 6
+        },
+        "Épica": {
+          "count": 2,
+          "avg_power": 6.5,
+          "min": 6,
+          "max": 7
+        },
+        "Primordial": {
+          "count": 3,
+          "avg_power": 8.33,
+          "min": 8,
+          "max": 9
+        },
+        "Singular": {
+          "count": 2,
+          "avg_power": 9.5,
+          "min": 9,
+          "max": 10
+        }
+      }
+    },
+    "Lua Negra": {
+      "count": 27,
+      "avg_base_power": 5.78,
+      "rarity_counts": {
+        "Épica": 6,
+        "Lendária": 3,
+        "Primordial": 1,
+        "Rara": 7,
+        "Comum": 9,
+        "Singular": 1
+      },
+      "by_rarity": {
+        "Comum": {
+          "count": 9,
+          "avg_power": 4.22,
+          "min": 3,
+          "max": 5
+        },
+        "Rara": {
+          "count": 7,
+          "avg_power": 5.71,
+          "min": 4,
+          "max": 6
+        },
+        "Épica": {
+          "count": 6,
+          "avg_power": 6.5,
+          "min": 6,
+          "max": 7
+        },
+        "Lendária": {
+          "count": 3,
+          "avg_power": 7,
+          "min": 6,
+          "max": 8
+        },
+        "Primordial": {
+          "count": 1,
+          "avg_power": 9,
+          "min": 9,
+          "max": 9
+        },
+        "Singular": {
+          "count": 1,
+          "avg_power": 9,
+          "min": 9,
+          "max": 9
+        }
+      }
+    }
+  },
+  "no_skill_count": 42,
+  "balance_curve": {
+    "Comum": 0,
+    "Rara": 1,
+    "Épica": 1,
+    "Lendária": 2,
+    "Mítica": 2,
+    "Primordial": 3,
+    "Singular": 3
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "finding": "Raridade escalava poder-base e potência do efeito ao mesmo tempo, com orçamento linear até 6 pontos.",
+      "action": "Curva de potência reduzida e limitada a 3, com retornos decrescentes."
+    },
+    {
+      "severity": "high",
+      "finding": "Sangue Corrompido estava descrito como efeito climático, mas o handler aplicava Sangramento na fileira de Cerco.",
+      "action": "Texto mecânico corrigido para refletir o handler real; comportamento de combate preservado."
+    },
+    {
+      "severity": "medium",
+      "finding": "Unidades sem habilidade especial podiam exibir texto genérico de potência de raridade.",
+      "action": "Texto de potência agora só aparece quando existe habilidade ou combo compatível."
+    },
+    {
+      "severity": "medium",
+      "finding": "Ordem Áurea tem maior média bruta de poder-base (6.42) que Véu Carmesim (6.00) e Lua Negra (5.78), mas a composição de raridades é diferente.",
+      "action": "Não aplicar nerf de facção baseado apenas na média bruta; comparar dentro da raridade e obter telemetria."
+    },
+    {
+      "severity": "medium",
+      "finding": "As regras definem deck de 12 cartas únicas, 10 na mão e 2 na reserva; não há custo de energia durante a partida nem limite competitivo por raridade documentado.",
+      "action": "Avaliar limite de cartas Primordiais/Singulares ou custo de oportunidade no deck após coletar dados de partidas."
+    }
+  ],
+  "limitations": [
+    "Não foi fornecido colizeu.db nem histórico de partidas.",
+    "Não há taxa de vitória, frequência de seleção, taxa de vitória quando jogada ou amostra por matchup.",
+    "Os números descrevem o catálogo e as regras; não provam equilíbrio competitivo real."
+  ]
+}
