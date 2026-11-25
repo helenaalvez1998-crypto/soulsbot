@@ -311,6 +311,8 @@ function renderGwentBuilder() {
     || ($('#gwent-leader')?.value || 'comandante_fornalha') !== gwentSavedLeader;
   $('#gwent-save-deck').disabled = selected.length !== 12 || unitCount < 8 || specialCount > 4
     || (JSON.stringify(gwentDeckIds) === JSON.stringify(gwentSavedIds) && !configChanged);
+  const resetButton = $('#gwent-reset-deck');
+  if (resetButton) resetButton.disabled = selected.length === 0 && gwentSavedIds.length === 0;
   $('#gwent-deck-status').textContent = selected.length === 12 && unitCount < 8
     ? 'Inclua pelo menos 8 unidades no deck.'
     : specialCount > 4 ? 'O limite é de 4 cartas especiais por deck.'
@@ -446,7 +448,7 @@ async function loadAtelierHistory() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Não foi possível carregar o histórico do Ateliê.');
     target.innerHTML = (data.history || []).map(item => {
-      const labels = {pending:'Em análise', approved:'Aprovada · arte oficial', rejected:'Rejeitada', archived:'Substituída por versão mais recente'};
+      const labels = {pending:'Em análise', approved:'Aprovada · arte oficial', rejected:'Rejeitada', archived:'Arquivada · não está mais aplicada à carta'};
       return `<article class="atelier-history-item"><b>${escapeHTML(item.card_id)}</b><span>${escapeHTML(labels[item.status] || item.status)}</span><small>${escapeHTML(item.created_at || '')}</small>${item.rejection_reason ? `<p>${escapeHTML(item.rejection_reason)}</p>` : ''}</article>`;
     }).join('') || '<p class="muted">Você ainda não enviou ilustrações.</p>';
   } catch (error) { target.innerHTML = `<p class="muted">${escapeHTML(error.message)}</p>`; }
@@ -465,6 +467,32 @@ async function loadAtelierReviewQueue() {
       `<article class="atelier-review-item"><img src="/api/gwent/atelier/submission/${Number(item.id)}/image" alt="Arte submetida"><div><b>${escapeHTML(item.card_id)}</b><small>Artista: ${escapeHTML(item.artist_name || `Discord ${item.user_id}`)}</small><small>${escapeHTML(item.created_at || '')}</small><div class="atelier-review-actions"><button class="primary" type="button" data-atelier-approve="${Number(item.id)}">Aprovar</button><button class="secondary" type="button" data-atelier-reject="${Number(item.id)}">Rejeitar</button></div></div></article>`
     ).join('') || '<p class="muted">Nenhuma arte aguardando aprovação.</p>';
   } catch (error) { panel.hidden = true; showNotice(error.message, 'error'); }
+}
+
+async function removeAllAtelierArts() {
+  const confirmed = window.confirm(
+    'Remover todas as artes oficiais atualmente aplicadas às cartas?\n\n' +
+    'As cartas voltarão à arte-base. O histórico, os créditos dos artistas e os arquivos enviados serão preservados. Esta ação não pode ser desfeita pelo site.'
+  );
+  if (!confirmed) return;
+  const button = $('#atelier-remove-all-art');
+  if (button) { button.disabled = true; button.textContent = 'Removendo artes...'; }
+  try {
+    const response = await fetch('/api/gwent/atelier/remove-all-art', {
+      method: 'POST', credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json'}, body: '{}'
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Não foi possível remover as artes oficiais.');
+    await Promise.all([loadAtelierHistory(), loadAtelierOfficialArt()]);
+    const cards = Number(data.cartas_limpas || 0);
+    const arts = Number(data.artes_removidas || 0);
+    showNotice(`${arts} arte(s) retirada(s) de ${cards} carta(s). Histórico e arquivos preservados.`, 'success');
+  } catch (error) {
+    showNotice(error.message, 'error');
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Remover todas as artes aplicadas'; }
+  }
 }
 
 async function loadAtelier() {
@@ -648,6 +676,34 @@ async function saveGwentDeck() {
     showNotice('Deck Gwent atualizado.', 'success');
   } catch(e) { $('#gwent-deck-status').textContent = e.message; }
   finally { button.textContent = 'Salvar deck Gwent'; renderGwentBuilder(); }
+}
+
+async function resetGwentDeck() {
+  if (!window.confirm('Redefinir seu deck Gwent? Todas as 12 posições e a configuração de facção, líder e relíquia serão zeradas. Suas cartas continuarão na coleção.')) return;
+  const button = $('#gwent-reset-deck');
+  if (button) { button.disabled = true; button.textContent = 'Zerando...'; }
+  try {
+    const response = await fetch('/api/gwent/deck/reset', {
+      method: 'POST', credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json'}, body: '{}'
+    });
+    const data = await parseGwentApiResponse(response);
+    if (!response.ok) throw new Error(data.error || 'Não foi possível redefinir o deck.');
+    try { localStorage.removeItem('narabot_gwent_relic_loadout_v20'); } catch (_) {}
+    const relic = $('#gwent-relic-select');
+    if (relic) {
+      relic.value = '';
+      relic.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+    await loadGwentDeck();
+    showNotice('Deck zerado. Suas cartas continuam disponíveis na coleção.', 'success');
+  } catch (error) {
+    $('#gwent-deck-status').textContent = error.message;
+    showNotice(error.message, 'error');
+  } finally {
+    if (button) button.textContent = 'Redefinir deck';
+    renderGwentBuilder();
+  }
 }
 
 async function loadGwentMatches() {
@@ -1220,6 +1276,8 @@ $('#gwent-card-search').addEventListener('input', renderGwentBuilder);
 $('#gwent-filter-faction').addEventListener('change', renderGwentBuilder);
 $('#gwent-filter-rarity').addEventListener('change', renderGwentBuilder);
 $('#gwent-save-deck').addEventListener('click', saveGwentDeck);
+$('#gwent-reset-deck').addEventListener('click', resetGwentDeck);
+$('#atelier-remove-all-art')?.addEventListener('click', removeAllAtelierArts);
 $('#gwent-create-match').addEventListener('click', createGwentMatch);
 $('#gwent-solo-match')?.addEventListener('click', createGwentSoloMatch);
 $('#gwent-open-pack').addEventListener('click', buyGwentPack);

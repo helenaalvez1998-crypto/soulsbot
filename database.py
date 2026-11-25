@@ -3730,6 +3730,40 @@ class Database:
             )
             return {"status": "ok", "submission": dict(row), "new_status": new_status}
 
+    async def coliseu_gwent_zerar_deck(self, user_id: int, faction: str, leader_id: str):
+        """Persiste um deck vazio e remove sua relíquia, sem tocar na coleção do jogador."""
+        async with self.transaction() as tx:
+            await tx.conn.execute(
+                """INSERT INTO cartas_gwent_decks
+                   (user_id,card_ids_json,exemplar_ids_json,faction,leader_id,relic_id)
+                   VALUES (?, '[]', '[]', ?, ?, '')
+                   ON CONFLICT(user_id) DO UPDATE SET
+                     card_ids_json='[]', exemplar_ids_json='[]', faction=excluded.faction,
+                     leader_id=excluded.leader_id, relic_id='', updated_at=CURRENT_TIMESTAMP""",
+                (int(user_id), str(faction), str(leader_id)),
+            )
+        return {"ok": True, "cards": 0, "faction": str(faction),
+                "leader_id": str(leader_id), "relic_id": ""}
+
+    async def coliseu_atelie_remover_todas_as_artes_ativas(self):
+        """Retira as artes oficiais de todas as cartas sem apagar os uploads ou créditos.
+
+        As submissões aprovadas são arquivadas; o histórico e os BLOBs continuam
+        preservados para auditoria e eventual restauração manual.
+        """
+        async with self.transaction() as tx:
+            resumo = await tx._one(
+                "SELECT COUNT(*) AS total, COUNT(DISTINCT card_id) AS cards "
+                "FROM cartas_atelie_submissoes WHERE status='approved'"
+            )
+            cur = await tx.conn.execute(
+                "UPDATE cartas_atelie_submissoes SET status='archived' WHERE status='approved'"
+            )
+            return {
+                "artes_removidas": int(cur.rowcount or 0),
+                "cartas_limpas": int(resumo["cards"] or 0) if resumo else 0,
+            }
+
     async def coliseu_atelie_obter_arte_oficial_metadata(self, card_id: str):
         """Consulta metadados sem copiar o BLOB da arte em toda requisição de imagem."""
         return await self._one(

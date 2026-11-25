@@ -781,10 +781,12 @@ class NaraBot(commands.Bot):
         app.router.add_post("/api/gwent/atelier/review/{submission_id}", self._api_gwent_atelier_review_decide)
         app.router.add_get("/api/gwent/atelier/art/{card_id}", self._api_gwent_atelier_official_art)
         app.router.add_get("/api/gwent/atelier/official/{card_id}", self._api_gwent_atelier_official_metadata)
+        app.router.add_post("/api/gwent/atelier/remove-all-art", self._api_gwent_atelier_remove_all_arts)
         app.router.add_get("/api/gwent/store", self._api_gwent_store)
         app.router.add_post("/api/gwent/store/pack", self._api_gwent_store_pack)
         app.router.add_get("/api/gwent/deck", self._api_gwent_deck)
         app.router.add_post("/api/gwent/deck", self._api_gwent_deck_save)
+        app.router.add_post("/api/gwent/deck/reset", self._api_gwent_deck_reset)
         app.router.add_get("/api/gwent/matches", self._api_gwent_matches)
         app.router.add_post("/api/gwent/matches", self._api_gwent_match_create)
         app.router.add_post("/api/gwent/matches/solo", self._api_gwent_match_create_solo)
@@ -1194,6 +1196,22 @@ class NaraBot(commands.Bot):
                 (user_id, json.dumps(ids), json.dumps(resolved), faction, leader_id, relic_id))
         return web.json_response({"ok": True, "card_ids": ids, "exemplar_ids": resolved,
                                   "faction": faction, "leader_id": leader_id, "relic_id": relic_id})
+
+    async def _api_gwent_deck_reset(self, request: web.Request) -> web.Response:
+        """Zera somente o deck do jogador autenticado; coleção e exemplares são preservados."""
+        user_id = self._api_user_id(request)
+        if user_id is None:
+            return web.json_response({"error": "Autenticação necessária."}, status=401)
+        if not self._api_origin_ok(request):
+            return web.json_response({"error": "Origem não autorizada."}, status=403)
+        await self._gwent_prepare_user(user_id)
+        from sistemas.gwent import DEFAULT_LEADERS
+        faction = "Ordem Áurea"
+        leader_id = DEFAULT_LEADERS[faction]
+        result = await self.db.coliseu_gwent_zerar_deck(user_id, faction, leader_id)
+        return web.json_response({
+            **result, "message": "Deck zerado. Sua coleção permanece intacta.",
+        })
 
     async def _gwent_deck_snapshots(self, user_id: int):
         import json
@@ -2137,6 +2155,19 @@ class NaraBot(commands.Bot):
         if result.get("status") != "ok":
             return web.json_response({"error": "Submissão já processada ou inexistente."}, status=404)
         return web.json_response({"ok": True, "status": result["new_status"]})
+
+    async def _api_gwent_atelier_remove_all_arts(self, request: web.Request) -> web.Response:
+        """Arquiva todas as artes comunitárias aprovadas; restrito à equipe do Ateliê."""
+        user_id = self._api_user_id(request)
+        if user_id is None:
+            return web.json_response({"error": "Autenticação necessária."}, status=401)
+        if not self._api_origin_ok(request):
+            return web.json_response({"error": "Origem não autorizada."}, status=403)
+        if not self._atelier_is_admin(user_id):
+            return web.json_response({"error": "Acesso restrito à administração do Ateliê."}, status=403)
+        result = await self.db.coliseu_atelie_remover_todas_as_artes_ativas()
+        return web.json_response({"ok": True, **result,
+                                  "message": "As artes oficiais foram retiradas das cartas. O histórico foi preservado."})
 
     async def _api_gwent_atelier_official_metadata(self, request: web.Request) -> web.Response:
         user_id = self._api_user_id(request)
