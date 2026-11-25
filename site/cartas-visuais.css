@@ -1,0 +1,153 @@
+/* ==========================================================
+   CARTAS VISUAIS — profissionais, leves, sem gambiarras pesadas
+   Unico arquivo. Sem dependencias. Sem JS.
+   Comeca no index com:
+   <link rel="stylesheet" href="cartas-visuais.css">
+   ========================================================== */
+
+:root{
+  --c-bg:#0a0d12;
+  --c-surface:#131821;
+  --c-border:rgba(194,166,111,.28);
+  --c-gold:#d8bb7a;
+  --c-gold-soft:rgba(216,187,122,.16);
+  --c-text:#eef0ec;
+  --c-muted:#9aa1ab;
+  --c-radius:14px;
+  --c-shadow:0 14px 34px rgba(0,0,0,.42);
+}
+
+html,body{margin:0}
+body{background:var(--c-bg);color:var(--c-text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+
+/* ---------- Grade de cartas: responsiva e automatica ---------- */
+.cartas{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+  gap:16px;
+  padding:24px;
+  max-width:1200px;
+  margin:0 auto;
+}
+
+/* ---------- Carta base ---------- */
+.carta{
+  position:relative;
+  aspect-ratio:3/4;
+  border:1px solid var(--c-border);
+  border-radius:var(--c-radius);
+  background:linear-gradient(155deg,#1c2736,#0e131c 76%);
+  box-shadow:var(--c-shadow);
+  overflow:hidden;
+  cursor:default;
+  transition:transform .16s,border-color .16s,box-shadow .16s;
+  display:flex;
+  flex-direction:column;
+}
+
+/* Hover sutil — so em mouse real, sem afetar touch */
+@media(hover:hover) and (pointer:fine){
+  .carta:hover{
+    transform:translateY(-4px);
+    border-color:var(--c-gold);
+    box-shadow:0 20px 40px rgba(0,0,0,.5),0 0 0 1px rgba(216,187,122,.18);
+  }
+}
+
+/* ---------- Partes internas ---------- */
+.carta-arte{
+  width:100%;
+  height:62%;
+  object-fit:cover;
+  background:#07090e;
+  display:block;
+}
+
+.carta-info{
+  padding:10px 12px 12px;
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+
+.carta-nome{
+  font-size:14px;
+  font-weight:600;
+  color:var(--c-text);
+  line-height:1.15;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+}
+
+.carta-custo{
+  position:absolute;
+  top:10px;
+  left:10px;
+  width:22px;height:22px;
+  border-radius:50%;
+  background:rgba(0,0,0,.55);
+  border:1px solid var(--c-border);
+  display:grid;place-items:center;
+  font-size:11px;font-weight:700;
+  color:var(--c-gold);
+}
+
+.carta-tipo{
+  font-size:10px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--c-muted);
+  margin-top:auto;
+}
+
+/* ---------- Raridade (borda colorida fina, sem imagens extras) ---------- */
+.carta.comum{--c-rar:#8a94a0}
+.carta.incomum{--c-rar:#4caf50}
+.carta.raro{--c-rar:#2196f3}
+.carta.epico{--c-rar:#9c27b0}
+.carta.legendario{--c-rar:#ff9800}
+
+.carta.comum{border-color:rgba(138,148,160,.35)}
+.carta.incomum{border-color:rgba(76,175,80,.45)}
+.carta.raro{border-color:rgba(33,150,243,.5)}
+.carta.epico{border-color:rgba(156,39,176,.5)}
+.carta.legendario{border-color:rgba(255,152,0,.6)}
+
+@media(hover:hover) and (pointer:fine){
+  .carta.legendario:hover{box-shadow:0 0 0 1px var(--c-rar),var(--c-shadow)}
+  .carta.epico:hover{box-shadow:0 0 0 1px var(--c-rar),var(--c-shadow)}
+}
+
+/* ---------- Estado selecionado / jogada ---------- */
+.carta.selecionada{
+  outline:2px solid var(--c-gold);
+  outline-offset:2px;
+  z-index:2;
+}
+
+/* ---------- Versao pequena para deck / mao ---------- */
+.carta-mini{
+  aspect-ratio:2/3;
+  width:100px;
+  height:150px;
+  font-size:12px;
+  padding:8px 10px;
+  gap:3px;
+}
+.carta-mini .carta-arte{height:55%}
+.carta-mini .carta-nome{font-size:11px;-webkit-line-clamp:1}
+.carta-mini .carta-tipo{font-size:8px}
+
+/* ---------- Utilitario: nao seleciona texto ao arrastar ---------- */
+.carta{user-select:none;-webkit-user-select:none}
+
+@media(prefers-reduced-motion:reduce){
+  .carta{transition:none}
+  @media(hover:hover) and (pointer:fine){
+    .carta:hover{transform:none}
+  }
+}
